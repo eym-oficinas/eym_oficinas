@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <template id="eym_report_purchasequotation_document_inherit" inherit_id="purchase.report_purchasequotation_document">
+        <xpath expr="//t[@t-set='address']" position="replace"/>
+        <xpath expr="//t[@t-set='information_block']" position="replace"/>
+        <xpath expr="//div[@id='informations']" position="after">
+            <div class="row">
+                <style>
+                    .page
+                    {
+                    font-size:12px!important;
+                    color:black!important;
+                    }
+                    strong, h2
+                    {
+                    color:black!important;
+                    }
+                    
+                </style>
+                <table class="table table-sm table-bordered">
+                    <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Proveedor:</td>
+                        <td colspan="3" style="padding:7px;">
+                            <t t-esc="o.partner_id.name"/>
+                        </td>
+                    </tr>
+                    <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'civil_registration'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> R.C.:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'id_card'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> T.I.:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'id_document'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  C.C.:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'national_citizen_id'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">   C.C.:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'residence_document'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  T.E.:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'foreign_id_card'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  C.E.:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'rut'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  NIT: </td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'passport'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> PAS:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'external_id'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> D.I.E.:</td>
+                        </t>
+                        <t t-if="o.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'diplomatic_card'">
+                            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">   Tax ID:</td>
+                        </t>
+                        <td style="padding:7px;">
+                            <span t-field="o.partner_id.vat"/>
+                        </td>
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">
+                            Telefono:     
+                        </td>
+                        <td style="padding:7px;">
+                            <span t-field="o.partner_id.phone"/>
+                            <span t-field="o.partner_id.mobile"/>
+                        </td>
+                    </tr>
+                    <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black;padding:7px;">
+                            Direccion: 
+                        </td>
+                        <td style="padding:7px;">
+                            <span t-field="o.partner_id.street"/>
+                            <span t-field="o.partner_id.street2"/>
+                        </td>
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black;padding:7px;">
+                            Ciudad:     
+                        </td>
+                        <td style="padding:7px;">
+                            <span t-field="o.partner_id.city"/>
+        /                            <span t-field="o.partner_id.country_id"/>
+                        </td>
+                    </tr>
+                    <tr style="font-size:12px;line-height: 30%;margin-left:-20px; padding:7px;">
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Correo:</td>
+                        <td colspan="3" style="padding:7px;">
+                            <t t-esc="o.partner_id.email"/>
+                        </td>
+                    </tr>
+                </table>
+
+            </div>
+        </xpath>
+        <xpath expr="//div[@id='informations']" position="after">
+            <div class="row" style='margin-top:10px'>
+                <table class="table table-sm table-bordered">
+                    <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+                        <td colspan="4"><strong>Dirección de envío</strong></td>
+                    </tr>
+                    <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Cliente:</td>
+                        <td colspan="3" style="padding:7px;">
+                            <t t-esc="o.company_id.name"/>
+                        </td>
+                    </tr>
+                     <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black;padding:7px;">
+                            Direccion: 
+                        </td>
+                        <td style="padding:7px;">
+                            <span t-field="o.company_id.street"/>
+                            <span t-field="o.company_id.street2"/>
+                        </td>
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black;padding:7px;">
+                            Ciudad:     
+                        </td>
+                        <td style="padding:7px;">
+                            <span t-field="o.company_id.city"/>
+        /                            <span t-field="o.company_id.country_id"/>
+                        </td>
+                    </tr>
+                    <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Teléfono:</td>
+                        <td colspan="3" style="padding:7px;">
+                            <t t-esc="o.company_id.phone"/>
+                        </td>
+                    </tr>
+                    <tr style="font-size:12px;line-height: 30%;margin-left:-20px; padding:7px;">
+                        <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Correo:</td>
+                        <td colspan="3" style="padding:7px;">
+                            <t t-esc="o.company_id.email"/>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </xpath>
+    </template>
+</odoo>

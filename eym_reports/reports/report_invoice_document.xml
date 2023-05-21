@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+  <template id="eym_report_invoice_document_inherit" inherit_id="account.report_invoice_document">
+    <xpath expr="//table[@name='invoice_line_table']/thead/tr/th" position="replace"/>
+    <xpath expr="//tbody[hasclass('invoice_tbody')]//tr//td" position="replace"/>
+    
+    <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[@name='th_taxes']" position="replace"/>
+    <xpath expr="//tbody[hasclass('invoice_tbody')]//tr//td/span[@t-field='line.product_uom_id']" position="replace"/>
+    
+    <xpath expr="//tbody[hasclass('invoice_tbody')]//tr//td[position()=(last()-1)]" position="replace"/>
+    
+    <xpath expr="//table[@name='invoice_line_table']/thead/tr/th[@name='th_quantity']" position="replace"/>
+    <xpath expr="//tbody[hasclass('invoice_tbody')]//tr//td[hasclass('text-right')]" position="replace"/>
+    
+    <xpath expr="//tbody[hasclass('invoice_tbody')]//tr//td/span[@t-field='line.quantity']" position="replace">
+      <span t-field="line.quantity"/>
+      <small t-field="line.product_uom_id" groups="uom.group_uom"/>
+    </xpath>
+  </template>
+</odoo>

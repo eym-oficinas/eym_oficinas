@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <template id="eym_report_external_layout_standard_inherit" inherit_id="web.external_layout_standard">
+         <xpath expr="//div" position="replace">
+            <div class="header">
+                <div style="font-size:14px;">
+                    <div style="float:left; width:33.3%;">
+                        <img t-if="company.logo" t-att-src="image_data_uri(company.logo)" style="margin:left:-20px; height: 110px; display: block;  border: 0px solid red;" alt="Logo"/>
+                    </div>
+                    <div style="float:left; width:33.3%;">
+                        <div>
+                            <b style="font-size:14px" t-esc="company.name"/>
+                        </div>
+                        <div>
+                            <span>NIT: </span>
+                            <t style="font-size:14px" t-esc="company.vat"/>
+                        </div>
+                        <div>
+                            <t style="font-size:14px" t-esc="company.street"/>
+                        </div>
+                        <div>
+                            <t style="font-size:14px" t-esc="company.city"/>
+                        </div>
+                        <div>
+                            <t style="font-size:14px" t-esc="company.country_id.name"/>
+                        </div>
+                        <div>
+                            <span>TEL: </span>
+                            <t style="font-size:14px" t-esc="company.phone"/>
+                        </div>
+                        <div>
+                            <span>E-mail: </span>
+                            <t style="font-size:14px" t-esc="company.email"/>
+                        </div>
+                    </div>
+                    <div style="float:left; width:33.3%;">
+                        <div>
+                            <strong>Tipo de organizacion: </strong>
+                            <t style="font-size:14px" t-esc="company.type_organization_id.name"/>
+                        </div>
+                        <div>
+                            <strong>Regimen: </strong>
+                            <t style="font-size:14px" t-esc="company.type_regime_id.name"/>
+                        </div>
+                        <div>
+                            <strong>Tipo de responsabilidad: </strong>
+                            <t style="font-size:14px" t-esc="company.type_liability_id.name"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+    </template>
+</odoo>

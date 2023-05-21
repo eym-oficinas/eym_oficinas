@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_/equiman/custom/addons/crm_repair_/equiman/custom/addons/crm_repair,/equiman/custom/addons/crm_repair./equiman/custom/addons/crm_repair,model_/equiman/custom/addons/crm_repair_/equiman/custom/addons/crm_repair,base.group_user,1,1,1,1

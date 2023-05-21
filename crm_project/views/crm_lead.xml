@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="crm_lead_view_form_inherit" model="ir.ui.view">
+      <field name="name">crm.lead.inherited.crm.oportunities</field>
+      <field name="model">crm.lead</field>
+      <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//button[@name='action_schedule_meeting']" position="after">
+          <button class="oe_stat_button" type="object" name="action_view_projects" icon="fa-tasks">
+              <field name="projects_count" widget="statinfo" string="Projects"/>
+          </button>
+        </xpath>
+        <xpath expr="//button[@name='action_set_won_rainbowman']" position="after">
+          <button string="New Project" name="action_new_projects" type="object" class="oe_highlight" data-hotkey="r" title="Create new repair" attrs="{'invisible': ['|', ('type', '=', 'lead'), '&amp;', ('probability', '=', 0), ('active', '=', False)]}"/>
+        </xpath>       
+      </field>
+    </record>
+
+</odoo>
