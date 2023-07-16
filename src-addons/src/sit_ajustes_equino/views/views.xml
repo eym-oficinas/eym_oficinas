@@ -1,0 +1,261 @@
+<odoo>
+  <data>
+
+
+        <record id="sit_invoice_report" model="ir.ui.view">
+            <field name="name">sit_invoice_report</field>
+            <field name="inherit_id" ref="account.report_invoice_document" />
+            <field name="arch" type="xml">
+                <xpath expr="//thead" position="attributes">
+                    <attribute name="style">font-size: 11px;</attribute>
+                </xpath>
+                <xpath expr="//tbody" position="attributes">
+                    <attribute name="style">font-size: 11px;</attribute>
+                </xpath>
+
+                <xpath expr="//h2" position="replace">
+                        <h4>
+                            <span t-if="o.move_type == 'out_invoice' and o.state == 'posted'">Invoice</span>
+                            <span t-if="o.move_type == 'out_invoice' and o.state == 'draft'">Draft Invoice</span>
+                            <span t-if="o.move_type == 'out_invoice' and o.state == 'cancel'">Cancelled Invoice</span>
+                            <span t-if="o.move_type == 'out_refund'">Credit Note</span>
+                            <span t-if="o.move_type == 'in_refund'">Vendor Credit Note</span>
+                            <span t-if="o.move_type == 'in_invoice'">Vendor Bill</span>
+                            <span t-if="o.name != '/'" t-field="o.name"/>
+                        </h4> 
+                </xpath>
+
+                <xpath expr="//div[@class='mt-5']" position="attributes">
+                    <attribute name="class"></attribute>
+                </xpath>
+            </field>
+        </record>
+
+
+
+
+
+
+
+
+
+
+
+        <record id="sit_quotation_report" model="ir.ui.view">
+            <field name="name">sit_quotation_report</field>
+            <field name="inherit_id" ref="sale.report_saleorder_document" />
+            <field name="arch" type="xml">
+                <xpath expr="//thead" position="attributes">
+                    <attribute name="style">font-size: 11px;</attribute>
+                </xpath>
+                <xpath expr="//tbody" position="attributes">
+                    <attribute name="style">font-size: 11px;</attribute>
+                </xpath>
+<!-- 
+                <xpath expr="//div[@class='mt-5']" position="attributes">
+                    <attribute name="class"></attribute>
+                </xpath> -->
+            </field>
+        </record>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <record id="sit_shipping_url_form" model="ir.ui.view">
+            <field name="name">sit_shipping_url_form</field>
+            <field name="model">crm.lead</field>
+            <field name="inherit_id" ref="equino_trading.view_crm_leads_form_inherit" />
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='form_id']" position="after">
+                                    <label for="sit_shipping_list_url"/>
+                                    <field name="sit_shipping_list_url" widget="url" />
+                </xpath>
+                <xpath expr="//button[@name='action_share_shipping_form']" position="replace">
+                                    <button title="Share Shipping Form" string="" name="sit_action_share_shipping_form" type="object" class="oe_highlight" data-hotkey="g"><i class="fa fa-paper-plane"/></button>
+                </xpath>
+
+
+            </field>
+        </record>
+
+
+
+
+
+
+        <record id="sit_action_share_shipping_form" model="ir.actions.server">
+            <field name="name">Share Shipping Form 2</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="model_trading_forms" />
+            <field name="binding_model_id" ref="model_trading_forms" />
+            <field name="state">code</field>
+            <field name="code">action = records.sit_share_shipping_form()</field>
+        </record>
+
+
+
+
+        <record id="sit_email_invite_shipping_form" model="mail.template">
+            <field name="name">Shipping Form Fillment 2</field>
+            <field name="model_id" ref="equino_trading.model_trading_forms"/>
+            <field name="subject">Shipping Form Fillment</field>
+            <field name="email_from">{{ (object.user_id.email_formatted or user.email_formatted) }}</field>
+            <field name="email_to">{{object.shipper_id.email}}</field>
+            <field name="lang">{{object.shipper_id.lang}}</field>
+            <field name="description">Fill Shipping Form</field>
+            <field name="body_html" type="html">
+                <p>
+                    <p>
+                        Dear <t t-esc="object.shipper_id.name"></t>,
+                    </p>
+                    <p>
+                        <span>Kindly, fill shipping form following next link.</span>
+                    </p>
+                    <p>
+
+                        <a    t-att-href="object.invite_url" >Shipping Form</a>
+                    </p>
+                    <p>
+                        <span>Regards,</span>  <t t-esc="object.user_id.name"></t>
+                    </p>
+                </p>
+            </field>
+            <field name="lang">{{ object.shipper_id.lang }}</field>
+            <field name="auto_delete" eval="True"/>
+        </record>
+
+
+
+
+
+
+<!-- 
+
+        <record id="email_invite_shipping_form" model="mail.template">
+            <field name="name">Shipping Form Fillment</field>
+            <field name="model_id" ref="equino_trading.model_trading_forms"/>
+            <field name="subject">Shipping Form Fillment</field>
+            <field name="email_from">{{ (object.user_id.email_formatted or user.email_formatted) }}</field>
+            <field name="email_to">{{object.shipper_id.email}}</field>
+            <field name="lang">{{object.shipper_id.lang}}</field>
+            <field name="description">Fill Shipping Form</field>
+            <field name="body_html" type="html">
+                <p>
+                    <p>
+                        Dear <t t-esc="object.shipper_id.name"></t>,
+                    </p>
+                    <p>
+                        <span>Kindly, fill shipping form following next link.</span>
+                    </p>
+                    <p>
+                        <a t-att-href="object.invite_url" class="link-primary">Shipping Form</a>
+                    </p>
+                    <p>
+                        <span>Regards,</span>  <t t-esc="object.user_id.name"></t>
+                    </p>
+                </p>
+            </field>
+            <field name="lang">{{ object.shipper_id.lang }}</field>
+            <field name="auto_delete" eval="True"/>
+        </record>
+
+
+ -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- 
+        <record id="sit_invoice_report" model="ir.ui.view">
+            <field name="name">sit_invoice_report</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="account.report_invoice_document" />
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='responsible_id']" position="replace">
+                </xpath>
+
+            </field>
+        </record>
+ -->
+
+    <!-- explicit list view definition -->
+<!--
+    <record model="ir.ui.view" id="sit_ajustes_equino.list">
+      <field name="name">sit_ajustes_equino list</field>
+      <field name="model">sit_ajustes_equino.sit_ajustes_equino</field>
+      <field name="arch" type="xml">
+        <tree>
+          <field name="name"/>
+          <field name="value"/>
+          <field name="value2"/>
+        </tree>
+      </field>
+    </record>
+-->
+
+    <!-- actions opening views on models -->
+<!--
+    <record model="ir.actions.act_window" id="sit_ajustes_equino.action_window">
+      <field name="name">sit_ajustes_equino window</field>
+      <field name="res_model">sit_ajustes_equino.sit_ajustes_equino</field>
+      <field name="view_mode">tree,form</field>
+    </record>
+-->
+
+    <!-- server action to the one above -->
+<!--
+    <record model="ir.actions.server" id="sit_ajustes_equino.action_server">
+      <field name="name">sit_ajustes_equino server</field>
+      <field name="model_id" ref="model_sit_ajustes_equino_sit_ajustes_equino"/>
+      <field name="state">code</field>
+      <field name="code">
+        action = {
+          "type": "ir.actions.act_window",
+          "view_mode": "tree,form",
+          "res_model": model._name,
+        }
+      </field>
+    </record>
+-->
+
+    <!-- Top menu item -->
+<!--
+    <menuitem name="sit_ajustes_equino" id="sit_ajustes_equino.menu_root"/>
+-->
+    <!-- menu categories -->
+<!--
+    <menuitem name="Menu 1" id="sit_ajustes_equino.menu_1" parent="sit_ajustes_equino.menu_root"/>
+    <menuitem name="Menu 2" id="sit_ajustes_equino.menu_2" parent="sit_ajustes_equino.menu_root"/>
+-->
+    <!-- actions -->
+<!--
+    <menuitem name="List" id="sit_ajustes_equino.menu_1_list" parent="sit_ajustes_equino.menu_1"
+              action="sit_ajustes_equino.action_window"/>
+    <menuitem name="Server to list" id="sit_ajustes_equino" parent="sit_ajustes_equino.menu_2"
+              action="sit_ajustes_equino.action_server"/>
+-->
+  </data>
+</odoo>

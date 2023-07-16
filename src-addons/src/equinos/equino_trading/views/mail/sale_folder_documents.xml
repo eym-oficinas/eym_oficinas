@@ -1,0 +1,32 @@
+<odoo>
+    <data>
+
+        <record id="sale_email_share_folder_documents" model="mail.template">
+            <field name="name">Certifications and Regulations Documents</field>
+            <field name="model_id" ref="equino_trading.model_sale_order"/>
+            <field name="subject">Certifications and Regulations Documents</field>
+            <field name="email_from">{{ (object.user_id.email_formatted or user.email_formatted) }}</field>
+            <field name="email_to">{{object.partner_id.email}}</field>
+            <field name="lang">{{object.partner_id.lang}}</field>
+            <field name="description">Fill Shipping Form</field>
+            <field name="body_html" type="html">
+                <p>
+                    <p>
+                        Dear <t t-esc="object.partner_id.name"></t>,
+                    </p>
+                    <p>
+                        <span>Documents are attached below this message.</span>
+                    </p>
+                    <p>
+                        <span>Kindly, read them and contact us for some concern.</span>
+                    </p>
+                    <p>
+                        <span>Regards,</span>  <t t-esc="object.user_id.name"></t>
+                    </p>
+                </p>
+            </field>
+            <field name="lang">{{ object.partner_id.lang }}</field>
+            <field name="auto_delete" eval="True"/>
+        </record>
+    </data>
+</odoo>

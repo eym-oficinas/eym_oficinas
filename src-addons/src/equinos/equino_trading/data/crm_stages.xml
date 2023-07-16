@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="0">
+    <record model="crm.stage" id="stage_lead1">
+        <field name="name">New</field>
+        <field name="fold" eval="False"/>
+        <field name="sequence">1</field>
+    </record>
+    <record model="crm.stage" id="stage_lead2">
+        <field name="name">Procesing</field>
+        <field name="fold" eval="False"/>
+        <field name="sequence">2</field>
+    </record>
+    <record model="crm.stage" id="stage_lead3">
+        <field name="name">Proposition</field>
+        <field name="fold" eval="False"/>
+        <field name="sequence">3</field>
+    </record>
+    <record model="crm.stage" id="stage_lead4">
+        <field name="name">Estimate Sent - Following</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won">False</field>
+        <field name="sequence">70</field>
+    </record>
+    <record model="crm.stage" id="stage_lead10">
+        <field name="name">Estimate Sent - Following</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won">True</field>
+        <field name="sequence">71</field>
+    </record>
+    <record model="crm.stage" id="stage_lead11">
+        <field name="name">Won W/O date</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won">True</field>
+        <field name="sequence">72</field>
+    </record>
+    <record model="crm.stage" id="stage_lead12">
+        <field name="name">Won W/Date</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won">True</field>
+        <field name="sequence">74</field>
+    </record>
+    <record model="crm.stage" id="stage_lead13">
+        <field name="name">Completed</field>
+        <field name="fold" eval="False"/>
+        <field name="is_won">True</field>
+        <field name="sequence">75</field>
+    </record>
+</odoo>

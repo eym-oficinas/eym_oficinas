@@ -1,0 +1,90 @@
+<odoo>
+  <data>
+
+    <record id="open_hotel_folio1_form_tree_all" model="ir.actions.act_window">
+      <field name="name">Reservations</field>
+      <field name="res_model">hotel.folio</field>
+      <field name="view_mode">tree,form,calendar,graph</field>
+      <field name="context">{'folio': True}</field>
+    </record>
+
+    <record id="view_hotel_folio_form_inherit" model="ir.ui.view">
+      <field name="name">hotel.folio.form</field>
+      <field name="model">hotel.folio</field>
+      <field name="type">form</field>
+      <field name="priority" eval="8"/>
+      <field name="inherit_id" ref="hotel.view_hotel_folio_form"/>
+      <field name="arch" type="xml">
+
+        <field name='partner_id' position="attributes">
+          <attribute name="string">Customer</attribute>
+        </field>
+        
+        <xpath expr="//notebook/page[last()]" position="after">
+
+          <page string="MAC">
+
+            <group string='Dates'>
+              <field name="datetime_checkin" attrs="{'readonly': [('state', 'in',['done', 'cancel'])]}"/>
+              <field name="datetime_checkout" attrs="{'readonly': [('state', 'in',['done', 'cancel'])]}"/>
+            </group>  
+
+            <group string='Units'>
+              <field string='' name="units_ids"/>
+            </group>           
+
+            <group string='Order'>
+              <field name="sale_order_ids" readonly='1' string=''/>
+            </group>  
+
+            <group string='Omportunity'>
+              <field name="crm_lead_id" readonly='1' string=''/>
+            </group>  
+
+            <group string='Event'>
+              <field name="calendar_event_id" readonly='1' string=''/>
+            </group>  
+
+            <group string='Project Tracking'>
+              <field name="project_id" readonly='1' string=''/>
+            </group>  
+
+            <group>
+              <field name="is_equine" widget="boolean_toggle" readonly='1'/>
+            </group>          
+
+            <group string='Containers'>
+              <field string='' name="container_ids"/>
+            </group> 
+
+          </page>
+
+        </xpath>
+
+        <xpath expr="//field[@name='room_line_ids']/tree/field[@name='price_unit']" position="after">
+          <field name='unit_id' readonly='1'/>
+        </xpath>
+
+      </field>
+    </record>
+
+    <record id="view_hotel_folio_search_inherit" model="ir.ui.view">
+        <field name="name">hotel.folio.search</field>
+        <field name="model">hotel.folio</field>
+        <field name="inherit_id" ref="hotel.view_hotel_folio_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[last()]" position="before">
+              <field name="units_ids" filter_domain="[('units_ids', 'in', units_ids)]" />
+            </xpath>
+            <xpath expr="//filter[last()]" position="before">
+              <filter
+                    name="units_ids"
+                    string="Units"
+                    context="{'group_by':'units_ids'}"
+                />
+            </xpath>
+        </field>
+    </record>
+
+  </data>
+</odoo>

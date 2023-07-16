@@ -1,0 +1,201 @@
+<odoo>
+  <data>
+
+        <!--
+            unit 1
+        -->
+        
+        <record id="unit_product_01_1" model="product.product">
+            <field name="name">Room 01</field>
+        </record>
+
+        <record id="unit_product_02_1" model="product.product">
+            <field name="name">Room 02</field>        
+        </record>
+
+        <record id="unit_product_03_1" model="product.product">
+            <field name="name">Room 03</field>  
+        </record>
+
+        <record id="unit_product_04_1" model="product.product">
+            <field name="name">Room 04</field>    
+        </record>
+
+        <record id="unit_product_05_1" model="product.product">
+            <field name="name">Room 05</field>   
+        </record>
+
+        <record id="unit_product_06_1" model="product.product">
+            <field name="name">Room 06</field>      
+        </record>
+
+        <!--
+            unit 2
+        -->
+        
+        <record id="unit_product_01_2" model="product.product">
+            <field name="name">Room 01</field>   
+        </record>
+
+        <record id="unit_product_02_2" model="product.product">
+            <field name="name">Room 02</field>    
+        </record>
+
+        <record id="unit_product_03_2" model="product.product">
+            <field name="name">Room 03</field>     
+        </record>
+
+        <record id="unit_product_04_2" model="product.product">
+            <field name="name">Room 04</field>
+        </record>
+
+        <record id="unit_product_05_2" model="product.product">
+            <field name="name">Room 05</field>
+        </record>
+
+        <record id="unit_product_06_2" model="product.product">
+            <field name="name">Room 06</field>
+        </record>
+
+        <!--
+            unit 3
+        -->
+        
+        <record id="unit_product_01_3" model="product.product">
+            <field name="name">Room 01</field>
+        </record>
+
+        <record id="unit_product_02_3" model="product.product">
+            <field name="name">Room 02</field>    
+        </record>
+
+        <record id="unit_product_03_3" model="product.product">
+            <field name="name">Room 03</field>  
+        </record>
+
+        <record id="unit_product_04_3" model="product.product">
+            <field name="name">Room 04</field>     
+        </record>
+
+        <record id="unit_product_05_3" model="product.product">
+            <field name="name">Room 05</field>   
+        </record>
+
+        <record id="unit_product_06_3" model="product.product">
+            <field name="name">Room 06</field>     
+        </record>
+
+        <!--
+            unit 4
+        -->
+        
+        <record id="unit_product_01_4" model="product.product">
+            <field name="name">Room 01</field>   
+        </record>
+
+        <record id="unit_product_02_4" model="product.product">
+            <field name="name">Room 02</field>  
+        </record>
+
+        <record id="unit_product_03_4" model="product.product">
+            <field name="name">Room 03</field>  
+        </record>
+
+        <record id="unit_product_04_4" model="product.product">
+            <field name="name">Room 04</field>      
+        </record>
+
+        <record id="unit_product_05_4" model="product.product">
+            <field name="name">Room 05</field>    
+        </record>
+
+        <record id="unit_product_06_4" model="product.product">
+            <field name="name">Room 06</field>   
+        </record>
+
+        <!--
+            unit 5
+        -->
+        
+        <record id="unit_product_01_5" model="product.product">
+            <field name="name">Room 01</field>
+        </record>
+
+        <record id="unit_product_02_5" model="product.product">
+            <field name="name">Room 02</field>
+        </record>
+
+        <record id="unit_product_03_5" model="product.product">
+            <field name="name">Room 03</field>
+        </record>
+
+        <record id="unit_product_04_5" model="product.product">
+            <field name="name">Room 04</field> 
+        </record>
+
+        <record id="unit_product_05_5" model="product.product">
+            <field name="name">Room 05</field>
+        </record>
+
+        <record id="unit_product_06_5" model="product.product">
+            <field name="name">Room 06</field>
+        </record>
+
+         <!--
+            unit 6
+        -->
+        
+        <record id="unit_product_01_6" model="product.product">
+            <field name="name">Room 01</field>  
+        </record>
+
+        <record id="unit_product_02_6" model="product.product">
+            <field name="name">Room 02</field>   
+        </record>
+
+        <record id="unit_product_03_6" model="product.product">
+            <field name="name">Room 03</field>  
+        </record>
+
+        <record id="unit_product_04_6" model="product.product">
+            <field name="name">Room 04</field>     
+        </record>
+
+        <record id="unit_product_05_6" model="product.product">
+            <field name="name">Room 05</field>
+        </record>
+
+        <record id="unit_product_06_6" model="product.product">
+            <field name="name">Room 06</field>   
+        </record>
+
+        <!--
+            unit 7
+        -->
+        
+        <record id="unit_product_01_7" model="product.product">
+            <field name="name">Room 01</field>  
+        </record>
+
+        <record id="unit_product_02_7" model="product.product">
+            <field name="name">Room 02</field>   
+        </record>
+
+        <record id="unit_product_03_7" model="product.product">
+            <field name="name">Room 03</field>     
+        </record>
+
+        <record id="unit_product_04_7" model="product.product">
+            <field name="name">Room 04</field>
+        </record>
+
+        <record id="unit_product_05_7" model="product.product">
+            <field name="name">Room 05</field>
+        </record>
+
+        <record id="unit_product_06_7" model="product.product">
+            <field name="name">Room 06</field>
+        </record>
+
+  </data>
+</odoo>

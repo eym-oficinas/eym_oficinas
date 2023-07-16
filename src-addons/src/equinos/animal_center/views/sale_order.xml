@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- tree view 
+        <record id="view_equine_trading_horses_tree" model="ir.ui.view">
+            <field name="name">Quotations</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_quotation_tree"/>
+            <field name="type">tree</field>
+            <field name="priority" eval="8"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='state']" position="before">
+
+                </xpath>
+            </field>
+        </record>
+        -->
+
+        <!-- form view -->
+        <record id="view_equine_trading_animal_center_form" model="ir.ui.view">
+            <field name="name">Quotation</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="equino_trading.view_equine_trading_horses_form"/>
+            <field name="type">form</field>
+            <field name="priority" eval="8"/>
+            <field name="arch" type="xml">
+
+                <xpath expr="//notebook/page[2]" position="after">
+
+                    <page string="MAC" attrs="{'invisible': [('state', '!=', 'sale')]}">
+
+                        <group string="Reservation" attrs="{'invisible': [('unit_id', '=', False), ('generate_type', '=', 'manual')]}">                          
+                            <group class="row">                              
+                                <field name="datetime_checkin" string="Check-In" attrs="{'readonly': [('state', 'in',['done', 'cancel'])]}"/>                                
+                                <field name="datetime_checkout" string="Check-Out" attrs="{'readonly': [('state', 'in', ['done', 'cancel'])]}"/>  
+                                <field name="reservation_id"/>
+                            </group>
+                        </group>
+                        
+                        <group>
+                            <field name="generate_type" widget="radio"/>
+                        </group>
+                        
+                        <group>
+                            <field name="unit_category_id"/>
+                            <field string='Assign Rooms in Units' name="unit_id" attrs="{'invisible': [('generate_type', '=', 'available')]}" widget="many2many_tags"/>
+                        </group>
+                        
+                        <div>
+                            <button name="action_create_reserve" type="object" class='btn btn-outline-primary'><i class="fa fa-building"/> Reserve</button>  
+                        </div>
+
+                    </page>
+
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

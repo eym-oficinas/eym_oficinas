@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="action_hotel_room_form" model="ir.actions.act_window">
+        <field name="name">Rooms</field>
+        <field name="res_model">hotel.room</field>
+        <field name="context">{'default_isroom':1,'default_rental':1,'default_available_in_pos':0}</field>
+        <field name="view_id" ref="hotel.view_hotel_room_tree" />
+        <field name="view_mode">kanban,tree,form</field>
+    </record>
+
+    <record id="view_view_hotel_room_search_inherit" model="ir.ui.view">
+        <field name="name">Rooms</field>
+        <field name="model">hotel.room</field>
+        <field name="inherit_id" ref="hotel.view_hotel_room_search"/>
+        <field name="arch" type="xml">
+
+            <field name='room_categ_id' position="after">
+                <field string="Unit Category" name="unit_category_id"/>
+            </field>
+
+            <filter name='available' position="replace"/>
+            <filter name='reserved' position="replace"/>
+
+            <xpath expr="//newline" position="after">
+                <group string="Group By..">
+                    <filter string="Unit" domain="" name="group_by_room_categ_id" context="{'group_by':'room_categ_id'}"/>
+                    <filter string="Unit Category" domain="" name="group_by_unit_category_id" context="{'group_by':'unit_category_id'}"/>
+                </group>
+            </xpath>
+
+        </field>
+    </record>
+
+    <record id="view_hotel_room_tree_inherit" model="ir.ui.view">
+        <field name="name">hotel.room.tree.inherit</field>
+        <field name="model">hotel.room</field>
+        <field name="inherit_id" ref="hotel.view_hotel_room_tree"/>
+        <field name="arch" type="xml">
+            <field name="room_categ_id" position='after'>
+                <field name="unit_category_id" />
+                <field name="product_id"/>
+            </field>
+            <field name="status" position='replace'/>
+            <field name="capacity" position='after'>
+                <field name="status" widget='badge' decoration-success="status == 'available'" decoration-danger="status == 'occupied'" />
+            </field>
+        </field>
+    </record>
+
+    <record id="view_hotel_room_form_inherit" model="ir.ui.view">
+        <field name="name">hotel.room.form.inherit</field>
+        <field name="model">hotel.room</field>
+        <field name="inherit_id" ref="hotel.view_hotel_room_form"/>
+        <field name="arch" type="xml">
+            <field name="room_categ_id" position='after'>
+                <field name="unit_category_id" readonly='1'/>
+                <field name="product_id" readonly='1'/>
+            </field>
+        </field>
+    </record>
+
+
+    <record id="product_template_search_view_inherit" model="ir.ui.view">
+        <field name="name">hotel.room.form.inherit</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="group" position="before">
+                <field string="Room" name="isroom"/>
+            </xpath>
+            <xpath expr="filter[@name='consumable']" position="after">
+                <filter string="Not Rooms" name="filter_isroom" domain="[['isroom','=',False]]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_template_action_product" model="ir.actions.act_window">
+        <field name="name">Products</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">kanban,tree,form</field>
+        <field name="search_view_id" ref="stock.product_template_search_form_view_stock"/>
+        <field name="context">{"search_default_consumable": 1, 'default_detailed_type': 'product', 'default_filter_isroom': '1'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No product found. Let's create one!
+            </p><p>
+                Track your stock quantities by creating storable products.
+            </p>
+        </field>
+    </record>
+
+    <record id="product_template_action" model="ir.actions.act_window">
+        <field name="name">Products</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">kanban,tree,form,activity</field>
+        <field name="view_id" ref="product.product_template_kanban_view"/>
+        <field name="search_view_id" ref="product.product_template_search_view"/>
+        <field name="context">{"search_default_filter_to_sell":1, "sale_multi_pricelist_product_template": 1, 'default_filter_isroom': '1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new product
+            </p><p>
+                You must define a product for everything you sell or purchase,
+                whether it's a storable product, a consumable or a service.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_product_pages_list" model="ir.actions.act_window">
+        <field name="name">Product Pages</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">tree,kanban</field>
+        <field name="view_id" ref="website_sale.product_pages_tree_view"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'sequence': 1, 'view_id': ref('website_sale.product_pages_tree_view')}),
+            (0, 0, {'view_mode': 'kanban', 'sequence': 2, 'view_id': ref('website_sale.product_pages_kanban_view')}),
+        ]"/>
+        <field name="context">{'create_action': 'website_sale.product_product_action_add, 'default_filter_isroom': '1'}</field>
+    </record>
+
+</odoo>

@@ -1,0 +1,13 @@
+<odoo>
+    <data>
+
+          <record id="breed_01" model="trading.breeds">
+            <field name="name">Tarpan</field>
+          </record>
+
+          <record id="breed_02" model="trading.breeds">
+            <field name="name">Akhal-Teke</field>
+          </record>
+          
+    </data>
+</odoo>

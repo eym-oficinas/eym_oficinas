@@ -1,0 +1,13 @@
+<odoo>
+    <data>
+
+          <record id="gender_01" model="trading.genders">
+            <field name="name">Male</field>
+          </record>
+
+          <record id="gender_02" model="trading.genders">
+            <field name="name">Female</field>
+          </record>
+
+    </data>
+</odoo>

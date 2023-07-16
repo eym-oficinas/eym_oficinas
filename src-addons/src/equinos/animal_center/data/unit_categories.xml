@@ -1,0 +1,7 @@
+<odoo>
+  <data>
+    <record id="unit_category_01" model="unit.categories">
+        <field name="name">Cuarentena</field>
+    </record>
+  </data>
+</odoo>

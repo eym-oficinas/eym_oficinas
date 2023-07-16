@@ -1,0 +1,71 @@
+<odoo>
+    <data>
+
+<!-- 
+
+    <template id="view_page_forms_shipping">
+        <t t-call="website.layout">
+            <div id="wrap">
+                <div class="container">
+                    <div class="form-shipping-page">
+                        <form class="form-form-shipping">
+
+                            <input name="id" id="id" value="1" class="invisible"/>
+
+                            <div class="row">
+
+                                <div class="mb-3 col-4">
+                                    <label for="shipper" class="form-label">Shipper</label>
+                                    <select class="form-control" name="shipper" id="shipper"/>
+                                </div>
+
+                            </div>
+
+                            <div class="row">
+
+                                <div class="mb-3 col-4">
+                                    <label for="departure" class="form-label">Departure</label>
+                                    <select class="form-control" name="departure" id="departure"/>
+                                </div>
+
+                                <div class="mb-3 col-4">
+                                    <label for="arrive" class="form-label">Arrive</label>
+
+
+                            </div>
+
+                            <div class="btn btn-default form-add-item"><i class="fa fa-plus"/> Add </div>
+                            <button type="submit" id="form-form-shipping-submit" class="btn btn-primary"><i class="fa fa-cloud"/> Submit</button>
+
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template> -->
+
+
+
+
+<!--
+        <template id="listing">
+          <ul>
+            <li t-foreach="objects" t-as="object">
+              <a t-attf-href="#{ root }/objects/#{ object.id }">
+                <t t-esc="object.display_name"/>
+              </a>
+            </li>
+          </ul>
+        </template>
+        <template id="object">
+          <h1><t t-esc="object.display_name"/></h1>
+          <dl>
+            <t t-foreach="object._fields" t-as="field">
+              <dt><t t-esc="field"/></dt>
+              <dd><t t-esc="object[field]"/></dd>
+            </t>
+          </dl>
+        </template>
+-->
+    </data>
+</odoo>

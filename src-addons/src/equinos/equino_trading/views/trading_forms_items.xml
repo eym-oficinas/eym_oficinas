@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- tree view -->
+        <record id="view_trading_forms_items_tree" model="ir.ui.view">
+            <field name="name">Trading Forms Items</field>
+            <field name="model">trading.forms.items</field>
+            <field name="type">tree</field>
+            <field name="priority" eval="8"/>
+            <field name="arch" type="xml">
+                <tree string="Trading Forms" create='0'>
+                    <field name="name" />
+                    <field name="gender"/>
+                    <field name="specie_id"/>
+                    <field name="breed_id"/>
+                    <field name="age"/>
+                    <field name="color_id"/>
+                    <field name="id_number_microchip"/>
+                    <field name="final_customer"/>
+                    <field name="t_number"/>
+                    <field name="driver_id"/>
+                    <field name="form_id"/>
+                </tree>
+            </field>
+        </record>
+        <!-- action window -->
+        <record id="action_trading_forms_items" model="ir.actions.act_window">
+            <field name="name">Trading Forms Items</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">trading.forms.items</field>            
+            <field name="view_mode">tree</field>           
+        </record>
+
+    </data>
+</odoo>
