@@ -1,0 +1,4 @@
+"id","perm_create","perm_unlink","model_id","name","perm_read","perm_write"
+"__export__.ir_model_access_154_9649701d","True","True","Feeding Services","hotel.services.feeding","True","True"
+"__export__.ir_model_access_154_9965e01d","True","True","Services Veterinary","hotel.services.veterinary","True","True"
+"__export__.ir_model_access_153_7a545fsd","True","True","Cleaning Services","hotel.services.cleaning","True","True"

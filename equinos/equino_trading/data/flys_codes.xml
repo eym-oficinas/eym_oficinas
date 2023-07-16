@@ -1,0 +1,35 @@
+<odoo>
+    <data noupdate="0">
+
+          <record id="fly_01" model="fly.codes">
+            <field name="name">Jorge Newbery Airpark</field>
+            <field name="code">AEP</field>
+          </record>
+
+          <record id="fly_02" model="fly.codes">
+            <field name="name">Juruti Airport</field>
+            <field name="code">JRT</field>
+          </record>
+          
+          <record id="fly_03" model="fly.codes">
+            <field name="name">Porto Urucu Airport</field>
+            <field name="code">RPU</field>
+          </record>
+
+          <record id="fly_04" model="fly.codes">
+            <field name="name">Islas Malvinas Airport</field>
+            <field name="code">ROS</field>
+          </record>
+
+          <record id="fly_06" model="fly.codes">
+            <field name="name">EEUU - Miami International Airport - MIA</field>
+            <field name="code">MIA</field>
+          </record>
+
+          <record id="fly_07" model="fly.codes">
+            <field name="name">ARG - Buenos Aires - Ministro Pistarini International - EZE</field>
+            <field name="code">EZE</field>
+          </record>
+
+    </data>
+</odoo>

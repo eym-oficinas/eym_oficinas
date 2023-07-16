@@ -1,0 +1,145 @@
+<odoo>
+  <data>
+
+    <record id="view_calendar_event_calendar_inherit_form" model="ir.ui.view">
+      <field name="name">calendar.event.form</field>
+      <field name="model">calendar.event</field>
+      <field name="type">form</field>
+      <field name="priority" eval="8"/>
+      <field name="inherit_id" ref="calendar.view_calendar_event_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//page[last()]" position="after">
+
+            <page string='Animal Center'>
+            
+                <group>
+                  <field name='color' widget='color_picker' readonly='1'/>
+                  <field name='is_equine' widget='boolean_toggle' readonly='1'/>
+                </group>
+
+                <group>
+                    <field name="folio_id" readonly='1'/>
+                    <field name="sale_order_id"  readonly='1'/> 
+                    <field name="project_id" readonly='1'/>               
+                </group>   
+
+                <group string='Lodging'>
+                    <field name="units_ids"/>
+                    <field name="filter_units_ids" invisible='1'/>
+                    <field name="room_line_ids" widget='many2many_list' readonly='1'/>
+                </group>   
+                
+            </page>
+                       
+        </xpath>
+      </field>
+    </record>
+
+    <record id="view_calendar_event_calendar_inherit_tree" model="ir.ui.view">
+      <field name="name">calendar.event.tree</field>
+      <field name="model">calendar.event</field>
+      <field name="type">form</field>
+      <field name="priority" eval="8"/>
+      <field name="inherit_id" ref="calendar.view_calendar_event_tree"/>
+      <field name="arch" type="xml">
+        <xpath expr="//field[last()]" position="after">          
+          <field name="folio_id" readonly='1'/>
+          <field name="sale_order_id"  readonly='1' optional='hide'/> 
+          <field name="project_id" readonly='1' optional='hide'/>
+          <field name="units_ids" readonly='1' widget='many2many_tags'/>
+          <field name="room_line_ids" widget='many2many_tags' readonly='1' optional='show'/>          
+          <field name='color' widget='color_picker' readonly='1'  optional='hide'/>
+          <field name='is_equine' widget='boolean_toggle' readonly='1'  optional='hide'/>  
+          <field name="filter_units_ids" invisible='1'/>
+        </xpath>
+      </field>
+    </record>
+
+    <record id="view_calendar_event_calendar_inherit_stick" model="ir.ui.view">
+      <field name="name">calendar.event.form</field>
+      <field name="model">calendar.event</field>
+      <field name="type">form</field>
+      <field name="priority" eval="8"/>
+      <field name="inherit_id" ref="calendar.view_calendar_event_calendar"/>
+      <field name="arch" type="xml">
+        <xpath expr="//field[2]" position="after">
+          <field name="folio_id" readonly='1'/>
+          <field name="sale_order_id" readonly='1'/>
+          <field name="project_id" readonly='1'/>
+          <field name="room_line_ids" readonly='1' invisible='1' />
+          <field name='is_equine' widget='boolean_toggle' readonly='1'/>
+          <field name='color' widget='color_picker'/>
+          <field name="filter_units_ids" invisible='1'/>
+        </xpath> 
+        <xpath expr="//calendar" position="attributes">
+          <attribute name="color">color</attribute>
+        </xpath>
+        <xpath expr="//calendar" position="attributes">
+          <attribute name="mode">month</attribute>
+        </xpath>
+      </field>
+    </record>
+
+    <record id="view_calendar_event_search_inherit" model="ir.ui.view">
+      <field name="name">calendar.event.tree</field>
+      <field name="model">calendar.event</field>
+      <field name="type">search</field>
+      <field name="priority" eval="8"/>
+      <field name="inherit_id" ref="calendar.view_calendar_event_search"/>
+      <field name="arch" type="xml">
+        <xpath expr="//field[last()]" position="before">
+          <field name="is_equine"/>
+          <field name="units_ids"/>
+        </xpath>
+
+        <xpath expr="//filter[@name='busy']" position="before">
+          <filter string="Unit 1" name="unit_1" domain="[('units_ids', '=', 1)]"/>
+          <separator/>
+          <filter string="Unit 2" name="unit_2" domain="[('units_ids', '=', 2)]"/>
+          <separator/>
+          <filter string="Unit 3" name="unit_3" domain="[('units_ids', '=', 3)]"/>
+          <separator/>
+          <filter string="Unit 4" name="unit_4" domain="[('units_ids', '=', 4)]"/>
+          <separator/>
+          <filter string="Unit 5" name="unit_5" domain="[('units_ids', '=', 5)]"/>
+          <separator/>
+          <filter string="Unit 6" name="unit_6" domain="[('units_ids', '=', 6)]"/>
+          <separator/>
+          <filter string="Unit 7" name="unit_6" domain="[('units_ids', '=', 7)]"/>
+          <separator/>
+        </xpath>
+        
+        <xpath expr="//filter[last()]" position="before">
+          <filter
+                name="units_ids"
+                string="Units"
+                context="{'group_by':'units_ids'}"
+            />
+            <filter
+                name="is_equine"
+                string="Trading"
+                context="{'group_by':'is_equine'}"
+            />
+        </xpath>
+      </field>
+    </record>
+
+    <record id="action_calendar_event_reservations" model="ir.actions.act_window">
+        <field name="name">Reservations</field>
+        <field name="res_model">calendar.event</field>
+        <field name="view_mode">calendar,tree,form</field>
+        <field name="view_id" ref="calendar.view_calendar_event_calendar"/>
+        <field name="search_view_id" ref="calendar.view_calendar_event_search"/>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            No meetings found. Let's schedule one!
+          </p><p>
+            The calendar is shared between employees and fully integrated with
+            other applications such as the employee leaves or the business
+            opportunities.
+          </p>
+        </field>
+    </record>
+
+  </data>
+</odoo>
