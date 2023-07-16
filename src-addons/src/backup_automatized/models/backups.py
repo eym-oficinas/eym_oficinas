@@ -142,7 +142,11 @@ class backup_automatized(models.Model):
                     response = os.system(config_memory)
                     _logger.warning("config_memory: %s", response)
                     
-                    push = str(exec_dir) + str("git push --set-upstream origin ") + str(backup_repository.github_branch)
+                    # push = str(exec_dir) + str("git push --set-upstream origin ") + str(backup_repository.github_branch)
+                    push = str(exec_dir) + str("git -c core.packedGitWindowSize=32m -c core.packedGitLimit=256m  push --set-upstream origin ") + str(backup_repository.github_branch)
+
+
+                    
                     response = os.system(push)
                     _logger.warning("push: %s", response)
                     # _logger.warning(response)
