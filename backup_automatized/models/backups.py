@@ -64,6 +64,8 @@ class backup_automatized(models.Model):
 
             if(addons_path):
                 addons_path = addons_path.split(',')
+                _logger.info("SIT addon path matriz = %s", addons_path)                     
+
                 if(len(addons_path) > 0):
                     
                     os.system(str("find " + str(level_3) + " -type d -name '__pycache__' -exec rm -rf {} \; "))
