@@ -1,0 +1,36 @@
+.list-item-cell
+{
+    display: contents;
+}
+.list-item-cell input
+{
+    max-width: 100%;
+}
+.form-form-shipping
+{
+    margin-bottom: 30px;
+}
+.form-item-action
+{
+    background-color: white;
+}
+.form-item-action-remove
+{
+    background: red;
+}
+.col-resgistered_name
+{
+    width: 120px;
+}
+.col-t_number
+{
+    width: 120px!important;
+}
+.col-driver_contact
+{
+    width: 160px!important;
+}
+.form-form-shipping .table > :not(caption) > * > *
+{
+    padding: 0.2rem 0.2rem!important;
+}

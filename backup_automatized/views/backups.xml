@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+	<record id="backup_automatized_tree" model="ir.ui.view">
+		<field name="name">Copia Seguridad Automático</field>
+		<field name="model">backup.automatized</field>
+		<field name="type">tree</field>
+		<field name="priority" eval="8"/>
+		<field name="arch" type="xml">
+			<tree string="Backup Automático">
+				<field name="name" />
+				<field name="github_username"/>
+				<field name="github_repository"/>
+				<field name="github_branch"/>
+			</tree>
+		</field>
+	</record>
+
+	<record id="backup_automatized_form" model="ir.ui.view">
+		<field name="name">kuber_template_form</field>
+		<field name="model">backup.automatized</field>
+		<field name="type">form</field>
+		<field name="priority" eval="8"/>
+		<field name="arch" type="xml">
+			<form string="Copia Seguridad Automático">
+				<header>
+				</header>
+				<sheet>
+					<div class="oe_button_box" name="button_box">
+						<!--button type="object" name="action_view_detail" class="oe_stat_button" icon="fa-pencil-square-o"-->
+							<!--field name="detail_count" widget="statinfo" string="Detail(s)"/-->
+							<!--field name="detail_ids" invisible="1"/-->
+						<!--/button-->
+					</div>
+					<div class="oe_title">
+						<label for="name" class="oe_edit_only" string="Copia Seguridad Automático"/>
+						<h1><field name="name"/></h1>
+					</div>
+					<notebook>
+						<page string="Base de Datos">
+							<group>
+								<field name="database_name"/>
+								<field name="master_password" password="True" />
+							</group>
+						</page>
+						<page string="Github">
+							<group>
+								<field name="github_username"/>
+								<field name="github_mail"/>
+								<field name="github_repository"/>
+								<field name="github_branch"/>														
+								<field name="github_token" password="True" />
+							</group>
+						</page>
+						<page string="Módulos">
+							<group>
+								<field name="addons_path"/>
+							</group>
+						</page>						
+					</notebook>					
+				</sheet>
+			</form>
+		</field>
+	</record>
+
+	<record id="action_backup_automatized" model="ir.actions.act_window">
+        <field name="name">Configure copias de seguridad de base de datos y sistema de archivos</field>
+        <field name="res_model">backup.automatized</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_id" ref="backup_automatized_tree"/>
+    </record>
+
+	<menuitem id="menu_backup_automatized"
+			  name="Copias de Seguridad"
+			  parent="base.menu_automation"
+			  action="action_backup_automatized"			  
+			  sequence="2"/>
+
+</odoo>

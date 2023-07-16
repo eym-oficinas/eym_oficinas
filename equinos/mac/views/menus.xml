@@ -1,0 +1,36 @@
+<odoo>
+  <data>
+
+    <menuitem sequence='1' id="menu_miami_animal_center_root" name="MIAMI ANIMAL CENTER"  groups="base.group_user"/>
+      <menuitem
+                id="menu_miami_animal_center_services"
+                name="Services"
+                sequence="20"
+                parent="menu_miami_animal_center_root"
+            />
+            <menuitem
+                        id="menu_miami_animal_center_feeding"
+                        name="Feeding"
+                        sequence="20"
+                        parent="menu_miami_animal_center_services"
+                    />
+            <menuitem
+                        id="menu_miami_animal_center_cleaning"
+                        name="Cleaning"
+                        sequence="20"
+                        parent="menu_miami_animal_center_services"
+                    />
+            <menuitem
+                        id="menu_miami_animal_center_veterinary"
+                        name="Veterinary"
+                        sequence="20"
+                        parent="menu_miami_animal_center_services"
+                    />
+            <menuitem
+                        id="menu_miami_animal_center_service_categories"
+                        name="Service Categories"
+                        sequence="40"
+                        parent="menu_miami_animal_center_services"
+                    />
+  </data>
+</odoo>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="open_hotel_room_type_form_tree" model="ir.actions.act_window">
+        <field name="name">Units</field>
+        <field name="res_model">hotel.room.type</field>
+        <field name="context">{}</field>
+        <field name="view_mode">tree,form</field>
+    </record>   
+
+     <record id="view_units_form_inherit" model="ir.ui.view">
+        <field name="name">Units</field>
+        <field name="model">hotel.room.type</field>
+        <field name="inherit_id" ref="hotel.view_hotel_room_type_form"/>
+        <field name="type">form</field>
+        <field name="priority" eval="8"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='categ_id']" position="after">
+            
+                <group class='col-3 mt-3'>
+                    <field name="unit_category_id"/>
+                    <field name="capacity"/>
+                </group>
+            </xpath>   
+
+             <xpath expr="//field[@name='categ_id']" position="replace"/>      
+
+        </field>
+    </record>
+
+</odoo>

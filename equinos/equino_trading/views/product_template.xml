@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- tree view -->
+        <record id="view_equine_trading_horses_tree" model="ir.ui.view">
+            <field name="name">Horses</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_tree_view"/>
+            <field name="type">tree</field>
+            <field name="priority" eval="8"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[last()]" position="after">
+                    <field name="is_equine" widget='boolean_toggle'/>
+                </xpath>  
+            </field>
+        </record>
+        <!-- form view -->
+        <record id="view_equine_trading_horses_form" model="ir.ui.view">
+            <field name="name">Horse</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_form_view"/>
+            <field name="type">form</field>
+            <field name="priority" eval="8"/>
+            <field name="arch" type="xml">
+                <xpath expr="//div[@name='options']/span[last()]" position="after">
+                    <span class="d-inline-block">
+                        <field name="is_equine" widget='boolean_toggle'/>
+                        <label for="is_equine"/>
+                    </span>
+                </xpath>    
+                <xpath expr="//div[@name='options']/span/field[@name='purchase_ok']" position="attributes">
+                    <attribute name="widget">boolean_toggle</attribute>
+                </xpath>   
+                <xpath expr="//div[@name='options']/span/field[@name='sale_ok']" position="attributes">
+                    <attribute name="widget">boolean_toggle</attribute>
+                </xpath>                        
+            </field>
+        </record>
+
+        <!-- action window -->
+        <record id="action_pt_horses" model="ir.actions.act_window">
+            <field name="name">Horses</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">product.template</field>
+            
+            <field name="view_mode">kanban,tree,form,graph</field>
+            <field name="context">{"search_default_fieldname":1}</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                Click to add a new Horses
+                </p><p>
+                Click the Create button to add a new Horses
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>
