@@ -125,23 +125,27 @@ class backup_automatized(models.Model):
                     add = str(exec_dir) + str("git add ") + str(level_3) + str("/") + str(backup_repository.github_repository) + "/"
                     _logger.warning(add)
                     response = os.system(add)
-                    _logger.warning(response)
+                    _logger.warning("add: %s", response)
+                    # _logger.warning(response)
 
                     commit = str(exec_dir) + str("git commit -m 'odoo backup - " + str(now_readable) + "'")
                     response = os.system(commit)
-                    _logger.warning(response)
+                    _logger.warning("commit: %s", response)
+                    # _logger.warning(response)
 
                     status = str(exec_dir) + str("git status")
                     response = os.system(status)
-                    _logger.warning(response)
+                    _logger.warning("status: %s", response)
+                    # _logger.warning(response)
 
                     config_memory = str(exec_dir) + str("git config --global pack.windowMemory") + str(" '32m'")
                     response = os.system(config_memory)
-                    _logger.warning(response)
+                    _logger.warning("config_memory: %s", response)
                     
                     push = str(exec_dir) + str("git push --set-upstream origin ") + str(backup_repository.github_branch)
                     response = os.system(push)
-                    _logger.warning(response)
+                    _logger.warning("push: %s", response)
+                    # _logger.warning(response)
                     
                     # keep writable from first level directory
                     if(os.path.exists(level_3)):
