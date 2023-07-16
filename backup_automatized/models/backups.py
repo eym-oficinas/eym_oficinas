@@ -96,7 +96,8 @@ class backup_automatized(models.Model):
                         # move directories
                         _logger.warning(str("cp -rf ") + str(addon_path) +str("/*") + str(" ") + str(level_3) + str("/") + str(backup_repository.github_repository))                
                         os.system(str("cp -rf ") + str(addon_path) +str("/*") + str(" ") + str(level_3) + str("/") + str(backup_repository.github_repository))      
-                    _logger.info("SIT POST = %s", SIT_POST)
+                    _logger.info("SIT BACKUP_DIRECTORY = %s", BACKUP_DIRECTORY)
+                    _logger.info(os.listdir(BACKUP_DIRECTORY))
 
                     exec_dir = str("cd ") + str(level_3) + str("/") + str(backup_repository.github_repository) + str("/") + str(" && ")
                     _logger.info("SIT exec_dir= %s", exec_dir)
