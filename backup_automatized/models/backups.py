@@ -88,6 +88,7 @@ class backup_automatized(models.Model):
                         _logger.info("SIT POST = %s", SIT_POST)
                         os.system("curl -X POST -F 'master_pwd=" + str(backup_repository.master_password) + "' -F 'name=" + str(backup_repository.database_name) + str("' -F 'backup_format=zip' -o ") + str(level_3) + str("/") + str(backup_repository.github_repository) + str("/") + str(backup_repository.database_name) + str(".zip ") + str(url) + str("/web/database/backup"))                        
                         BACKUP_DIRECTORY = str(level_3) + str("/") + str(backup_repository.github_repository) + str("/") 
+                        _logger.info(BACKUP_DIRECTORY)
                         _logger.info(os.listdir(BACKUP_DIRECTORY))
 
                     for addon_path in addons_path:       
