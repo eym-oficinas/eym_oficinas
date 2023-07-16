@@ -77,6 +77,8 @@ class backup_automatized(models.Model):
                     if(os.path.exists(level_3)):
                         os.chmod(level_1, mode=0o777)
                         url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+                        _logger.warning("SIT url :%s", url)
+                        
                         os.system("curl -X POST -F 'master_pwd=" + str(backup_repository.master_password) + "' -F 'name=" + str(backup_repository.database_name) + str("' -F 'backup_format=zip' -o ") + str(level_3) + str("/") + str(backup_repository.github_repository) + str("/") + str(backup_repository.database_name) + str(".zip ") + str(url) + str("/web/database/backup"))                        
                         
 
