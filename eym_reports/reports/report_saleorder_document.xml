@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <template id="report_saleorder_document_customized" inherit_id="sale.report_saleorder_document">
+    <xpath expr="//table[hasclass('o_main_table')]/thead/tr/th" position="before">
+      <th name="th_image" class="text-left"/>
+    </xpath>
+    <xpath expr="//td[@name='td_name']" position="before">
+      <td name="td_image">
+        <div t-field="line.product_id.image_1920" t-options="{'widget': 'image'}" style="width:70px"/>
+      </td>
+    </xpath>
+    <xpath expr="//th[@name='th_taxes']" position="replace"/>
+    <xpath expr="//td[@name='td_taxes']" position="replace"/>
+    <xpath expr="//td[@name='td_quantity']/span" position="replace"/>
+    <xpath expr="//td[@name='td_quantity']/span" position="replace">
+      <span t-field="line.product_uom_qty"/>
+      <small t-field="line.product_uom"/>
+    </xpath>
+    <xpath expr="//t[@t-set='address']" position="replace"/>
+    <xpath expr="//t[@t-set='information_block']" position="replace"/>
+    <xpath expr="//div[@id='informations']" position="replace"/>
+    <xpath expr="//t[@t-set='display_discount']" position="before">
+      <style>
+          .page
+          {
+          font-size:12px!important;
+          color:black!important;
+          }
+          strong, h2, th
+          {
+          color:black!important;
+          }
+          
+      </style>
+      <div class="row">
+        <table class="table table-sm table-bordered">
+          <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Cliente:</td>
+            <td colspan="3" style="padding:7px;">
+              <t t-esc="doc.partner_id.name"/>
+            </td>
+          </tr>
+          <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'civil_registration'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> R.C.:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'id_card'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> T.I.:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'id_document'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  C.C.:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'national_citizen_id'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">   C.C.:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'residence_document'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  T.E.:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'foreign_id_card'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  C.E.:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'rut'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">  NIT: </td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'passport'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> PAS:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'external_id'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;"> D.I.E.:</td>
+            </t>
+            <t t-if="doc.partner_id.l10n_latam_identification_type_id.l10n_co_document_code == 'diplomatic_card'">
+              <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">   Tax ID:</td>
+            </t>
+            <td style="padding:7px;">
+              <span t-field="doc.partner_id.vat"/>
+            </td>
+            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">
+                     Telefono:     
+            </td>
+            <td style="padding:7px;">
+              <span t-field="doc.partner_id.phone"/>
+              <span t-field="doc.partner_id.mobile"/>
+            </td>
+          </tr >
+          <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+            <td style="background-color: #d1d1d1;font-weight: bolder;color:black;padding:7px;">
+                     Direccion: 
+            </td>
+            <td style="padding:7px;">
+              <span t-field="doc.partner_id.street"/>
+              <span t-field="doc.partner_id.street2"/>
+            </td>
+            <td style="background-color: #d1d1d1;font-weight: bolder;color:black;padding:7px;">
+                     Ciudad:     
+            </td>
+            <td style="padding:7px;">
+              <span t-field="doc.partner_id.city"/>
+ /              <span t-field="doc.partner_id.country_id"/>
+            </td>
+          </tr>
+          <tr style="font-size:12px;line-height: 90%;margin-left:-20px; padding:7px;">
+            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Direccion de entrega:</td>
+            <td colspan="3" style="padding:7px;">
+              <t t-esc="doc.partner_shipping_id.street"/>
+            </td>
+          </tr>
+          <tr style="font-size:12px;line-height: 30%;margin-left:-20px; padding:7px;">
+            <td style="background-color: #d1d1d1;font-weight: bolder;color:black; padding:7px;">Correo:</td>
+            <td colspan="3" style="padding:7px;">
+              <t t-esc="doc.partner_id.email"/>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </xpath>
+</template>
+</odoo>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="crm_lead_view_form_inherit" model="ir.ui.view">
+      <field name="name">crm.lead.inherited.crm.oportunities</field>
+      <field name="model">crm.lead</field>
+      <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//button[@name='action_view_sale_quotation']" position="before">
+          <button class="oe_stat_button" type="object" name="action_view_repairs" icon="fa-wrench">
+              <field name="repairs_count" widget="statinfo" string="Repairs"/>
+          </button>
+        </xpath>
+        <xpath expr="//button[@name='action_set_won_rainbowman']" position="after">
+          <button string="New Rapair" name="action_repair_lead_new" type="object" class="oe_highlight" data-hotkey="r" title="Create new repair" attrs="{'invisible': ['|', ('type', '=', 'lead'), '&amp;', ('probability', '=', 0), ('active', '=', False)]}"/>
+        </xpath>       
+      </field>
+    </record>
+
+    <record id="action_repairs_with_onboarding" model="ir.actions.act_window">
+        <field name="name">Repairs</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">repair.order</field>
+        <!--<field name="view_id" ref="repair.view_repair_tree_with_onboarding"/>-->
+        <field name="view_mode">tree,kanban,form,calendar,pivot,graph,activity</field>
+        <field name="search_view_id" ref="repair.view_repair_order_form_filter"/>
+        <field name="context">{'search_default_my_repairs': 1}</field>
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Create a new repair, the first step of a new sale!
+          </p><p>
+            Once the repair is confirmed by the customer, it becomes a repair order.<br/> You will be able to create an invoice and collect the payment.
+          </p>
+        </field>
+    </record>
+
+    <record id="view_repair_tree_with_onboarding" model="ir.ui.view">
+        <field name="name">repair.order.tree</field>
+        <field name="model">repair.order</field>
+        <field name="inherit_id" ref="repair.view_repair_order_tree"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//tree" position="attributes">
+                <attribute name="banner_route">/sales/sale_quotation_onboarding_panel</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="repair_order_view_search_inherit_repair" model="ir.ui.view">
+        <field name="name">sale.order.search.inherit.quotation</field>
+        <field name="model">repair.order</field>
+        <field name="mode">primary</field>
+        <field name="inherit_id" ref="repair.view_repair_order_form_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[last()]" position="replace">
+                <filter string="My Repairs" name="my_repairs" domain="[('user_id', '=', uid)]"/>
+                <separator/>
+                <filter string="Repairs" name="draft" domain="[('state','in',('draft', 'confirmed'))]"/>
+                <filter string="Repaired Orders" name="repaired" domain="[('state','in',('ready','done'))]"/>
+                <separator/>
+                <filter string="Create Date" name="filter_create_date" date="create_date"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
