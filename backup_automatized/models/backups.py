@@ -72,10 +72,16 @@ class backup_automatized(models.Model):
                     os.system(str("find " + str(level_3) + " -type d -name '.ipynb_checkpoints' -exec rm -rf {} \; "))
 
                     # iteractive github
+                    # os.system(str(exec_dir) + str("git config --global user.email '" +str(backup_repository.github_mail) + "'"))
+                    # os.system(str(exec_dir) + str("git config --global user.name '" +str(backup_repository.github_username) + "'"))
                     os.system(str(exec_dir) + str("git config --global user.email '" +str(backup_repository.github_mail) + "'"))
-                    os.system(str(exec_dir) + str("git config --global user.name '" +str(backup_repository.github_username) + "'"))
-                    _logger.warning( str(exec_dir) + str("git clone -b " + str(backup_repository.github_branch) + " https://" + str(backup_repository.github_token) + str("@github.com/") + str(backup_repository.github_username) + str("/") + str(backup_repository.github_repository) + str(".git")) )
-                    os.system(str(exec_dir) + str("git clone -b " + str(backup_repository.github_branch) + " https://" + str(backup_repository.github_token) + str("@github.com/") + str(backup_repository.github_username) + str("/") + str(backup_repository.github_repository) + str(".git")))                    
+                    os.system(str(exec_dir) + str("git config --global user.name '" +str(backup_repository.github_username) + "'"))                    
+                    os.system(str(exec_dir) + str("eval `ssh-agent -s`   git config --global user.name '" +str(backup_repository.github_username) + "'"))                    
+                    LIMPIAR_GIT = str(exec_dir) + str("rm -rf " + str(backup_repository.github_repository)  )
+                    os.system(LIMPIAR_GIT)
+                    _logger.warning( str(exec_dir) + str("eval `ssh-agent -s` &&  ssh-add  /livecargo.priv  &&   git clone -b ") + str(backup_repository.github_branch) + " git" +  str("@github.com:") + str(backup_repository.github_username) + str("/") + str(backup_repository.github_repository) + str(".git") )                          
+                    os.system(str(exec_dir) + str("eval `ssh-agent -s` &&  ssh-add  /livecargo.priv  &&   git clone -b ") + str(backup_repository.github_branch) + " git" +  str("@github.com:") + str(backup_repository.github_username) + str("/") + str(backup_repository.github_repository) + str(".git"))
+                    # os.system(str(exec_dir) + str("git clone -b " + str(backup_repository.github_branch) + " https://" + str(backup_repository.github_token) + str("@github.com/") + str(backup_repository.github_username) + str("/") + str(backup_repository.github_repository) + str(".git")))                    
 
                     now = datetime.now()
                     now_readable = now.strftime("%d.%m.%Y.%H.%M.%S")
@@ -101,12 +107,17 @@ class backup_automatized(models.Model):
 
                     exec_dir = str("cd ") + str(level_3) + str("/") + str(backup_repository.github_repository) + str("/") + str(" && ")
                     _logger.info("SIT exec_dir= %s", exec_dir)
-                    zip_book = str(exec_dir) + "zip " + str(backup_repository.database_name) + ".zip --out database-"+str(now_readable)+".zip -s 100m"
-                    os.system(zip_book)
+                    FILE_ZIP = os.path.getsize(str( BACKUP_DIRECTORY + backup_repository.database_name) + ".zip"  )
+                    _logger.info("SIT size = %s", FILE_ZIP)
+                    if FILE_ZIP > 104857600:
+                        zip_book = str(exec_dir) + "zip " + str(backup_repository.database_name) + ".zip --out database-"+str(now_readable)+".zip -s 100m"
+                        os.system(zip_book)
 
-                    rm_db_zip = str(exec_dir) + "rm -r " + str(backup_repository.database_name) + ".zip"
-                    os.system(rm_db_zip)
-
+                        rm_db_zip = str(exec_dir) + "rm -r " + str(backup_repository.database_name) + ".zip"
+                        os.system(rm_db_zip)
+                    else: 
+                        zip_book = str(exec_dir) + "mv " + str(backup_repository.database_name) + ".zip database-"+str(now_readable)+".zip"
+                        os.system(zip_book)
                     #auth = "https://github.com/" + str(backup_repository.github_username) + "/" + str(backup_repository.github_repository) + str(".git")                    
 
                     init = str(exec_dir) + str("git init '" + str(level_3)  + str("/") + str(backup_repository.github_repository) + "/'")
@@ -131,38 +142,46 @@ class backup_automatized(models.Model):
                         os.chmod(level_1, mode=0o777)
                         
                     for addon_path in addons_path:                            
-                        _logger.warning("***** directory ****")
+                        _logger.warning("***** directory ****=  %s", addon_path)
                         #_logger.warning(str("rm -r ") + str(" ") + str(level_3) + str("/") + str(backup_repository.github_repository) + str("/") + str("backup_automatized/models/repository/*"))
                         #os.system(str("rm -r ") + str(addon_path) +str("/*") + str(" ") + str(level_3) + str("/") + str(backup_repository.github_repository) + str("/") + str("backup_automatized/models/repository/*"))
                     # EOF
 
                     add = str(exec_dir) + str("git add ") + str(level_3) + str("/") + str(backup_repository.github_repository) + "/"
-                    _logger.warning(add)
+                    _logger.warning("add = %s", add)
                     response = os.system(add)
                     _logger.warning("add: %s", response)
                     # _logger.warning(response)
 
                     commit = str(exec_dir) + str("git commit -m 'odoo backup - " + str(now_readable) + "'")
+                    _logger.warning("commit = %s", commit)
+
                     response = os.system(commit)
                     _logger.warning("commit: %s", response)
                     # _logger.warning(response)
 
                     status = str(exec_dir) + str("git status")
+                    _logger.warning("status: %s", status)
+
                     response = os.system(status)
                     _logger.warning("status: %s", response)
                     # _logger.warning(response)
 
                     config_memory = str(exec_dir) + str("git config --global pack.windowMemory") + str(" '32m'")
+                    _logger.warning("config_memory: %s", config_memory)
+
                     response = os.system(config_memory)
                     _logger.warning("config_memory: %s", response)
-                    
+                    os.system(str(exec_dir) + str("git config --global user.email '" +str(backup_repository.github_mail) + "'"))
+                    os.system(str(exec_dir) + str("git config --global user.name '" +str(backup_repository.github_username) + "'"))
+
                     # push = str(exec_dir) + str("git push --set-upstream origin ") + str(backup_repository.github_branch)
-                    push = str(exec_dir) + str("git -c core.packedGitWindowSize=32m -c core.packedGitLimit=256m  push --set-upstream origin ") + str(backup_repository.github_branch)
-
-
-                    
-                    response = os.system(push)
-                    _logger.warning("push: %s", response)
+                    push = str(exec_dir) + str("eval `ssh-agent -s` &&  ssh-add  /livecargo.priv  && git push ") 
+                    # push = str(exec_dir) + str("git -c core.packedGitWindowSize=32m -c core.packedGitLimit=256m  push --set-upstream origin ") + str(backup_repository.github_branch)
+                    _logger.warning("push: %s", os.system(push) )
+                   
+                    # response = os.system(push)
+                    # _logger.warning("push: %s", response)
                     # _logger.warning(response)
                     
                     # keep writable from first level directory
