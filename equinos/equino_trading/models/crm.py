@@ -122,7 +122,8 @@ class crm_lead(models.Model):
                 if self.sequence_arrive:
                     crm_sequence += str(self.sequence_arrive.code)
                 if self.partner_id:
-                    crm_sequence += str(' ') + str(self.partner_id.name)
+                    crm_sequence += str(' ') + str(self.name) + "-" + str(self.partner_id.name)
+                _logger.info("SIT name = %s  | %s", str(crm_sequence).strip(), str(self.name) )
                 self.name = str(crm_sequence).strip()               
                 
                     

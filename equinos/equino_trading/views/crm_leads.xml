@@ -163,7 +163,7 @@
 
                                 <div class='col-4 for-fit'>
                                     <label for="form_id"/>
-                                    <!-- <field name='form_id'  domain="[['crf_crm_lead_id','=',id]]"/> -->
+                                    <field name='form_id'  domain="[['crf_crm_lead_id','=',id]]" invisible="1"/>
                                 </div> 
                                 <div class='col-2 small-button'  attrs="{'invisible': [('form_id','=',False)]}">
                                     <button title='Share Shipping Form' string="" name="action_share_shipping_form" type="object" class="oe_highlight" data-hotkey="g" ><i class='fa fa-paper-plane'/></button>
