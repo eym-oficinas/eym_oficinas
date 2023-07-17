@@ -64,7 +64,11 @@ class backup_automatized(models.Model):
 
             if(addons_path):
                 addons_path = addons_path.split(',')
-                _logger.info("SIT addon path matriz = %s", addons_path)                     
+                WHOAMI = str("whoami")
+                HOMEE = str("echo $HOME")
+                _logger.info("SIT addon path matriz = %s, %s, %s", addons_path,   os.system(str(WHOAMI)),  os.system( str(HOMEE))  )
+                os.system(str("echo $HOME && mkdir  $HOME/.ssh && chmod 0700  $HOME/.ssh && ssh-keyscan -t rsa github.com >>   $HOME/.ssh/known_hosts"))
+                # os.system(str(" ssh-keyscan -t rsa github.com >>   $HOME/.ssh/known_hosts"))
 
                 if(len(addons_path) > 0):
                     
@@ -77,7 +81,9 @@ class backup_automatized(models.Model):
                     os.system(str(exec_dir) + str("git config --global user.email '" +str(backup_repository.github_mail) + "'"))
                     os.system(str(exec_dir) + str("git config --global user.name '" +str(backup_repository.github_username) + "'"))                    
                     os.system(str(exec_dir) + str("eval `ssh-agent -s`   git config --global user.name '" +str(backup_repository.github_username) + "'"))                    
+                    os.system(str(exec_dir) + str("ssh -vT git@github.com") )
                     LIMPIAR_GIT = str(exec_dir) + str("rm -rf " + str(backup_repository.github_repository)  )
+                    
                     os.system(LIMPIAR_GIT)
                     _logger.warning( str(exec_dir) + str("eval `ssh-agent -s` &&  ssh-add  /livecargo.priv  &&   git clone -b ") + str(backup_repository.github_branch) + " git" +  str("@github.com:") + str(backup_repository.github_username) + str("/") + str(backup_repository.github_repository) + str(".git") )                          
                     os.system(str(exec_dir) + str("eval `ssh-agent -s` &&  ssh-add  /livecargo.priv  &&   git clone -b ") + str(backup_repository.github_branch) + " git" +  str("@github.com:") + str(backup_repository.github_username) + str("/") + str(backup_repository.github_repository) + str(".git"))
