@@ -19,7 +19,7 @@
 #    If not, see <http://www.gnu.org/licenses/>.
 #
 #############################################################################
-
+from __future__ import print_function
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 import odoo
@@ -36,7 +36,7 @@ import errno
 import logging
 
 
-from __future__ import print_function
+
 
 import google.auth
 from googleapiclient.discovery import build
