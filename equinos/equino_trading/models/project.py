@@ -4,6 +4,8 @@ from odoo import models, fields, api, _
 import logging
 _logger = logging.getLogger(__name__)
 from odoo.exceptions import UserError
+import logging
+_logger = logging.getLogger(__name__)
 
 class project(models.Model):
     _inherit = 'project.project'
@@ -49,7 +51,7 @@ class project(models.Model):
                 raise UserError('Already exist a project tracker for this oportunity. Remove it or edit instead.')
         else:
             raise UserError('System Error')
-            
+        _logger.info("SIT new_proyect= %s ", new_project)
         return new_project
     
     def action_view_track(self):
