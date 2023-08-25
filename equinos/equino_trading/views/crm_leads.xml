@@ -108,7 +108,8 @@
                         </div> 
                         <div class="col-7">
                             <label for="service_type" class='col-3'/>
-                            <field class='col-4' name="service_type" widget="radio" attrs="{'invisible': [('is_equine', '=', False)], 'required': [('is_equine', '=', True)]}"/>
+                            <!-- <field class='col-4' name="service_type" widget="radio" attrs="{'invisible': [('is_equine', '=', False)], 'required': [('is_equine', '=', True)]}"/> -->
+                            <field class='col-4' name="service_type" widget="radio" attrs="{'invisible': [('is_equine', '=', False)] }"/>
                         </div>   
                     </div>
                     <div attrs="{'invisible': [('is_equine', '=', False)]}">
@@ -163,7 +164,7 @@
 
                                 <div class='col-4 for-fit'>
                                     <label for="form_id"/>
-                                    <!-- <field name='form_id'  domain="[['crf_crm_lead_id','=',id]]"/> -->
+                                    <field name='form_id'  domain="[['crf_crm_lead_id','=',id]]" invisible="1"/>
                                 </div> 
                                 <div class='col-2 small-button'  attrs="{'invisible': [('form_id','=',False)]}">
                                     <button title='Share Shipping Form' string="" name="action_share_shipping_form" type="object" class="oe_highlight" data-hotkey="g" ><i class='fa fa-paper-plane'/></button>
@@ -176,7 +177,8 @@
                                 <div class='col-4 for-fit '>
                                     <label for="project_id"/>
                                     <field name="is_project_template" invisible='1'/>
-                                    <field name="project_id" attrs="{'invisible': [('is_equine', '=', False)], 'required': [('is_equine', '=', True)]}"  domain="[('is_equine', '=', True), ('service_type', '=', service_type)]"/>                                                                    
+                                    <!-- <field name="project_id" attrs="{'invisible': [('is_equine', '=', False)], 'required': [('is_equine', '=', True)]}"  domain="[('is_equine', '=', True), ('service_type', '=', service_type)]"/>                                                                     -->
+                                    <field name="project_id" attrs="{'invisible': [('is_equine', '=', False)] }"  domain="[('is_equine', '=', True), ('service_type', '=', service_type)]"/>                                                                    
                                 </div> 
                                 <div class='col-2 small-button'>
                                     <button title='Clone project tacking from selected' string="" name="action_replicate_project_tracking" type="object" class="oe_highlight" data-hotkey="g"  attrs="{'invisible': [('is_project_template','=',False)]}">
