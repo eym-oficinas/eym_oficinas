@@ -110,21 +110,27 @@ class crm_lead(models.Model):
     def _onchange_(self):
         if self:
             if self.is_equine:
-                crm_sequence = str(' ')
+                crm_sequence = str('')
+                self.name = str(crm_sequence).strip()               
+
                 if self.sequence_date:
                     date = datetime.strptime(str(self.sequence_date), DEFAULT_SERVER_DATE_FORMAT)
                     sequence_date = str(date.month) + str('-') + str(date.day) + str('-') + str(date.year)
                     crm_sequence += str(sequence_date) + str(' ')
                 if self.sequence_qty:
-                    crm_sequence += str(self.sequence_qty) + str(' ') + str(self.sequence_specie.name) + str(' ')
+                    crm_sequence += str(self.sequence_qty) + str(' ') 
+                if self.sequence_specie:
+                    crm_sequence += str(self.sequence_specie.name) + str(' ')                    
                 if self.sequence_departure:
-                    crm_sequence += str(self.sequence_departure.code) + str('-')
-                if self.sequence_arrive:
-                    crm_sequence += str(self.sequence_arrive.code)
+                    if self.sequence_arrive:
+                        crm_sequence += str(self.sequence_departure.code) + str('-') + str(self.sequence_arrive.code)
+                    else:
+                        crm_sequence += str(self.sequence_departure.code) + str(' ')
+
                 if self.partner_id:
-                    crm_sequence += str(' ') + str(self.name) + "-" + str(self.partner_id.name)
+                    crm_sequence += str(' ')  + "-" + str(self.partner_id.name)
                 _logger.info("SIT name = %s  | %s", str(crm_sequence).strip(), str(self.name) )
-                self.name = str(crm_sequence).strip()               
+                self.name = str(crm_sequence).strip()             
                 
                     
     def action_view_folders(self):
