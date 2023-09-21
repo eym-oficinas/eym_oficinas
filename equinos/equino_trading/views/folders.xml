@@ -9,9 +9,10 @@
             <field name="priority" eval="8"/>
             <field name="arch" type="xml">
                 <tree string="Folders_">
-                    <field name="id" />
+                    <!-- <field name="id" /> -->
                     <field name="name" />
-                    <field name="certificates_regulates_ids" widget='many2many_tags'/>
+                    <field name="certificates_regulates_ids" widget='many2many_tags'>
+                    </field>
                 </tree>
             </field>
         </record>
@@ -30,10 +31,10 @@
                       
                         <div class="oe_button_box" name="button_box">
                         
-                            <!--button type="object" name="action_view_detail" class="oe_stat_button" icon="fa-pencil-square-o"-->
-                                <!--field name="detail_count" widget="statinfo" string="Detail(s)"/-->
-                                <!--field name="detail_ids" invisible="1"/-->
-                            <!--/button-->
+                            button type="object" name="action_view_detail" class="oe_stat_button" icon="fa-pencil-square-o"
+                                field name="detail_count" widget="statinfo" string="Detail(s)"/
+                                field name="detail_ids" invisible="1"/
+                            /button
                           
                         </div>
                         
@@ -43,14 +44,31 @@
                         </div>
                         
                         <div class="row">
-                          <group string="Documents1">
-                              <field string="" name="certificates_regulates_ids"/>
+                          <group string="Documents">
+                              <field string="" name="certificates_regulates_ids" >
+                                    <tree>
+                                        <field  style="width: 5px;  " colspan="4"  name="name" />
+                                        <field  style="width: 5px; " colspan="4" string="View Doc" name="sit_pre_visualizar" widget="boolean_toggle"/>
+                                        <!-- <field  name="project_id" /> -->
+                                        <!-- <field  name="folder_id" /> -->
+
+                                        <field  name="file" widget="pdf_viewer"  attrs="{'invisible': [('sit_pre_visualizar','=',False )]}"  />
+                                    </tree>
+
+                              </field>
                           </group>
                         </div>
                         
                         <div class="row">
                             <group string="CRM Leads">
-                              <field string="" name="crf_crm_lead_id"/>
+                              <field string="" name="crf_crm_lead_id">
+                                    <tree>
+                                        <field  name="name" />
+                                        <field  name="contact_name" />
+                                        <field  name="email_from" />
+                                        <field  name="user_id" />
+                                    </tree>
+                              </field>
                             </group>
                         </div>
                         

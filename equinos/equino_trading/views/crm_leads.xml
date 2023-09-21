@@ -29,7 +29,7 @@
                     <page name="certifications_and_regulations" string="Certifications and Regulations">                        
 
                         <group string='Folders'>
-                            <field string='' name='certificates_regulates_folders_ids' widget='many2many' readonly='1'/>                            
+                            <field string='' name='certificates_regulates_folders_ids' widget='many2many_tags' readonly='0'   domain="[('crf_crm_lead_id','=', id)]" options="{'no_open': True, 'no_create_edit': True, 'no_create': True}"  />                            
                             <!-- <field string='s_s' name='certificates_regulates_folders_ids'/>                             -->
                         </group>
 

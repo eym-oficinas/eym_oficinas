@@ -12,7 +12,8 @@ class certificates_regulates(models.Model):
     name = fields.Char(string='Name')
     
     file_name = fields.Char(string='Name')
-    file = fields.Binary(string='File', filename=file_name)
+    file = fields.Binary(string='File', filename=file_name,  attachment=True)
+    sit_pre_visualizar = fields.Boolean(string='Visualizar Documento', default=False)
     
     
     service_type = fields.Selection(string='Service Type', selection=[['export','Export'],['import','Import']])
@@ -45,16 +46,30 @@ class certificates_regulates_folders(models.Model):
 
     name = fields.Char(string='Name')
     certificates_regulates_ids = fields.One2many('certificates.regulates', string='Documents', inverse_name="folder_id")
-    crf_crm_lead_id = fields.One2many('crm.lead', string='CRM Leads', inverse_name="certificates_regulates_folders_ids")
+    # crf_crm_lead_id = fields.One2many('crm.lead', string='CRM Leads', inverse_name="certificates_regulates_folders_ids")
+    crf_crm_lead_id = fields.Many2one('crm.lead', string='CRM Leads')
 
     
+    # @api.model
+    # def default_get(self, vals):
+    #     rec = super(certificates_regulates_folders, self).default_get(vals)
+    #     active_id =  self.env.context.get('active_id')
+    #     active_lead = self.env['crm.lead'].browse(self._context['active_id'])
+    #     # crm_leads = self.env['crm.lead'].search([('id','=', active_id) ])
+    #     # _logger.info("SIT     product_get : %s (%s)", crm_leads, active_id)
+    #     if active_lead:
+    #         rec['crf_crm_lead_id'] = active_lead
+    #     return rec    
+
     @api.model
     def default_get(self, vals):
         rec = super(certificates_regulates_folders, self).default_get(vals)
         active_id =  self.env.context.get('active_id')
+        _logger.info("SIT     product_get : %s (%s)", rec, active_id)
+
         active_lead = self.env['crm.lead'].browse(self._context['active_id'])
         # crm_leads = self.env['crm.lead'].search([('id','=', active_id) ])
         # _logger.info("SIT     product_get : %s (%s)", crm_leads, active_id)
         if active_lead:
             rec['crf_crm_lead_id'] = active_lead
-        return rec    
+        return rec        

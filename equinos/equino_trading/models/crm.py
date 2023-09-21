@@ -84,6 +84,7 @@ class crm_lead(models.Model):
     certificates_regulates_folders_count_ids = fields.Integer(string='Folders', compute=_compute_folders_count)
     # certificates_regulates_folders_ids = fields.Many2many('certificates.regulates.folders', string='Certificates and Regulations Folders')
     certificates_regulates_folders_ids = fields.Many2many('certificates.regulates.folders', string='Certificates and Regulations Folders', inverse_name="crf_crm_lead_id")
+    # certificates_regulates_folders_ids = fields.One2many('certificates.regulates.folders', 'crf_crm_lead_id', string='Certificates and Regulations Folders')
     
     sale_order_ids = fields.Many2one('sale.orders', string='Quotation')
     project_ids = fields.Many2one('project.project', string='Project Checklists')
@@ -147,7 +148,7 @@ class crm_lead(models.Model):
                     #"context": {'group_by': 'state'},
                     "view_mode": "tree,form",
                     "domain": filter,
-                    # "crf_crm_lead_id": self.id,
+                    "crf_crm_lead_id": self.id,
                     # "sit_id": self.id
                 }
     
