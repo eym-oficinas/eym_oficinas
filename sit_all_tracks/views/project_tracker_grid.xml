@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+
+        <record model="ir.ui.view" id="sit_project_tracker_grid_view">
+            <field name="name">sit_project_tracker_grid_view</field>
+            <field name="model">project.tracker.grid</field>
+            <field name="inherit_id" ref="equino_trading.view_project_all_tracker_grid_tree"/>
+            <field name="arch" type="xml">
+<!-- 
+                <field name="name" position="after">
+                </field> -->
+
+
+                <xpath expr="//tree" position="replace">
+                    <tree string="All Tracks" editable="bottom" create="false" >
+                        <field name="status" invisible="1"/>
+
+
+
+
+
+                        <field name="project_id_status" invisible="1"/>
+                        <field name="service_type_status" invisible="1"/>
+                        <field name="estimate_departmenture_arrival_status" invisible="1"/>
+                        <field name="realse_date_departure_status" invisible="1"/>
+                        <field name="import_permit_status" invisible="1"/>
+                        <field name="import_permit_paid_status" invisible="1"/>
+                        <field name="usda_res_72hrs_status" invisible="1"/>
+                        <field name="usda_res_72hrs_date_status" invisible="1"/>
+                        <field name="field_17_29_status" invisible="1"/>
+                        <field name="usda_mac_sent_date_status" invisible="1"/>
+                        <field name="hc_start_res_paid_status" invisible="1"/>
+                        <field name="hc_expiration_status" invisible="1"/>
+                        <field name="hc_sent_to_usda_status" invisible="1"/>
+                        <field name="billed_paid_status" invisible="1"/>
+                        <field name="mac_shipment_id_status" invisible="1"/>
+                        <field name="q_start_reserve_status" invisible="1"/>
+                        <field name="custom_clarance_status" invisible="1"/>
+                        <field name="invoice_shipping_ccial_freigth_forward_status" invisible="1"/>
+                        <field name="airline_reserve_guide_status" invisible="1"/>
+                        <field name="pc_check_date_status" invisible="1"/>
+                        <field name="pc_check_status" invisible="1"/>                    
+                        <field name="stalls_status" invisible="1"/>
+                        <field name="awb_status" invisible="1"/>
+                        <field name="cert_origin_status" invisible="1"/>
+                        <field name="tags_ship_status" invisible="1"/>                    
+                        <field name="actual_work_status" invisible="1"/>
+                        <field name="animal_handler_status" invisible="1"/>
+                        <field name="pending_status" invisible="1"/>
+                        <field name="stalls_2_status" invisible="1"/>
+                        <field name="stalls_set3_status" invisible="1"/>
+                        <field name="pending6_status" invisible="1"/>
+                        <field name="is_trading_template_status" invisible="1"/>
+						
+						<field name="shipping_list_status" invisible="1"/>
+						<field name="contingency_plan_status" invisible="1"/>
+						<field name="shipping_list_final_dest_status" invisible="1"/>
+						<field name="coord_shipping_list_drivers_status" invisible="1"/>
+						<field name="hc_origin_status" invisible="1"/>
+						<field name="import_permit_destinity_country_status" invisible="1"/>
+						<field name="jockey_club_status" invisible="1"/>
+						<field name="commercial_invoice_status" invisible="1"/>
+						<field name="commercial_invoice_and_awv_sent_to_c_status" invisible="1"/>
+						<field name="animal_handler_confirmed_status" invisible="1"/>
+						<field name="coordinar_wls_status" invisible="1"/>
+						<field name="coordinar_mac_status" invisible="1"/>
+						<field name="coordinar_conductor_status" invisible="1"/>
+						<!-- <field name="elaboracion_carpeta_doc_to_export_status" invisible="1"/> -->
+
+
+
+
+
+
+
+
+
+
+
+
+                        <field name="name" invisible="1"/>
+                        <!-- <field name="project_id" readonly='1' options='{"style": "color: red;"}'  attrs="{'invisible': [('project_id_status', '!=', 'OPERATIONS')]}" />  -->
+                        <!-- <field name="project_id" readonly='1' options='{"style": "color: blue;"}'  attrs="{'invisible': [('project_id_status', '!=', 'CEO')]}" />  -->
+                        <!-- <field name="project_id" readonly='1' options='{"style": "color: yellow;"}'  attrs="{'invisible': [('project_id_status', '!=', 'ADMINISTRATION')]}" />  -->
+                        <field name="project_id" readonly='1'  /> 
+
+                        <!-- <field name="service_type" readonly='1' options='{"style": "color: red;"}'  attrs="{'invisible': [('service_type_status', '=', 'OPERATIONS')]}" />  -->
+                        <!-- <field name="service_type" readonly='1' options='{"style": "color: blue;"}'  attrs="{'invisible': [('service_type_status', '=', 'CEO')]}" />  -->
+                        <!-- <field name="service_type" readonly='1' options='{"style": "color: yellow;"}'  attrs="{'invisible': [('service_type_status', '=', 'ADMINISTRATION')]}" />  -->
+                        <field name="service_type" readonly='1'  /> 
+
+                        <field name="estimate_departmenture_arrival" readonly='1' string="(A)(I/E/T)Estimated Departure / Arrival" /> 
+                        <field name="realse_date_departure" string="(O)(I/E)Release Date / Departure"/>
+                        <field name="import_permit" widget='boolean_toggle' string="(O)(I/T)Import Permit"/>
+                        <field name="import_permit_paid" widget='boolean_toggle' string="(O)(I)Import Permit Paid"/>
+                        <field name="usda_res_72hrs" widget='boolean_toggle' string="(O)USDA Reservation 72 Hours"/>
+                        <field name="usda_res_72hrs_date" string="(O)(I/E/T)USDA /72 Hours permit reservation sent date"/>
+                        <field name="field_17_29" widget='boolean_toggle' string="(O)(I)17-29"/>
+                        <field name="usda_mac_sent_date" string="(O)(I/E/T)17-29 Sent date"/>
+                        <field name="hc_start_res_paid" optional="hide" string="(A)(E)Health Certificate Starts"/>
+                        <field name="hc_expiration" optional="hide" string="(A)(E)Health Certificate Expiration"/>
+                        <field name="hc_sent_to_usda" optional="hide" string="(A)(E)Health Certificate Sent to USDA"/>
+                        <field name="billed_paid" string="(C)(I/E/T)Billed / Paid"/>
+                        <field name="mac_shipment_id" optional="hide" string="(O)(I)MAC Shipment ID"/>
+                        <!-- <field name="q_start_reserve" string="()"/> -->
+                        <field name="custom_clarance" string="(O)(I)Custom Clearance"/>
+                        <field name="invoice_shipping_ccial_freigth_forward" optional="hide" string="(O)(E)Commercial invoice send to freight forward Date"/>
+                        <field name="airline_reserve_guide" optional="hide" string="(O)(I/E)Reserva y Guia Aerolinea / Expo"/>
+                        <field name="pc_check_date" string="(O)(I)PC Check Date"/>
+                        <field name="pc_check" widget='boolean_toggle' string="(O)(I)PC Check"/>
+                        <field name="stalls" optional="hide" string="(O)(I/E)Stalls"/>
+                        <field name="awb" optional="hide" string="(O)(I/E/T)AWB"/>
+                        <field name="cert_origin" optional="hide" string="(O)(I)Certificate of Origen"/>
+                        <!-- <field name="tags_ship" optional="hide" string="()"/> -->
+                        <!-- <field name="actual_work" optional="hide" string="()"/> -->
+                        <field name="animal_handler" optional="hide" string="(A)(I/E/T)Animal Handler"/>
+                        <!-- <field name="pending" optional="hide" string="()"/> -->
+                        <!-- <field name="stalls_2" optional="hide" string="()"/> -->
+                        <!-- <field name="stalls_set3" optional="hide" string="()"/> -->
+                        <!-- <field name="pending6" optional="hide" string="()"/> -->
+                        <!-- <field name="is_trading_template" optional="hide"  widget='boolean_toggle' string="()"/> -->
+
+
+
+
+
+
+
+
+
+
+                    </tree>
+
+                </xpath>
+
+
+
+            </field>
+        </record>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</odoo>

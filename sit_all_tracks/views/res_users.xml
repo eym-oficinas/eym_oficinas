@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+
+        <record model="ir.ui.view" id="view_res_users_responsability_view">
+            <field name="name">view_res_users_responsability_view</field>
+            <field name="model">res.users</field>
+            <field name="inherit_id" ref="base.view_users_form"/>
+            <field name="arch" type="xml">
+
+                <xpath expr="//field[@name='name']" position="after">
+                    <field name="responsability" required="0" groups="base.group_no_one" />
+
+                </xpath>
+
+
+
+
+            </field>
+        </record>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</odoo>

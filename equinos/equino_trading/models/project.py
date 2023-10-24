@@ -4,8 +4,6 @@ from odoo import models, fields, api, _
 import logging
 _logger = logging.getLogger(__name__)
 from odoo.exceptions import UserError
-import logging
-_logger = logging.getLogger(__name__)
 
 class project(models.Model):
     _inherit = 'project.project'
@@ -137,7 +135,23 @@ class project_tracks(models.Model):
     stalls_set3 = fields.Char(string='STALLS set3')
     pending6 = fields.Char(string='pending6')
     is_trading_template = fields.Boolean(string='Template', related="project_id.is_trading_template", store=True)
+    #Nuevos campos
+    shipping_list = fields.Boolean(string='Shipping list')
+    contingency_plan = fields.Date(string='Contingency plan')
+    shipping_list_final_dest = fields.Boolean(string='Shippping list final destination')
+    coord_shipping_list_drivers = fields.Boolean(string='Coordinar shipping list drivers')
+    hc_origin = fields.Boolean(string='Helath certificate Origin')
+    import_permit_destinity_country = fields.Date(string='Import Permit Destinity country send Veterinary')
+    jockey_club = fields.Boolean(string='Jockey Club')
+    stalls_in_start = fields.Date(string='STALLS IN Start')
+    commercial_invoice = fields.Boolean(string='Comercial Invoice')
+    commercial_invoice_and_awv_sent_to_c = fields.Date(string='Commecial invoice ans AWB send to customer')
+    animal_handler_confirmed = fields.Boolean(string='Animal Handler Confirmed')
+    coordinar_wls = fields.Boolean(string='Coordinar WLS')
+    coordinar_mac = fields.Boolean(string='Coordinar MAC')
+    coordinar_conductor = fields.Char(string='Coordinar conductor')
     
+
     @api.model
     def create(self, values):
         track = super (project_tracks, self).create(values)

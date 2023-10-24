@@ -14,7 +14,7 @@
                     <field name="name" invisible="1"/>
                     <field name="project_id" readonly='1'/>
                     <field name="service_type" readonly='1'/>
-                    <field name="estimate_departmenture_arrival"/>
+                    <field name="estimate_departmenture_arrival" string="(A)Estimated Departure / Arrival"/>
                     <field name="realse_date_departure"/>
                     <field name="import_permit" widget='boolean_toggle'/>
                     <field name="import_permit_paid" widget='boolean_toggle'/>

@@ -1,0 +1,128 @@
+<odoo>
+  <data>
+
+
+        <record id="view_project_tracker_grid_tree" model="ir.ui.view">
+            <field name="name">view_project_tracker_grid_tree</field>
+            <field name="model">sit_all_tracks.sit_all_tracks</field>
+            <!-- <field name="type">tree</field> -->
+            <!-- <field name="priority" eval="8"/> -->
+            <field name="arch" type="xml">
+                <!-- <tree string="All Tracks" editable="bottom" create="false" delete="false"> -->
+                <tree string="Responsables"  editable="bottom" create="true" >
+
+                    <field name="id" />
+                    <!-- <field name="name" /> -->
+                    <field name="service_type" invisible="0"/>
+                    <field name="responsability" />
+
+       
+                </tree>
+            </field>
+        </record>
+
+
+        <record model="ir.ui.view" id="view_project_tracker_grid_form">
+            <field name="name">sit_all_tracks</field>
+            <field name="model">sit_all_tracks.sit_all_tracks</field>
+            <field name="arch" type="xml">
+                <form string="Responsibl">
+                    <sheet>
+                        <group>
+                          <field name="id" />
+                          <!-- <field name="name" /> -->
+                          <field name="service_type" invisible="0"/>
+                          <field name="responsability" />
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+        <!-- action window -->
+        <record id="action_cr_projects_tracker_owner" model="ir.actions.act_window">
+            <field name="name">Projects Tracker Owner</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">sit_all_tracks.sit_all_tracks</field>
+            <field name="view_mode">tree,form</field>
+            <field name="context">{"search_default_fieldname":1}</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                Click to add a new Projects Tracker
+                </p>
+                <p>
+                Click the Create button to add a new Projects Tracker
+                </p>
+            </field>
+        </record>
+
+
+
+
+
+
+
+
+        <menuitem sequence='3' id="menu_project_owner" name="Projects responsibles" parent="equino_trading.menu_project_tracker" action='action_cr_projects_tracker_owner' groups="base.group_user"/>
+                
+
+                       
+    <!-- explicit list view definition -->
+<!--
+    <record model="ir.ui.view" id="sit_all_tracks.list">
+      <field name="name">sit_all_tracks list</field>
+      <field name="model">sit_all_tracks.sit_all_tracks</field>
+      <field name="arch" type="xml">
+        <tree>
+          <field name="name"/>
+          <field name="value"/>
+          <field name="value2"/>
+        </tree>
+      </field>
+    </record>
+-->
+
+    <!-- actions opening views on models -->
+<!--
+    <record model="ir.actions.act_window" id="sit_all_tracks.action_window">
+      <field name="name">sit_all_tracks window</field>
+      <field name="res_model">sit_all_tracks.sit_all_tracks</field>
+      <field name="view_mode">tree,form</field>
+    </record>
+-->
+
+    <!-- server action to the one above -->
+<!--
+    <record model="ir.actions.server" id="sit_all_tracks.action_server">
+      <field name="name">sit_all_tracks server</field>
+      <field name="model_id" ref="model_sit_all_tracks_sit_all_tracks"/>
+      <field name="state">code</field>
+      <field name="code">
+        action = {
+          "type": "ir.actions.act_window",
+          "view_mode": "tree,form",
+          "res_model": model._name,
+        }
+      </field>
+    </record>
+-->
+
+    <!-- Top menu item -->
+<!--
+    <menuitem name="sit_all_tracks" id="sit_all_tracks.menu_root"/>
+-->
+    <!-- menu categories -->
+<!--
+    <menuitem name="Menu 1" id="sit_all_tracks.menu_1" parent="sit_all_tracks.menu_root"/>
+    <menuitem name="Menu 2" id="sit_all_tracks.menu_2" parent="sit_all_tracks.menu_root"/>
+-->
+    <!-- actions -->
+<!--
+    <menuitem name="List" id="sit_all_tracks.menu_1_list" parent="sit_all_tracks.menu_1"
+              action="sit_all_tracks.action_window"/>
+    <menuitem name="Server to list" id="sit_all_tracks" parent="sit_all_tracks.menu_2"
+              action="sit_all_tracks.action_server"/>
+-->
+  </data>
+</odoo>
