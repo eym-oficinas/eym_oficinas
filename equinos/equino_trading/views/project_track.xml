@@ -14,38 +14,50 @@
                     <field name="project_id" readonly='1' invisible="1"/>
                     <field name="service_type" readonly='1'/>
                     <field name="estimate_departmenture_arrival"/>
+                    <field name="realse_date_departure"/>
+                    <field name="shipping_list"/>
                     <field name="import_permit" widget='boolean_toggle'/>
                     <field name="import_permit_paid" widget='boolean_toggle'/>
                     <field name="usda_res_72hrs" widget='boolean_toggle'/>
                     <field name="usda_res_72hrs_date"/>
+                    <field name="contingency_plan"/>
+                    <field name="shipping_list_final_dest"/>
                     <field name="field_17_29" widget='boolean_toggle'/>
                     <field name="usda_mac_sent_date"/>
+                    <field name="coord_shipping_list_drivers"/>
+                    <field name="hc_origin"/>
                     <field name="hc_start_res_paid"/>
                     <field name="hc_end_res_paid"/>
-                    <!-- <field name="hc_start_res_paid" optional="hide"/> -->
                     <field name="hc_expiration"/>
-                    <!-- <field name="hc_expiration" optional="hide"/> -->
                     <field name="hc_sent_to_usda"/>
-                    <!-- <field name="hc_sent_to_usda" optional="hide"/> -->
+                    <field name="import_permit_destinity_country"/>
+                    <field name="jockey_club"/>
                     <field name="billed_paid"/>
-                    <field name="mac_shipment_id" optional="hide"/>
-                    <field name="q_start_reserve"/>
+                    <field name="mac_shipment_id" optional="show"/>
                     <field name="custom_clarance"/>
-                    <field name="invoice_shipping_ccial_freigth_forward" optional="hide"/>
-                    <field name="airline_reserve_guide" optional="hide"/>
+                    <field name="commercial_invoice"/>
+                    <field name="invoice_shipping_ccial_freigth_forward" optional="show"/>
+                    <field name="awb" optional="show"/>
+                    <field name="airline_reserve_guide" optional="show"/>
+                    <field name="commercial_invoice_and_awv_sent_to_c" optional="show"/>
+                    <field name="animal_handler" optional="show"/>
+                    <field name="animal_handler_confirmed" optional="show"/>
                     <field name="pc_check_date"/>
                     <field name="pc_check" widget='boolean_toggle'/>
-                    <field name="realse_date_departure"/>
-                    <field name="stalls" optional="hide"/>
-                    <field name="awb" optional="hide"/>
-                    <field name="cert_origin" optional="hide"/>
-                    <field name="tags_ship" optional="hide"/>                    
-                    <field name="actual_work" optional="hide"/>
-                    <field name="animal_handler" optional="hide"/>
-                    <field name="pending" optional="hide"/>
-                    <field name="stalls_2" optional="hide"/>
-                    <field name="stalls_set3" optional="hide"/>
-                    <field name="pending6" optional="hide"/>
+                    <field name="stalls" optional="show"/>
+                    <field name="cert_origin" optional="show"/>
+                    <field name="coordinar_wls"  widget='boolean_toggle' optional="show"/>
+                    <field name="coordinar_mac"  widget='boolean_toggle' optional="show"/>
+                    <field name="coordinar_conductor" optional="show"/>
+<!--                     
+                    <field name="tags_ship" optional="show"/>                    
+                    <field name="actual_work" optional="show"/>
+                    <field name="pending" optional="show"/>
+                    <field name="stalls_2" optional="show"/>
+                    <field name="stalls_set3" optional="show"/>
+                    <field name="pending6" optional="show"/>
+ -->
+
                 </tree>
             </field>
         </record>
@@ -77,6 +89,73 @@
                                 <field name="name" invisible="1"/>
                                 <field name="service_type" readonly='1'/>
                             </group>
+                            <group>
+                                <field name="estimate_departmenture_arrival"/>
+                                <field name="realse_date_departure"/>
+                                <field name="shipping_list"/>
+                            </group>
+                            <group>
+                    <field name="import_permit" widget='boolean_toggle'/>
+                    <field name="import_permit_paid" widget='boolean_toggle'/>
+                            </group>
+                            <group>
+                    <field name="usda_res_72hrs" widget='boolean_toggle'/>
+                    <field name="usda_res_72hrs_date"/>
+                            </group>
+                            <group>
+                    <field name="contingency_plan"/>
+                    <field name="shipping_list_final_dest"/>                            </group>
+                            <group>
+                    <field name="field_17_29" widget='boolean_toggle'/>
+                    <field name="usda_mac_sent_date"/>
+                    <field name="coord_shipping_list_drivers"/>                    
+                            </group>
+                            <group>
+                    <field name="hc_origin"/>
+                    <field name="hc_start_res_paid"/>
+                    <field name="hc_end_res_paid"/>
+                    <field name="hc_expiration"/>
+                    <field name="hc_sent_to_usda"/>
+                            </group>
+                            <group>
+                    <field name="import_permit_destinity_country"/>
+                    <field name="jockey_club"/>
+                            </group>
+                            <group>
+                    <field name="billed_paid"/>
+                    <field name="mac_shipment_id" optional="show"/>
+                    <field name="custom_clarance"/>
+                            </group>
+                            <group>
+                    <field name="commercial_invoice"/>
+                    <field name="invoice_shipping_ccial_freigth_forward" optional="show"/>
+                    <field name="awb" optional="show"/>
+                            </group>
+                            <group>
+                    <field name="airline_reserve_guide" optional="show"/>
+                    <field name="commercial_invoice_and_awv_sent_to_c" optional="show"/>
+                            </group>
+                            <group>
+                    <field name="animal_handler" optional="show"/>
+                    <field name="animal_handler_confirmed" optional="show"/>
+                            </group>
+                            <group>
+                    <field name="pc_check_date"/>
+                    <field name="pc_check" widget='boolean_toggle'/>
+                            </group>
+                            <group>
+                    <field name="stalls" optional="show"/>
+                    <field name="cert_origin" optional="show"/>
+                            </group>
+                            <group>
+                    <field name="coordinar_wls"  widget='boolean_toggle' optional="show"/>
+                    <field name="coordinar_mac"  widget='boolean_toggle' optional="show"/>
+                    <field name="coordinar_conductor" optional="show"/>
+                            </group>
+
+
+
+<!-- 
                             <group>
                                 <field name="estimate_departmenture_arrival"/>
                                 <field name="realse_date_departure"/>
@@ -142,6 +221,9 @@
                                 <field name="pending6"/>
                                 <field name="is_trading_template" invisible='1'/>
                             </group>
+ -->
+
+
                     </sheet>
                 </form>
             </field>

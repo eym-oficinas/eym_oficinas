@@ -50,11 +50,52 @@ class crm_lead(models.Model):
                 record.filter_certificates_regulates_ids = self.env['certificates.regulates'].search([['id','in',document_ids]])
             else:
                 record.filter_certificates_regulates_ids = None
-    
+
+    def compute_certificates_regulates_folders_ids(self):
+        document_folder_ids = []
+        for record in self:
+            # folders = self.env['certificates.regulates.folders'].search([['id','in',self.id]])
+            folders = self.env['certificates.regulates.folders'].search([['crf_crm_lead_id','=',self.id ]])
+            _logger.info("SIT compute_certificates_regulates_folders_ids folders folders=%s ", folders)
+            
+
+            for folder in folders:
+                # for document in folder.certificates_regulates_ids:
+                    document_folder_ids.append(folder.id)
+            if len(document_folder_ids):
+                _logger.info("SIT compute_certificates_regulates_folders_ids document_folder_ids=%s ", document_folder_ids)
+                record.filter_certificates_regulates_folders_ids = self.env['certificates.regulates.folders'].search([['id','in',document_folder_ids]])
+            else:
+                record.filter_certificates_regulates_folders_ids = None
+
+
+    @api.depends('certificates_regulates_folders_ids')
+    def compute_manyon2_certificates_regulates_ids(self):
+        for record in self:
+            # Aquí puedes implementar la lógica para calcular el valor del campo Many2one
+            # basado en los valores seleccionados en el campo Many2many.
+            # En este ejemplo, simplemente se toma el primer registro seleccionado en Many2many.
+
+            if record.certificates_regulates_folders_ids:
+                # Tomar el primer registro seleccionado en Many2many
+                selected_record = record.certificates_regulates_folders_ids[0]
+                record.filter_certificates_regulates_folders_ids = selected_record
+            else:
+                # Si no hay ningún registro en Many2many, establecer Many2one en nulo.
+                record.filter_certificates_regulates_folders_ids = False
+
+
+
+
+
     filter_certificates_regulates_ids = fields.Many2many('certificates.regulates', string='Certificates and Regulations', readonly=False, compute=compute_certificates_regulates_ids)
+    filter_certificates_regulates_folders_ids = fields.Many2many('certificates.regulates.folders', string='Certificates and Regulations Folders', readonly=False, compute=compute_certificates_regulates_folders_ids)
     
-    certificates_regulates_ids = fields.Many2many('certificates.regulates', string='Certificates and Regulations', readonly=False)
-    
+    certificates_regulates_ids = fields.Many2many('certificates.regulates', string='Certificates and Regulations Files', readonly=False)
+    # sit_certificates_regulates_folders_ids = fields.Many2one('certificates.regulates.folders', string='Certificates and Regulations Folders', readonly=False,  compute=compute_manyon2_certificates_regulates_ids )
+    sit_certificates_regulates_folders_ids = fields.Many2one('certificates.regulates.folders', string='Certificates and Regulations Folders', readonly=False )
+    include_files_folders = fields.Selection([['files','Include Files'],['folders','Include folders']], string='Incluir', default='files')
+
     def _compute_folders_count(self):
         # _logger.info("SIT certificates_regulates_folders_count_ids : %s", self.id    )
 
@@ -82,8 +123,8 @@ class crm_lead(models.Model):
 
 
     certificates_regulates_folders_count_ids = fields.Integer(string='Folders', compute=_compute_folders_count)
-    # certificates_regulates_folders_ids = fields.Many2many('certificates.regulates.folders', string='Certificates and Regulations Folders')
-    certificates_regulates_folders_ids = fields.Many2many('certificates.regulates.folders', string='Certificates and Regulations Folders', inverse_name="crf_crm_lead_id")
+    certificates_regulates_folders_ids = fields.Many2many('certificates.regulates.folders', string='Certificates and Regulations Folders')
+    # certificates_regulates_folders_ids = fields.Many2many('certificates.regulates.folders', string='Certificates and Regulations Folders', inverse_name="crf_crm_lead_id")
     # certificates_regulates_folders_ids = fields.One2many('certificates.regulates.folders', 'crf_crm_lead_id', string='Certificates and Regulations Folders')
     
     sale_order_ids = fields.Many2one('sale.orders', string='Quotation')
@@ -282,25 +323,57 @@ class crm_lead(models.Model):
         response = None
         attachment_ids = []
         if self.certificates_regulates_folders_ids:
-            for folder in self.certificates_regulates_folders_ids:                
-                if folder.certificates_regulates_ids:
-                    for document in folder.certificates_regulates_ids:
-                        if document.id in self.certificates_regulates_ids.ids:
-                            if document.type == 'binary':
-                                attachment = { 
-                                            'name': str(document.file_name),
-                                            'datas': document.file,
-                                            'res_model': str('certificates.regulates'),                                          
-                                            'type': 'binary'
-                                            }
-                                attachment_id = self.env['ir.attachment'].create(attachment)
-                                attachment_ids.append(attachment_id.id)
+            if self.include_files_folders == "files":            
+                for folder in self.certificates_regulates_folders_ids:
+                    documents = folder.certificates_regulates_ids
+                    if documents:
+                        # for document in folder.certificates_regulates_ids:
+                        for document in documents:
+                            if document.id in self.certificates_regulates_ids.ids:
+                                if document.type == 'binary':
+                                    attachment = { 
+                                                'name': str(document.file_name),
+                                                'datas': document.file,
+                                                'res_model': str('certificates.regulates'),                                          
+                                                'type': 'binary'
+                                                }
+                                    attachment_id = self.env['ir.attachment'].create(attachment)
+                                    attachment_ids.append(attachment_id.id)
+
+            else: 
+                    # documents = folder.certificates_regulates_folders_ids.certificates_regulates_ids
+                    documents = self.sit_certificates_regulates_folders_ids
+                    # MENSAJE = "documents =" + str(documents)
+                    # raise UserError (MENSAJE)
+
+                    if documents:
+                        # for document in folder.certificates_regulates_ids:
+                        for document in documents.certificates_regulates_ids:
+                            # MENSAJE = "documents =" + str(document)
+                            # raise UserError (MENSAJE)
+
+                            if document.id:
+                                if document.type == 'binary':
+                                    attachment = { 
+                                                'name': str(document.file_name),
+                                                'datas': document.file,
+                                                'res_model': str('certificates.regulates'),                                          
+                                                'type': 'binary'
+                                                }
+                                    attachment_id = self.env['ir.attachment'].create(attachment)
+                                    attachment_ids.append(attachment_id.id)
+            _logger.info("SIT  <<<<<<<<<<<<<<<<<<<<< = %s", attachment_ids)    
+
+                # if folder.certificates_regulates_ids:
             email_template = self.env.ref('equino_trading.crm_email_share_folder_documents')
+            _logger.info("SIT email_template_0 <<<<<<<<<<<<<<<<<<<<< = %s", email_template)    
+
             if len(attachment_ids) > 0:
                 for attachment_id in attachment_ids:
                     email_template.attachment_ids =  [(4, attachment_id)]
-                    
+                _logger.info("SIT email_template = %s", email_template)    
                 response = email_template.send_mail(self.id, raise_exception=False, force_send=True)
+
                 email_template.attachment_ids.unlink()
         return response
     

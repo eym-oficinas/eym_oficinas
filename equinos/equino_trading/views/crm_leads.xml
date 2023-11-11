@@ -29,8 +29,28 @@
                     <page name="certifications_and_regulations" string="Certifications and Regulations">                        
 
                         <group string='Folders'>
-                            <field string='' name='certificates_regulates_folders_ids' widget='many2many_tags' readonly='0'   domain="[('crf_crm_lead_id','=', id)]" options="{'no_open': True, 'no_create_edit': True, 'no_create': True}"  />                            
-                            <!-- <field string='s_s' name='certificates_regulates_folders_ids'/>                             -->
+                            <div class="col-8">
+                                <span>Folders</span>
+                            </div>
+                            <div >
+                                <!-- <field string='' name='certificates_regulates_folders_ids' widget='many2many_tags' readonly='0'   domain="[('crf_crm_lead_id','=', id)]" options="{'no_open': True, 'no_create_edit': True, 'no_create': True}"  />                             -->
+                            <!-- <div class="col-4">
+                                <span>Folders</span>
+                            </div> -->
+
+                                <!-- <field string='' name='certificates_regulates_folders_ids' widget='many2many_tags' readonly='0'   domain="[('id','in', filter_certificates_regulates_folders_ids)]" options="{'no_open': True, 'no_create_edit': True, 'no_create': True}"  />                             -->
+                                <field string='' name='certificates_regulates_folders_ids' widget='many2many_tags'   domain="[('crf_crm_lead_id','=',id)]"/>                        
+                                <!-- <field string='s_s' name='certificates_regulates_folders_ids'/>                             -->
+                                <!-- <field string='Files to Include' name='certificates_regulates_ids' widget='many2many_tags' domain="[['id','in',filter_certificates_regulates_ids]]"/> -->
+                                <field string='' name='filter_certificates_regulates_folders_ids' widget='many2many_tags' invisible='1'/>                            
+                            </div>
+
+                                <!-- <field string='Files to Include' name='certificates_regulates_ids' widget='many2many_tags' domain="[['id','in',filter_certificates_regulates_ids]]"/>
+                                <field string='' name='filter_certificates_regulates_ids' widget='many2many_tags' invisible='1'/> -->
+
+
+
+
                         </group>
 
                         <group string="Share Documents">   
@@ -56,8 +76,28 @@
                                 </tree>
                             </field>
 
-                            <field string='Files to Include' name='certificates_regulates_ids' widget='many2many_tags' domain="[['id','in',filter_certificates_regulates_ids]]"/>
-                            <field string='' name='filter_certificates_regulates_ids' widget='many2many_tags' invisible='1'/>
+                            <div >
+                                <label for="include_files_folders" string="Include" />
+                            </div>   
+                            <div>   
+
+                                <field name='include_files_folders'/>
+                            </div>   
+                            <div>   
+
+                                <span string='Adjuntos'/>
+                            </div>                               
+                            <div  attrs="{'invisible': [('include_files_folders','!=','files')]}">
+                                <field string='Files to Include' name='certificates_regulates_ids' widget='many2many_tags' domain="[['id','in',filter_certificates_regulates_ids]]"/>
+                                <field string='' name='filter_certificates_regulates_ids' widget='many2many_tags' invisible='1'/>
+                            </div>   
+                            <div  attrs="{'invisible': [('include_files_folders','!=','folders')]}">
+                                <field string='' name='sit_certificates_regulates_folders_ids'    domain="[['id','in',certificates_regulates_folders_ids]]"/>                   
+
+                                <!-- <field string='Folders to Include' name='sit_certificates_regulates_folders_ids' widget='many2many_tags' /> -->
+                                <!-- <field string='' name='filter_certificates_regulates_folders_ids' widget='many2many_tags' invisible='1'/> -->
+                            </div>   
+
 
                             <div class="col-4">
                                 <label for="sit_body" string='Contenido' />

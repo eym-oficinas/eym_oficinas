@@ -102,55 +102,72 @@ class project_tracks(models.Model):
     
     project_id = fields.Many2one('project.project', string='Tracks', inverse_name="project_tracker_grid_ids")
     service_type = fields.Selection(string='Service Type', related='project_id.service_type')
-    estimate_departmenture_arrival = fields.Datetime(string='Estimate Departure / Arrival')
-    import_permit = fields.Boolean(string='Import Permit')
-    import_permit_paid = fields.Boolean(string='Import Permit Paid')
-    usda_res_72hrs = fields.Boolean(string='USDA RES 72HRS')
-    usda_res_72hrs_date = fields.Date(string='72HRS/PERMIT USDA SENT DATE')
-    field_17_29 = fields.Boolean(string='17-29')
-    usda_mac_sent_date = fields.Date(string='17-29 SENT DATE')
-    realse_date_departure = fields.Datetime(string='Relase Date/Departure')
-    hc_start_res_paid = fields.Date(string='H C Start')
-    hc_end_res_paid = fields.Date(string='H C End')
-    hc_expiration = fields.Date(string='H C Expiration')
-    hc_sent_to_usda = fields.Date(string='H C sent to USDA')
-    hc_endorsed = fields.Char(string='HC ENDORSED')
-    billed_paid = fields.Selection(string='BILLED / PAID', selection=[['billed','Billed'],['paid', 'Paid']])
-    mac_shipment_id = fields.Char(string='MAC Shipment ID')
-    q_start_reserve = fields.Datetime(string='Q Start / Reserve')
-    custom_clarance = fields.Date(string='Custom Clearance')
-    invoice_shipping_ccial_freigth_forward = fields.Char(string='Envio Factura CCial Freight Forward/ EXPO')
-    airline_reserve_guide = fields.Char(string='Reserva y Guia Aerolinea / Expo')
-    awb_paid = fields.Char(string='AWB PAID')
-    pc_check_date = fields.Date(string='PC CHECK DATE')
-    pc_check = fields.Boolean(string='PC CHECK')    
-    stalls = fields.Char(string='STALLS')
-    awb = fields.Char(string='AWB')
-    cert_origin = fields.Char(string='Cert of Origen')
-    tags_ship = fields.Char(string='TAGS  SHIP')
-    actual_work = fields.Integer(string='Actual Work (in hours)')
-    animal_handler = fields.Char(string='Animal Handler')
-    pending = fields.Char(string='Pending')
-    stalls_2 = fields.Char(string='STALLS2')
-    stalls_set3 = fields.Char(string='STALLS set3')
-    pending6 = fields.Char(string='pending6')
-    is_trading_template = fields.Boolean(string='Template', related="project_id.is_trading_template", store=True)
+
+    estimate_departmenture_arrival = fields.Datetime(string='Estimate Departure / Arrival(A)(I/E/T)')
+    realse_date_departure = fields.Datetime(string='Relase Date/Departure(O)(I/E)')
+    #Nuevo
+    shipping_list = fields.Boolean(string='Shipping list(O)(I/E/T)')
+
+    import_permit = fields.Boolean(string='Import Permit(O)(I/T)')
+    import_permit_paid = fields.Boolean(string='Import Permit Paid(O)(I)')
+    usda_res_72hrs = fields.Boolean(string='USDA RES 72HRS(O)(I/E/T)')
+    usda_res_72hrs_date = fields.Date(string='72HRS/PERMIT USDA SENT DATE(O)(I/E/T)')
     #Nuevos campos
-    shipping_list = fields.Boolean(string='Shipping list')
-    contingency_plan = fields.Date(string='Contingency plan')
-    shipping_list_final_dest = fields.Boolean(string='Shippping list final destination')
-    coord_shipping_list_drivers = fields.Boolean(string='Coordinar shipping list drivers')
-    hc_origin = fields.Boolean(string='Helath certificate Origin')
-    import_permit_destinity_country = fields.Date(string='Import Permit Destinity country send Veterinary')
-    jockey_club = fields.Boolean(string='Jockey Club')
-    stalls_in_start = fields.Date(string='STALLS IN Start')
-    commercial_invoice = fields.Boolean(string='Comercial Invoice')
-    commercial_invoice_and_awv_sent_to_c = fields.Date(string='Commecial invoice ans AWB send to customer')
-    animal_handler_confirmed = fields.Boolean(string='Animal Handler Confirmed')
-    coordinar_wls = fields.Boolean(string='Coordinar WLS')
-    coordinar_mac = fields.Boolean(string='Coordinar MAC')
-    coordinar_conductor = fields.Char(string='Coordinar conductor')
-    
+    contingency_plan = fields.Date(string='Contingency plan(O)(T)')
+    shipping_list_final_dest = fields.Boolean(string='Shippping list final destination(O)(I)')
+
+    field_17_29 = fields.Boolean(string='17-29(O)(I)')
+    usda_mac_sent_date = fields.Date(string='17-29 SENT DATE(O)(I/E/T)')
+    #Nuevos campos
+    coord_shipping_list_drivers = fields.Boolean(string='Coordinar shipping list drivers(O)(I)')
+    hc_origin = fields.Boolean(string='Helath certificate Origin(O)(I/T)')
+
+    hc_start_res_paid = fields.Date(string='H C Start(A)(E)')
+    hc_end_res_paid = fields.Date(string='H C End(A)(E)')
+    hc_expiration = fields.Date(string='H C Expiration(A)(E)')
+    hc_sent_to_usda = fields.Date(string='H C sent to USDA(A)(E)')
+    #Nuevos campos
+    import_permit_destinity_country = fields.Date(string='Import Permit Destinity country send Veterinary(A)(E)')
+    jockey_club = fields.Boolean(string='Jockey Club(A)(E)')
+
+    billed_paid = fields.Selection(string='BILLED / PAID(C)(I/E/T)', selection=[['billed','Billed'],['paid', 'Paid']])
+    mac_shipment_id = fields.Char(string='MAC Shipment ID(O)(I)')
+    custom_clarance = fields.Date(string='Custom Clearance(O)(I)')
+    #Nuevos campos
+    commercial_invoice = fields.Boolean(string='Comercial Invoice(O)(I/E/T)')
+
+    invoice_shipping_ccial_freigth_forward = fields.Char(string='Envio Factura CCial Freight Forward/ EXPO(O)(E)')
+    awb = fields.Char(string='AWB(O)(I/E/T)')
+    airline_reserve_guide = fields.Char(string='Reserva y Guia Aerolinea / Expo(O)(I/E)')
+    commercial_invoice_and_awv_sent_to_c = fields.Date(string='Commecial invoice ans AWB send to customer(O)(E)')
+    animal_handler = fields.Char(string='Animal Handler(A)(E)')
+    animal_handler_confirmed = fields.Boolean(string='Animal Handler Confirmed(A)(E)')
+    pc_check_date = fields.Date(string='PC CHECK DATE(O)(I)')
+    pc_check = fields.Boolean(string='PC CHECK(O)(I)')    
+    stalls = fields.Char(string='STALLS(O)(I/E)')
+    cert_origin = fields.Char(string='Cert of Origen(O)(I)')
+    #Nuevos campos
+    coordinar_wls = fields.Boolean(string='Coordinar WLS(A)(I/E/T)')
+    coordinar_mac = fields.Boolean(string='Coordinar MAC(A)(I/E/T)')
+    coordinar_conductor = fields.Char(string='Coordinar conductor(A)(I/E)')
+
+    #BORRAR    
+    q_start_reserve = fields.Datetime(string='Q Start / Reserve()()')
+    stalls_in_start = fields.Date(string='STALLS IN Start()()')
+    tags_ship = fields.Char(string='TAGS  SHIP()()')
+    actual_work = fields.Integer(string='Actual Work (in hours)()()')
+    pending = fields.Char(string='Pending()()')
+    stalls_2 = fields.Char(string='STALLS2()()')
+    stalls_set3 = fields.Char(string='STALLS set3()()')
+    pending6 = fields.Char(string='pending6()()')
+    is_trading_template = fields.Boolean(string='Template', related="project_id.is_trading_template", store=True)
+
+
+    hc_endorsed = fields.Char(string='HC ENDORSED()()')
+    awb_paid = fields.Char(string='AWB PAID()()')
+
+
+
 
     @api.model
     def create(self, values):

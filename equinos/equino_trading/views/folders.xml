@@ -10,9 +10,13 @@
             <field name="arch" type="xml">
                 <tree string="Folders_">
                     <!-- <field name="id" /> -->
+                    <!-- <filter name="id" string="id" domain="[('id','in','filter_certificates_regulates_ids')]" /> -->
+
                     <field name="name" />
-                    <field name="certificates_regulates_ids" widget='many2many_tags'>
-                    </field>
+                    <field name="certificates_regulates_ids" widget='many2many_tags'/>
+                    <field name="crf_crm_lead_id" optional="hide"/>
+                    <field name="filter_certificates_regulates_ids" optional="hide"/>
+
                 </tree>
             </field>
         </record>
@@ -83,7 +87,7 @@
             <field name="model">certificates.regulates.folders</field>
             <field name="arch" type="xml">
                 <search string="Folders">
-                    <filter string="Name" name="filter_by_name" domain="[('name','=','')]" />
+                    <filter string="Name" name="filter_by_name" domain="[('name','in','filter_certificates_regulates_ids')]" />
                     <field name="name" select="True"/>
                     <field name="certificates_regulates_ids" select="True"/>
                     <group string="Group By..">
