@@ -438,6 +438,8 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
           tipoSilla: hoja.getRange(f, 4).getValue(),
           numeroEYM: hoja.getRange(f, 5).getValue(),
           numeroTemporal: hoja.getRange(f, 6).getValue(),
+          color: hoja.getRange(f, 8).getValue(),
+          ubicacion: hoja.getRange(f, 9).getValue(),
           componentes: hoja.getRange(f, 14).getValue(),
           otrosServicios: hoja.getRange(f, 15).getValue(),
           tapiceriaAsiento: hoja.getRange(f, 17).getValue(),
@@ -472,12 +474,17 @@ function agruparPorSilla(diagnosticos, hoja) {
       silas[numTemp] = {
         numeroTemporal: numTemp,
         tipoSilla: diag.tipoSilla,
+        color: diag.color,
+        ubicacion: diag.ubicacion,
         partes: [],
         tapiceria: [],
         servicios: [],
+        componentes: diag.componentes,
+        otrosServicios: diag.otrosServicios,
         subtotalPartes: 0,
-        subtotalTapiceria: 0,
         subtotalServicios: 0,
+        subtotalTapiceria: 0,
+        subtotalMO: 0,
         total: 0
       };
     }
@@ -522,6 +529,7 @@ function agruparPorSilla(diagnosticos, hoja) {
     silas[numTemp].subtotalPartes = diag.subtotalPartes || 0;
     silas[numTemp].subtotalTapiceria = diag.subtotalTapiceria || 0;
     silas[numTemp].subtotalServicios = diag.subtotalServicios || 0;
+    silas[numTemp].subtotalMO = diag.subtotalMO || 0;
     silas[numTemp].total = diag.totalPresupuesto || 0;
   }
 
@@ -649,35 +657,90 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
 
     body.appendParagraph("");
 
-    // Tabla de detalles por silla (SOLO SUBTOTALES)
+    // Tabla de detalles por silla (DETALLADA CON TODOS LOS DATOS)
     silasDatos.forEach((sila, index) => {
-      // Encabezado de silla
-      const encabezadoSilla = body.appendParagraph("SILLA " + sila.numeroTemporal + " - " + sila.tipoSilla);
+      // Encabezado de silla con datos generales
+      const encabezadoSilla = body.appendParagraph("SILLA " + sila.numeroTemporal);
       encabezadoSilla.setBold(true);
-      encabezadoSilla.setFontSize(11);
+      encabezadoSilla.setFontSize(12);
 
-      // PARTES - Solo subtotal
+      // Datos generales de la silla
+      const datosSilla = body.appendParagraph(
+        "Tipo: " + (sila.tipoSilla || "") +
+        " | Color: " + (sila.color || "") +
+        " | Ubicación: " + (sila.ubicacion || "")
+      );
+      datosSilla.setFontSize(9);
+      datosSilla.setItalic(true);
+
+      // PARTES
       if (sila.subtotalPartes > 0) {
-        const subtotalPartes = body.appendParagraph("  PARTES: $" + formatearNumero(sila.subtotalPartes));
-        subtotalPartes.setIndentFirstLine(18);
+        const partesHeading = body.appendParagraph("PARTES:");
+        partesHeading.setBold(true);
+
+        if (sila.componentes) {
+          const comps = sila.componentes.toString().split(";");
+          comps.forEach(comp => {
+            if (comp.trim()) {
+              const compText = body.appendParagraph("  • " + comp.trim());
+              compText.setIndentFirstLine(18);
+            }
+          });
+        }
+
+        const subtotalPartes = body.appendParagraph("Subtotal Partes: $" + formatearNumero(sila.subtotalPartes));
+        subtotalPartes.setBold(true);
+        subtotalPartes.setIndentFirstLine(0);
       }
 
-      // TAPICERÍA - Solo subtotal
-      if (sila.subtotalTapiceria > 0) {
-        const subtotalTapiceria = body.appendParagraph("  TAPICERÍA: $" + formatearNumero(sila.subtotalTapiceria));
-        subtotalTapiceria.setIndentFirstLine(18);
-      }
-
-      // OTROS SERVICIOS - Solo subtotal
+      // OTROS SERVICIOS
       if (sila.subtotalServicios > 0) {
-        const subtotalServicios = body.appendParagraph("  OTROS SERVICIOS: $" + formatearNumero(sila.subtotalServicios));
-        subtotalServicios.setIndentFirstLine(18);
+        const serviciosHeading = body.appendParagraph("OTROS SERVICIOS:");
+        serviciosHeading.setBold(true);
+
+        if (sila.otrosServicios) {
+          const servText = body.appendParagraph("  • " + sila.otrosServicios);
+          servText.setIndentFirstLine(18);
+        }
+
+        const subtotalServicios = body.appendParagraph("Subtotal Servicios: $" + formatearNumero(sila.subtotalServicios));
+        subtotalServicios.setBold(true);
+        subtotalServicios.setIndentFirstLine(0);
       }
 
-      // Total silla
+      // TAPICERÍA
+      if (sila.subtotalTapiceria > 0) {
+        const tapiceriaHeading = body.appendParagraph("TAPICERÍA:");
+        tapiceriaHeading.setBold(true);
+
+        if (sila.tapiceria && sila.tapiceria.length > 0) {
+          sila.tapiceria.forEach(tap => {
+            const tapText = body.appendParagraph("  • " + tap.nombre);
+            tapText.setIndentFirstLine(18);
+          });
+        }
+
+        const subtotalTapiceria = body.appendParagraph("Subtotal Tapicería: $" + formatearNumero(sila.subtotalTapiceria));
+        subtotalTapiceria.setBold(true);
+        subtotalTapiceria.setIndentFirstLine(0);
+      }
+
+      // MANTENIMIENTO GENERAL
+      if (sila.subtotalMO > 0) {
+        const moHeading = body.appendParagraph("MANTENIMIENTO GENERAL:");
+        moHeading.setBold(true);
+        const moText = body.appendParagraph("  • Mantenimiento General: $" + formatearNumero(sila.subtotalMO));
+        moText.setIndentFirstLine(18);
+      }
+
+      // SUBTOTAL GENERAL DE LA SILLA
+      const linea = body.appendParagraph("─────────────────────────────────────");
+      linea.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
       const totalSilla = body.appendParagraph("TOTAL SILLA " + sila.numeroTemporal + ": $" + formatearNumero(sila.total));
       totalSilla.setBold(true);
       totalSilla.setFontSize(12);
+      totalSilla.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
 
       body.appendParagraph("");
     });
