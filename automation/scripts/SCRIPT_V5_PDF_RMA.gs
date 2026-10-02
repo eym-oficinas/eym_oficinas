@@ -675,15 +675,6 @@ function crearOP(hojaDiag, hojaOP, fila) {
   }
 }
 
-function onOpen() {
-  SpreadsheetApp.getUi().createMenu("🚀 EYM v4.0")
-    .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
-    .addItem("📤 Procesar Aprobados", "procesarAprobadosAOP")
-    .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
-    .addSeparator()
-    .addItem("🔄 Recalcular Todo", "recalcularTodo")
-    .addToUi();
-}
 
 function instalarTriggerAutomatico() {
   try {
