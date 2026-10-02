@@ -5,7 +5,8 @@ const ID_FORMULARIO = "1ernMEHTdhRypQCMVgZmHxFGpvQPXkmYhygfxa-i0jxY";
 const CONFIG = {
   PROXIMO_EYM: 60037,
   PROXIMO_OP: 7560,
-  MANTENIMIENTO_GENERAL: 46000
+  MANTENIMIENTO_GENERAL: 46000,
+  CELDA_CONTROL: "AE1" // Guardar cuántas respuestas se procesaron
 };
 
 const PRECIOS = {
@@ -69,6 +70,32 @@ function obtenerPrecioDelCatalogo(nombreProducto) {
   return 0;
 }
 
+function obtenerUltimaRespuestaProcesada() {
+  try {
+    const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
+    const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
+    if (!hojaDiag) return 1;
+
+    const celda = hojaDiag.getRange(CONFIG.CELDA_CONTROL);
+    const valor = celda.getValue();
+    return valor ? parseInt(valor) : 1;
+  } catch (e) {
+    return 1;
+  }
+}
+
+function guardarUltimaRespuestaProcesada(numRespuesta) {
+  try {
+    const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
+    const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
+    if (!hojaDiag) return;
+
+    hojaDiag.getRange(CONFIG.CELDA_CONTROL).setValue(numRespuesta);
+  } catch (e) {
+    Logger.log("Error guardando control: " + e);
+  }
+}
+
 function procesarRespuestaFormulario() {
   try {
     const ssResp = SpreadsheetApp.openById(ID_RESPUESTAS_NUEVA);
@@ -77,73 +104,86 @@ function procesarRespuestaFormulario() {
     const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
 
     if (!hojaResp || !hojaDiag) {
-      SpreadsheetApp.getUi().alert("❌ ERROR: Hojas no encontradas");
+      Logger.log("❌ ERROR: Hojas no encontradas");
       return;
     }
 
-    const ultFila = hojaResp.getLastRow();
-    if (ultFila <= 1) {
-      SpreadsheetApp.getUi().alert("⚠️ No hay respuestas nuevas");
+    const ultFilaResp = hojaResp.getLastRow();
+    if (ultFilaResp <= 1) {
+      Logger.log("⚠️ No hay respuestas");
       return;
     }
 
-    // Procesar SOLO la última respuesta
-    const resp = hojaResp.getRange(ultFila, 1, 1, 31).getValues()[0];
+    // Obtener cuántas respuestas ya fueron procesadas
+    const ultimaProcesada = obtenerUltimaRespuestaProcesada();
 
-    const componentes = [];
-    if (resp[14]) componentes.push(resp[14]);
-    if (resp[15]) componentes.push(resp[15]);
-    if (resp[16]) componentes.push(resp[16]);
-    if (resp[17]) componentes.push(resp[17]);
-    if (resp[18]) componentes.push("Concha " + resp[18]);
-    if (resp[20]) componentes.push("Concha " + resp[20]);
-    if (resp[22]) componentes.push(resp[22]);
-    if (resp[23]) componentes.push(resp[23]);
-    if (resp[24]) componentes.push(resp[24]);
+    let procesadas = 0;
 
-    const fila = [
-      resp[1] || new Date(),               // 1: A
-      resp[2] || "",                       // 2: B
-      resp[3] || "",                       // 3: C
-      resp[4] || "",                       // 4: D
-      "",                                  // 5: E (se genera después)
-      resp[6] || "",                       // 6: F - TEMPORAL
-      resp[13] || "",                      // 7: G
-      resp[7] || "",                       // 8: H
-      resp[8] || "",                       // 9: I
-      resp[9] || "",                       // 10: J
-      resp[10] || "",                      // 11: K
-      resp[11] || "",                      // 12: L
-      resp[12] || "",                      // 13: M
-      componentes.join("; "),              // 14: N
-      resp[25] || "",                      // 15: O
-      resp[26] || "",                      // 16: P
-      resp[27] || "",                      // 17: Q
-      resp[28] || "",                      // 18: R
-      "",                                  // 19: S
-      0,                                   // 20: T
-      0,                                   // 21: U
-      0,                                   // 22: V
-      0,                                   // 23: W
-      0,                                   // 24: X
-      resp[30] || "",                      // 25: Y - OPERARIO
-      "Diagnosticado",                     // 26: Z
-      "",                                  // 27: AA
-      "",                                  // 28: AB
-      "",                                  // 29: AC
-      ""                                   // 30: AD
-    ];
+    // Procesar TODAS las respuestas nuevas (desde la última procesada + 1)
+    for (let r = ultimaProcesada + 1; r <= ultFilaResp; r++) {
+      const resp = hojaResp.getRange(r, 1, 1, 31).getValues()[0];
 
-    const newFila = hojaDiag.getLastRow() + 1;
-    hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
+      const componentes = [];
+      if (resp[14]) componentes.push(resp[14]);
+      if (resp[15]) componentes.push(resp[15]);
+      if (resp[16]) componentes.push(resp[16]);
+      if (resp[17]) componentes.push(resp[17]);
+      if (resp[18]) componentes.push("Concha " + resp[18]);
+      if (resp[20]) componentes.push("Concha " + resp[20]);
+      if (resp[22]) componentes.push(resp[22]);
+      if (resp[23]) componentes.push(resp[23]);
+      if (resp[24]) componentes.push(resp[24]);
 
-    calcularSubtotales(hojaDiag, newFila);
-    generarEyMSiEsNueva(hojaDiag, newFila, resp);
+      const fila = [
+        resp[1] || new Date(),               // 1: A
+        resp[2] || "",                       // 2: B
+        resp[3] || "",                       // 3: C
+        resp[4] || "",                       // 4: D
+        "",                                  // 5: E (se genera después)
+        resp[6] || "",                       // 6: F - TEMPORAL
+        resp[13] || "",                      // 7: G
+        resp[7] || "",                       // 8: H
+        resp[8] || "",                       // 9: I
+        resp[9] || "",                       // 10: J
+        resp[10] || "",                      // 11: K
+        resp[11] || "",                      // 12: L
+        resp[12] || "",                      // 13: M
+        componentes.join("; "),              // 14: N
+        resp[25] || "",                      // 15: O
+        resp[26] || "",                      // 16: P
+        resp[27] || "",                      // 17: Q
+        resp[28] || "",                      // 18: R
+        "",                                  // 19: S
+        0,                                   // 20: T
+        0,                                   // 21: U
+        0,                                   // 22: V
+        0,                                   // 23: W
+        0,                                   // 24: X
+        resp[30] || "",                      // 25: Y - OPERARIO
+        "Diagnosticado",                     // 26: Z
+        "",                                  // 27: AA
+        "",                                  // 28: AB
+        "",                                  // 29: AC
+        ""                                   // 30: AD
+      ];
 
-    SpreadsheetApp.getUi().alert("✅ Diagnóstico procesado - Haz clic de nuevo para la siguiente");
+      const newFila = hojaDiag.getLastRow() + 1;
+      hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
+
+      calcularSubtotales(hojaDiag, newFila);
+      generarEyMSiEsNueva(hojaDiag, newFila, resp);
+
+      procesadas++;
+    }
+
+    // Guardar la última fila procesada
+    if (procesadas > 0) {
+      guardarUltimaRespuestaProcesada(ultFilaResp);
+      Logger.log("✅ " + procesadas + " diagnóstico(s) procesado(s) automáticamente");
+    }
+
   } catch (e) {
-    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
-    Logger.log(e);
+    Logger.log("❌ ERROR: " + e);
   }
 }
 
@@ -258,7 +298,7 @@ function onEdit(e) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu("🚀 EYM V3.0")
-    .addItem("📥 Procesar Última", "procesarRespuestaFormulario")
+    .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("📤 Procesar Aprobados", "procesarAprobadosAOP")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
@@ -275,12 +315,19 @@ function instalarTriggerAutomatico() {
       }
     });
 
+    // Inicializar celda de control
+    const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
+    const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
+    if (hojaDiag) {
+      hojaDiag.getRange(CONFIG.CELDA_CONTROL).setValue(1);
+    }
+
     ScriptApp.newTrigger('procesarRespuestaFormulario')
       .forForm(FormApp.openById(ID_FORMULARIO))
       .onFormSubmit()
       .create();
 
-    SpreadsheetApp.getUi().alert("✅ TRIGGER INSTALADO");
+    SpreadsheetApp.getUi().alert("✅ TRIGGER AUTOMÁTICO INSTALADO\n\nCada nueva respuesta se procesará automáticamente");
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
   }
