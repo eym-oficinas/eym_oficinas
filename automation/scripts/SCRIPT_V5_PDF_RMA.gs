@@ -654,6 +654,10 @@ function crearOP(hojaDiag, hojaOP, fila) {
     const numeroEyM = hojaDiag.getRange(fila, 5).getValue();
     const nuevoOP = obtenerProximoOP(hojaOP);
 
+    const serviciosO = hojaDiag.getRange(fila, 15).getValue() || "";
+    const serviciosP = hojaDiag.getRange(fila, 16).getValue() || "";
+    const serviciosCombinados = [serviciosO, serviciosP].filter(s => s).join("; ");
+
     const filaOP = [
       nuevoOP,
       "",
@@ -667,7 +671,7 @@ function crearOP(hojaDiag, hojaOP, fila) {
       hojaDiag.getRange(fila, 10).getValue(),
       hojaDiag.getRange(fila, 6).getValue(),
       hojaDiag.getRange(fila, 14).getValue(),
-      hojaDiag.getRange(fila, 15).getValue(),
+      serviciosCombinados,
       hojaDiag.getRange(fila, 17).getValue(),
       hojaDiag.getRange(fila, 18).getValue(),
       numeroEyM
