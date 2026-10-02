@@ -1434,6 +1434,22 @@ function buscarImpuestoPorNombre(nombreImpuesto, creds) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════════
+// FUNCIONES AUXILIARES: PDF Y ATTACHMENT
+// ═════════════════════════════════════════════════════════════════════════════════════════
+
+function adjuntarPDFaRMA(numeroRMA, urlPDF, nombreOportunidad) {
+  try {
+    const creds = obtenerCredencialesOdoo();
+
+    // Descargar PDF desde Google Drive
+    const fileId = extraerFileIdDeURL(urlPDF);
+    if (!fileId) {
+      return { exito: false, error: "No se pudo extraer ID del PDF" };
+    }
+
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+    const base64 = Utilities.base64Encode(blob.getBytes());
 
     // Crear attachment en Odoo
     const attachmentData = {
