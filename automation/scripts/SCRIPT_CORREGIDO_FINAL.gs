@@ -52,6 +52,15 @@ function obtenerPrecioDelCatalogo(nombreProducto, catalogo) {
 
 function procesarRespuestaFormulario() {
   try {
+    procesarTodasLasRespuestas();
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
+    Logger.log(e);
+  }
+}
+
+function procesarTodasLasRespuestas() {
+  try {
     const ssResp = SpreadsheetApp.openById(ID_RESPUESTAS_NUEVA);
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
     const hojaResp = ssResp.getSheetByName("Respuestas de formulario 1");
@@ -62,42 +71,51 @@ function procesarRespuestaFormulario() {
       return;
     }
 
-    const ultFila = hojaResp.getLastRow();
-    if (ultFila <= 1) {
-      SpreadsheetApp.getUi().alert("⚠️ No hay respuestas nuevas");
+    const ultFilaResp = hojaResp.getLastRow();
+    const ultFilaDiag = hojaDiag.getLastRow();
+
+    if (ultFilaResp <= 1) {
+      SpreadsheetApp.getUi().alert("⚠️ No hay respuestas");
       return;
     }
 
-    const resp = hojaResp.getRange(ultFila, 1, 1, 31).getValues()[0];
+    let procesadas = 0;
 
-    const repuestos = [];
-    if (resp[14]) repuestos.push(resp[14]);
-    if (resp[15]) repuestos.push(resp[15]);
-    if (resp[16]) repuestos.push(resp[16]);
-    if (resp[17]) repuestos.push(resp[17]);
-    if (resp[18]) repuestos.push("Concha " + resp[18]);
-    if (resp[20]) repuestos.push("Concha " + resp[20]);
-    if (resp[22]) repuestos.push(resp[22]);
-    if (resp[23]) repuestos.push(resp[23]);
-    if (resp[24]) repuestos.push(resp[24]);
+    // Procesar TODAS las respuestas (desde fila 2 en adelante)
+    for (let r = 2; r <= ultFilaResp; r++) {
+      const resp = hojaResp.getRange(r, 1, 1, 31).getValues()[0];
 
-    const fila = [
-      resp[1] || new Date(),resp[2] || "",resp[3] || "",resp[4] || "",
-      "","",resp[13] || "",resp[7] || "",resp[8] || "",
-      resp[9] || "",resp[10] || "",resp[11] || "",resp[12] || "",
-      repuestos.join("; "),resp[25] || "",resp[26] || "",
-      resp[27] || "",resp[28] || "","",
-      0,0,0,0,0,
-      resp[30] || "","Diagnosticado","","",""
-    ];
+      const repuestos = [];
+      if (resp[14]) repuestos.push(resp[14]);
+      if (resp[15]) repuestos.push(resp[15]);
+      if (resp[16]) repuestos.push(resp[16]);
+      if (resp[17]) repuestos.push(resp[17]);
+      if (resp[18]) repuestos.push("Concha " + resp[18]);
+      if (resp[20]) repuestos.push("Concha " + resp[20]);
+      if (resp[22]) repuestos.push(resp[22]);
+      if (resp[23]) repuestos.push(resp[23]);
+      if (resp[24]) repuestos.push(resp[24]);
 
-    const newFila = hojaDiag.getLastRow() + 1;
-    hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
+      const fila = [
+        resp[1] || new Date(),resp[2] || "",resp[3] || "",resp[4] || "",
+        "","",resp[13] || "",resp[7] || "",resp[8] || "",
+        resp[9] || "",resp[10] || "",resp[11] || "",resp[12] || "",
+        repuestos.join("; "),resp[25] || "",resp[26] || "",
+        resp[27] || "",resp[28] || "","",
+        0,0,0,0,0,
+        resp[30] || "","Diagnosticado","","",""
+      ];
 
-    calcularSubtotales(hojaDiag, newFila);
-    generarEyMSiEsNueva(hojaDiag, newFila, resp);
+      const newFila = hojaDiag.getLastRow() + 1;
+      hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
 
-    SpreadsheetApp.getUi().alert("✅ Diagnóstico procesado");
+      calcularSubtotales(hojaDiag, newFila);
+      generarEyMSiEsNueva(hojaDiag, newFila, resp);
+
+      procesadas++;
+    }
+
+    SpreadsheetApp.getUi().alert("✅ " + procesadas + " diagnósticos procesados");
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
     Logger.log(e);
@@ -286,10 +304,22 @@ function recalcularTodo() {
 
     const ultFila = hoja.getLastRow();
     for (let f = 2; f <= ultFila; f++) {
+      // Llenar columnas fijas que NO deberían estar vacías
+      const estadoDiag = hoja.getRange(f, 26).getValue(); // Z
+      if (!estadoDiag || estadoDiag === "") {
+        hoja.getRange(f, 26).setValue("Diagnosticado"); // Z
+      }
+
+      const estadoAprobacion = hoja.getRange(f, 27).getValue(); // AA
+      if (!estadoAprobacion || estadoAprobacion === "") {
+        hoja.getRange(f, 27).setValue(""); // AA = blanco
+      }
+
+      // Recalcular subtotales
       calcularSubtotales(hoja, f);
     }
 
-    SpreadsheetApp.getUi().alert("✅ RECALCULADO");
+    SpreadsheetApp.getUi().alert("✅ RECALCULADO - Columnas Y,Z,AA,AB restauradas");
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
   }
