@@ -767,6 +767,34 @@ function diagnosticarHojas() {
   SpreadsheetApp.getUi().alert(nombres);
 }
 
+function configurarValidacionAprobacion() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
+
+    if (!hoja) {
+      SpreadsheetApp.getUi().alert("Hoja DIAGNOSTICOS_2026 no encontrada");
+      return;
+    }
+
+    const ultFila = hoja.getLastRow();
+    const columnaAE = hoja.getRange("AE2:AE" + ultFila);
+
+    const rule = SpreadsheetApp.newDataValidation()
+      .allowList(["Aprobado", "Pendiente", "Rechazado"])
+      .setHelpText("Selecciona una opción: Aprobado, Pendiente o Rechazado")
+      .setShowDropdown(true)
+      .build();
+
+    columnaAE.setDataValidation(rule);
+
+    SpreadsheetApp.getUi().alert("✅ LISTAS DESPLEGABLES CONFIGURADAS\n\nAhora puedes hacer clic en la columna AE y seleccionar de la lista");
+
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("ERROR: " + e.toString());
+  }
+}
+
 function finalizarOportunidad() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1138,6 +1166,7 @@ function onOpen() {
     .addItem("Finalizar Oportunidad", "finalizarOportunidad")
     .addItem("Recalcular Todo", "recalcularTodo")
     .addSeparator()
+    .addItem("Configurar Listas Desplegables", "configurarValidacionAprobacion")
     .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
     .addToUi();
 }
