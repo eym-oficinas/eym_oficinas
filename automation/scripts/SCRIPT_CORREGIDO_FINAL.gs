@@ -201,7 +201,6 @@ function procesarRespuestaFormulario() {
       hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
 
       calcularSubtotales(hojaDiag, newFila);
-      generarEyMSiEsNueva(hojaDiag, newFila, resp);
 
       procesadas++;
     }
@@ -346,10 +345,22 @@ function onEdit(e) {
 
     // Si se escribe "aprobado" en la columna AE (27) - ESTADO_APROBACION
     if (col === 27 && valor && valor.toString().toLowerCase().includes("aprobado")) {
-      // 1. Rellenar fecha de aprobación en AB (28)
+      // 1. Asignar EYM si aún no tiene
+      const celdaEYM = sheet.getRange(fila, 5);
+      const numeroEYM = celdaEYM.getValue();
+
+      if (!numeroEYM || numeroEYM.toString().trim() === "") {
+        const nuevoEYM = obtenerProximoEYM(sheet);
+        celdaEYM.setValue(nuevoEYM);
+        celdaEYM.setBackground("#FFFF00");
+        celdaEYM.setFontColor("#0000FF");
+        Logger.log("✅ Nuevo EYM asignado al aprobar: " + nuevoEYM);
+      }
+
+      // 2. Rellenar fecha de aprobación en AB (28)
       sheet.getRange(fila, 28).setValue(new Date());
 
-      // 2. Crear OP automáticamente
+      // 3. Crear OP automáticamente
       try {
         const hojaOP = ss.getSheetByName("OP_2026");
         if (hojaOP) {
