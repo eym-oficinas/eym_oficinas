@@ -334,6 +334,43 @@ function obtenerCredencialesOdoo() {
   };
 }
 
+function listarBaseDatosOdoo(creds) {
+  try {
+    const url = creds.url + "/jsonrpc";
+    const payload = {
+      jsonrpc: "2.0",
+      method: "call",
+      params: {
+        service: "db",
+        method: "list",
+        args: []
+      }
+    };
+
+    Logger.log("📤 Listando BDs desde: " + url);
+
+    const response = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+
+    const resultado = JSON.parse(response.getContentText());
+
+    if (resultado.error) {
+      Logger.log("❌ Error al listar BDs: " + JSON.stringify(resultado.error));
+      return null;
+    }
+
+    return resultado.result || [];
+
+  } catch (e) {
+    Logger.log("❌ Error: " + e.toString());
+    return null;
+  }
+}
+
 function consolidarProductos(componentesTexto) {
   try {
     if (!componentesTexto) return [];
@@ -1663,15 +1700,24 @@ function pruebaConexionOdoo() {
   try {
     const creds = obtenerCredencialesOdoo();
 
-    SpreadsheetApp.getUi().alert("🔍 Probando conexión a Odoo...\n\nURL: " + creds.url + "\nBD: " + creds.database + "\nUsuario: " + creds.username + "\n\nRevisa los Logs para detalles...");
+    SpreadsheetApp.getUi().alert("🔍 Probando conexión a Odoo...\n\nPrimero voy a listar las bases de datos disponibles...\n\nRevisa los Logs para detalles...");
 
     Logger.log("═══════════════════════════════════════════════════════════════");
     Logger.log("🔍 INICIANDO PRUEBA DE CONEXIÓN ODOO");
     Logger.log("═══════════════════════════════════════════════════════════════");
     Logger.log("URL: " + creds.url);
-    Logger.log("Database: " + creds.database);
+    Logger.log("Database actual: " + creds.database);
     Logger.log("Username: " + creds.username);
     Logger.log("URL completa JSON-RPC: " + creds.url + "/jsonrpc");
+
+    // Prueba 0: Listar bases de datos disponibles (sin autenticación)
+    Logger.log("\n📌 PRUEBA 0: Listando bases de datos disponibles...");
+    const bdsList = listarBaseDatosOdoo(creds);
+    if (bdsList && bdsList.length > 0) {
+      Logger.log("✅ Bases de datos encontradas: " + bdsList.join(", "));
+    } else {
+      Logger.log("⚠️ No se pudo listar las BDs o lista vacía");
+    }
 
     // Prueba 1: Buscar en crm.lead (sin filtros)
     Logger.log("\n📌 PRUEBA 1: Buscando TODOS los CRM LEADS (sin filtros)...");
