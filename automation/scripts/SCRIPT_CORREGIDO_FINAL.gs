@@ -129,11 +129,30 @@ function calcularSubtotales(hoja, fila) {
     }
 
     // V (col 22): Suma precios en Q (col 17) + R (col 18)
+    // Si ambas tienen el mismo item (ej: "Abollonado y Tapizado general"), contar solo una vez
     const asiento = hoja.getRange(fila, 17).getValue() || "";
     const espaldar = hoja.getRange(fila, 18).getValue() || "";
     let totalV = 0;
-    if (asiento) totalV += obtenerPrecioDelCatalogo(asiento, catalogo);
-    if (espaldar) totalV += obtenerPrecioDelCatalogo(espaldar, catalogo);
+
+    const asientoNormalizado = normalizarTexto(asiento);
+    const espaldarNormalizado = normalizarTexto(espaldar);
+
+    if (asiento && espaldar) {
+      // Ambas tienen datos
+      if (asientoNormalizado === espaldarNormalizado) {
+        // Son iguales - contar solo una vez
+        totalV = obtenerPrecioDelCatalogo(asiento, catalogo);
+      } else {
+        // Son diferentes - contar ambas
+        totalV = obtenerPrecioDelCatalogo(asiento, catalogo) + obtenerPrecioDelCatalogo(espaldar, catalogo);
+      }
+    } else if (asiento) {
+      // Solo asiento tiene datos
+      totalV = obtenerPrecioDelCatalogo(asiento, catalogo);
+    } else if (espaldar) {
+      // Solo espaldar tiene datos
+      totalV = obtenerPrecioDelCatalogo(espaldar, catalogo);
+    }
     hoja.getRange(fila, 22).setValue(totalV);
 
     // W (col 23): Siempre 46,000
