@@ -757,12 +757,35 @@ function recalcularTodo() {
 // NUEVAS FUNCIONES V5: GENERAR PDF CONSOLIDADO + FINALIZAR OPORTUNIDAD
 // ═════════════════════════════════════════════════════════════════════════════════════════
 
+function diagnosticarHojas() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hojas = ss.getSheets();
+  let nombres = "Hojas disponibles:\n";
+  for (let h of hojas) {
+    nombres += "- '" + h.getName() + "'\n";
+  }
+  SpreadsheetApp.getUi().alert(nombres);
+}
+
 function finalizarOportunidad() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
+    const hojas = ss.getSheets();
+    let hojaDiag = null;
+
+    for (let h of hojas) {
+      if (h.getName() === "DIAGNOSTICOS_2026") {
+        hojaDiag = h;
+        break;
+      }
+    }
+
     if (!hojaDiag) {
-      SpreadsheetApp.getUi().alert("Hoja DIAGNOSTICOS_2026 no encontrada");
+      let nombresDisponibles = "Hojas encontradas:\n";
+      for (let h of hojas) {
+        nombresDisponibles += "- " + h.getName() + "\n";
+      }
+      SpreadsheetApp.getUi().alert("Hoja DIAGNOSTICOS_2026 no encontrada.\n\n" + nombresDisponibles);
       return;
     }
 
@@ -1098,5 +1121,7 @@ function onOpen() {
     .addSeparator()
     .addItem("Finalizar Oportunidad", "finalizarOportunidad")
     .addItem("Recalcular Todo", "recalcularTodo")
+    .addSeparator()
+    .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
     .addToUi();
 }
