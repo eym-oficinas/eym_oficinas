@@ -270,19 +270,41 @@ function calcularSubtotales(hoja, fila) {
   }
 }
 
+function obtenerProximoEYM(hoja) {
+  try {
+    const columnaE = hoja.getRange("E:E").getValues();
+    let maxEYM = 60036;
+
+    for (let i = 1; i < columnaE.length; i++) {
+      const valor = columnaE[i][0];
+      if (valor && !isNaN(valor)) {
+        const num = parseInt(valor);
+        if (num > maxEYM) {
+          maxEYM = num;
+        }
+      }
+    }
+
+    return maxEYM + 1;
+  } catch (e) {
+    Logger.log("⚠️ Error obteniendo próximo EYM: " + e);
+    return 60037;
+  }
+}
+
 function generarEyMSiEsNueva(hoja, fila, resp) {
   try {
     // Si la columna E (resp[4]) viene en blanco, asignar nuevo número EYM
     const numeroEYMFormulario = resp[4];
 
     if (!numeroEYMFormulario || numeroEYMFormulario.toString().trim() === "") {
-      // Generar nuevo EYM
-      CONFIG.PROXIMO_EYM++;
+      // Generar nuevo EYM buscando el máximo actual + 1
+      const nuevoEYM = obtenerProximoEYM(hoja);
       const celda = hoja.getRange(fila, 5);
-      celda.setValue(CONFIG.PROXIMO_EYM);
+      celda.setValue(nuevoEYM);
       celda.setBackground("#FFFF00");
       celda.setFontColor("#0000FF");
-      Logger.log("✅ Nuevo EYM asignado: " + CONFIG.PROXIMO_EYM);
+      Logger.log("✅ Nuevo EYM asignado: " + nuevoEYM);
     }
   } catch (e) {
     Logger.log("❌ Error: " + e);
