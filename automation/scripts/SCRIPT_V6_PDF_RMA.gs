@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// SISTEMA AUTOMÁTICO EYM OFICINAS v4.0 - CON INTEGRACIÓN ODOO
+// SISTEMA AUTOMÁTICO EYM OFICINAS v6.0 - INTEGRACIÓN COMPLETA ODOO RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// Incluye: Procesamiento de diagnósticos + Creación automática de RMA en Odoo
+// Incluye: Diagnósticos + RMA en Odoo + Piezas + Operaciones + PDF + Impuestos
 
 const ID_RESPUESTAS_NUEVA = "151jFiyUYDKxHYgswm5-BIED8py5j1_txVxYU5qyPlW4";
 const ID_DIAGNOSTICOS = "1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y";
