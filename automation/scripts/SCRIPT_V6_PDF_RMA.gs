@@ -1596,6 +1596,45 @@ function onOpen() {
     .addSeparator()
     .addItem("Recalcular Todo", "recalcularTodo")
     .addItem("Configurar Listas Desplegables", "configurarValidacionAprobacion")
+    .addSeparator()
+    .addItem("🔧 PRUEBA: Conectar Odoo", "pruebaConexionOdoo")
     .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
     .addToUi();
+}
+
+function pruebaConexionOdoo() {
+  try {
+    const creds = obtenerCredencialesOdoo();
+
+    SpreadsheetApp.getUi().alert("🔍 Probando conexión a Odoo...\n\nURL: " + creds.url + "\nBD: " + creds.database + "\nUsuario: " + creds.username);
+
+    Logger.log("Intentando conectar a Odoo...");
+    Logger.log("URL: " + creds.url);
+    Logger.log("Database: " + creds.database);
+    Logger.log("Username: " + creds.username);
+
+    // Prueba 1: Buscar en crm.lead
+    Logger.log("\n📌 PRUEBA 1: Buscando en CRM LEADS...");
+    const leadsAll = llamarOdooXMLRPC("crm.lead", "search", [[[], ["name"]]], creds);
+    Logger.log("✅ CRM Leads encontrados: " + leadsAll.length);
+    if (leadsAll && leadsAll.length > 0) {
+      Logger.log("Primeros 5 lead IDs: " + leadsAll.slice(0, 5).join(", "));
+    }
+
+    // Prueba 2: Buscar una oportunidad específica
+    Logger.log("\n📌 PRUEBA 2: Buscando 'Mic 25'...");
+    const resultado = llamarOdooXMLRPC("crm.lead", "search", [[["name", "ilike", "Mic 25"]]], creds);
+    Logger.log("Resultados encontrados: " + (resultado ? resultado.length : 0));
+    if (resultado && resultado.length > 0) {
+      Logger.log("✅ ENCONTRADA! IDs: " + resultado.join(", "));
+    } else {
+      Logger.log("❌ NO encontrada");
+    }
+
+    SpreadsheetApp.getUi().alert("✅ CONEXIÓN EXITOSA\n\nCRM Leads totales: " + leadsAll.length + "\n\nRevisa los Logs (Extensiones → Apps Script → Ejecuciones) para ver detalles");
+
+  } catch (e) {
+    Logger.log("❌ ERROR DE CONEXIÓN: " + e.toString());
+    SpreadsheetApp.getUi().alert("❌ ERROR:\n" + e.toString() + "\n\nVerifica:\n1. URL de Odoo\n2. Credenciales\n3. Acceso a módulo CRM");
+  }
 }
