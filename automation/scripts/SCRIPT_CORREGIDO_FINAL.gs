@@ -8,39 +8,58 @@ const CONFIG = {
   MANTENIMIENTO_GENERAL: 46000
 };
 
-function obtenerCatalogoPreciosDesdeSheet() {
-  try {
-    const ss = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojasCatalogo = ss.getSheetByName("CATÁLOGO_PRECIOS_2026");
-    if (!hojasCatalogo) return {};
-    const datos = hojasCatalogo.getDataRange().getValues();
-    const catalogo = {};
-    for (let i = 1; i < datos.length; i++) {
-      const nombre = datos[i][0] ? datos[i][0].toString().toLowerCase().trim() : "";
-      const precio = datos[i][1] ? parseInt(datos[i][1]) : 0;
-      if (nombre && precio > 0) {
-        catalogo[nombre] = precio;
-      }
-    }
-    Logger.log("✅ Catálogo: " + Object.keys(catalogo).length + " artículos");
-    return catalogo;
-  } catch (e) {
-    Logger.log("❌ Error catálogo: " + e);
-    return {};
-  }
-}
+const PRECIOS = {
+  "deslizadores x 4": 15000,
+  "rodachinas goma 60mm x5": 28000,
+  "rodachinas goma 50mm x5": 25000,
+  "rodachinas nylon 50mm x5": 20000,
+  "base naylon 64cm": 56000,
+  "base cromada 64cms": 69000,
+  "base aluminio 64cm": 165000,
+  "telescopio": 5000,
+  "cilindro secretarial negro": 24000,
+  "cilindro cromado negro gerente": 28000,
+  "cilindro butaco": 44000,
+  "cilindro mini negro": 20000,
+  "cilindro mini cromado": 22000,
+  "platina espaldar": 35000,
+  "platina curva": 65000,
+  "perilla": 20000,
+  "plato sencillo": 28000,
+  "kit contacto 2palancas": 92000,
+  "kit contacto permanente": 76000,
+  "contacto permanente": 48000,
+  "contacto 3palancas": 111400,
+  "concha interna asiento f02 05": 50000,
+  "concha interna herradura": 53000,
+  "concha interna rudy gills": 36000,
+  "modulo de madera": 48000,
+  "plato basculante": 38000,
+  "base cromada": 53000,
+  "aro nylon": 70000,
+  "brazo ajustable 2d par": 50000,
+  "brazo ajustable 3d par": 73600,
+  "servicio de mantenimiento y mdo": 46000,
+  "tapizado asiento": 30000,
+  "abollonado asiento": 30000,
+  "tapizado espaldar": 30000,
+  "abollonado espaldar": 30000,
+  "abollonado y tapizado general": 100000,
+  "abollonado especial": 0,
+  "costura especial": 0
+};
 
 function normalizarTexto(texto) {
   if (!texto) return "";
   return texto.toString().toLowerCase().trim().replace(/[()]/g, "").replace(/\s+/g, " ").replace(/\//g, " ");
 }
 
-function obtenerPrecioDelCatalogo(nombreProducto, catalogo) {
-  if (!nombreProducto || Object.keys(catalogo).length === 0) return 0;
+function obtenerPrecioDelCatalogo(nombreProducto) {
+  if (!nombreProducto) return 0;
   const nombreNormalizado = normalizarTexto(nombreProducto);
-  if (catalogo[nombreNormalizado]) return catalogo[nombreNormalizado];
+  if (PRECIOS[nombreNormalizado]) return PRECIOS[nombreNormalizado];
   const palabras = nombreNormalizado.split(" ");
-  for (const [comp, precio] of Object.entries(catalogo)) {
+  for (const [comp, precio] of Object.entries(PRECIOS)) {
     let coincidencias = 0;
     for (const palabra of palabras) {
       if (palabra.length > 2 && comp.includes(palabra)) coincidencias++;
@@ -48,15 +67,6 @@ function obtenerPrecioDelCatalogo(nombreProducto, catalogo) {
     if (coincidencias > 0) return precio;
   }
   return 0;
-}
-
-function procesarRespuestaFormulario() {
-  try {
-    procesarTodasLasRespuestas();
-  } catch (e) {
-    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
-    Logger.log(e);
-  }
 }
 
 function procesarTodasLasRespuestas() {
@@ -72,7 +82,6 @@ function procesarTodasLasRespuestas() {
     }
 
     const ultFilaResp = hojaResp.getLastRow();
-    const ultFilaDiag = hojaDiag.getLastRow();
 
     if (ultFilaResp <= 1) {
       SpreadsheetApp.getUi().alert("⚠️ No hay respuestas");
@@ -81,29 +90,52 @@ function procesarTodasLasRespuestas() {
 
     let procesadas = 0;
 
-    // Procesar TODAS las respuestas (desde fila 2 en adelante)
     for (let r = 2; r <= ultFilaResp; r++) {
       const resp = hojaResp.getRange(r, 1, 1, 31).getValues()[0];
 
-      const repuestos = [];
-      if (resp[14]) repuestos.push(resp[14]);
-      if (resp[15]) repuestos.push(resp[15]);
-      if (resp[16]) repuestos.push(resp[16]);
-      if (resp[17]) repuestos.push(resp[17]);
-      if (resp[18]) repuestos.push("Concha " + resp[18]);
-      if (resp[20]) repuestos.push("Concha " + resp[20]);
-      if (resp[22]) repuestos.push(resp[22]);
-      if (resp[23]) repuestos.push(resp[23]);
-      if (resp[24]) repuestos.push(resp[24]);
+      const componentes = [];
+      if (resp[14]) componentes.push(resp[14]); // O: Rodachinas
+      if (resp[15]) componentes.push(resp[15]); // P: Cilindro
+      if (resp[16]) componentes.push(resp[16]); // Q: Base
+      if (resp[17]) componentes.push(resp[17]); // R: Plato
+      if (resp[18]) componentes.push("Concha " + resp[18]); // S: Concha Asiento
+      if (resp[20]) componentes.push("Concha " + resp[20]); // U: Concha Espaldar
+      if (resp[22]) componentes.push(resp[22]); // W: Brazo
+      if (resp[23]) componentes.push(resp[23]); // X: Otros
+      if (resp[24]) componentes.push(resp[24]); // Y: Otros repuestos
 
+      // MAPEO CORRECTO: 30 elementos (eliminadas 4 columnas N,O,P,R de DIAGNÓSTICOS_2026)
       const fila = [
-        resp[1] || new Date(),resp[2] || "",resp[3] || "",resp[4] || "",
-        "","",resp[13] || "",resp[7] || "",resp[8] || "",
-        resp[9] || "",resp[10] || "",resp[11] || "",resp[12] || "",
-        repuestos.join("; "),resp[25] || "",resp[26] || "",
-        resp[27] || "",resp[28] || "","",
-        0,0,0,0,0,
-        resp[30] || "","Diagnosticado","","",""
+        resp[1] || new Date(),               // 1: A - FECHA_DIAGNOSTICO
+        resp[2] || "",                       // 2: B - NOMBRE_OPORTUNIDAD
+        resp[3] || "",                       // 3: C - CLIENTE
+        resp[4] || "",                       // 4: D - TIPO_SILLA
+        resp[5] || "",                       // 5: E - NUMERO_EYM_ANTERIOR
+        resp[6] || "",                       // 6: F - #_TEMPORAL
+        resp[13] || "",                      // 7: G - FOTO_INICIAL
+        resp[7] || "",                       // 8: H - NUMERO_ACTIVO_EMPRESA
+        resp[8] || "",                       // 9: I - CONDICION_SILLA
+        resp[9] || "",                       // 10: J - TIPO_TELA
+        resp[10] || "",                      // 11: K - COLOR
+        resp[11] || "",                      // 12: L - UBICACION
+        resp[12] || "",                      // 13: M - GARANTIA
+        componentes.join("; "),              // 14: N (era Q) - COMPONENTES
+        resp[25] || "",                      // 15: O (era S) - OTROS_SERVICIOS
+        resp[26] || "",                      // 16: P (era T) - OBSERVACIONES
+        resp[27] || "",                      // 17: Q (era U) - TAPICERIA_TIPO
+        resp[28] || "",                      // 18: R (era V) - TAPICERIA_DETALLES
+        "",                                  // 19: S (era W) - PRESUPUESTO_GENERADO
+        0,                                   // 20: T (era X) - Subtotal Repuestos
+        0,                                   // 21: U (era Y) - Subtotal Servicios
+        0,                                   // 22: V (era Z) - Subtotal Tapicería
+        0,                                   // 23: W (era AA) - Subtotal M.O.
+        0,                                   // 24: X (era AB) - TOTAL
+        resp[30] || "",                      // 25: Y - OPERARIO_DIAGNOSTICA
+        "Diagnosticado",                     // 26: Z - ESTADO_DIAGNOSTICO
+        "",                                  // 27: AA - ESTADO_APROBACION
+        "",                                  // 28: AB - FECHA_APROBACION
+        "",                                  // 29: AC - REFERENCIA_RMA
+        ""                                   // 30: AD - NOTAS_INTERNAS
       ];
 
       const newFila = hojaDiag.getLastRow() + 1;
@@ -122,21 +154,23 @@ function procesarTodasLasRespuestas() {
   }
 }
 
+function procesarRespuestaFormulario() {
+  procesarTodasLasRespuestas();
+}
+
 function calcularSubtotales(hoja, fila) {
   try {
-    const catalogo = obtenerCatalogoPreciosDesdeSheet();
-
-    // T (col 20): Suma precios de ítems en N (col 14)
-    const repuestos = hoja.getRange(fila, 14).getValue() || "";
+    // T (col 20): Suma precios de componentes en N (col 14)
+    const componentes = hoja.getRange(fila, 14).getValue() || "";
     let totalT = 0;
-    if (repuestos) {
-      repuestos.toString().split(";").forEach(item => {
-        totalT += obtenerPrecioDelCatalogo(item, catalogo);
+    if (componentes) {
+      componentes.toString().split(";").forEach(item => {
+        totalT += obtenerPrecioDelCatalogo(item);
       });
     }
     hoja.getRange(fila, 20).setValue(totalT);
 
-    // U (col 21): Amarillo si O (col 15) tiene datos, sino 0
+    // U (col 21): Amarillo si O (col 15) tiene datos
     const otrosServicios = hoja.getRange(fila, 15).getValue() || "";
     if (otrosServicios && otrosServicios.toString().trim() !== "") {
       hoja.getRange(fila, 21).setBackground("#FFFF00");
@@ -146,7 +180,7 @@ function calcularSubtotales(hoja, fila) {
       hoja.getRange(fila, 21).setBackground("#FFFFFF");
     }
 
-    // V (col 22): Suma precios en Q (col 17) + R (col 18)
+    // V (col 22): Suma precios de Q (col 17) + R (col 18)
     // NO duplicar SOLO si ambas son exactamente "Abollonado y Tapizado general"
     const asiento = hoja.getRange(fila, 17).getValue() || "";
     const espaldar = hoja.getRange(fila, 18).getValue() || "";
@@ -157,20 +191,15 @@ function calcularSubtotales(hoja, fila) {
     const textoAbollonado = "abollonado y tapizado general";
 
     if (asiento && espaldar) {
-      // Ambas tienen datos
       if (asientoNormalizado === textoAbollonado && espaldarNormalizado === textoAbollonado) {
-        // Ambas son "Abollonado y Tapizado general" - contar solo una vez
-        totalV = obtenerPrecioDelCatalogo(asiento, catalogo);
+        totalV = obtenerPrecioDelCatalogo(asiento);
       } else {
-        // En cualquier otro caso - contar ambas (Tapizado, Abollonado separados, etc.)
-        totalV = obtenerPrecioDelCatalogo(asiento, catalogo) + obtenerPrecioDelCatalogo(espaldar, catalogo);
+        totalV = obtenerPrecioDelCatalogo(asiento) + obtenerPrecioDelCatalogo(espaldar);
       }
     } else if (asiento) {
-      // Solo asiento tiene datos
-      totalV = obtenerPrecioDelCatalogo(asiento, catalogo);
+      totalV = obtenerPrecioDelCatalogo(asiento);
     } else if (espaldar) {
-      // Solo espaldar tiene datos
-      totalV = obtenerPrecioDelCatalogo(espaldar, catalogo);
+      totalV = obtenerPrecioDelCatalogo(espaldar);
     }
     hoja.getRange(fila, 22).setValue(totalV);
 
@@ -200,6 +229,82 @@ function generarEyMSiEsNueva(hoja, fila, resp) {
     }
   } catch (e) {
     Logger.log("❌ Error EyM: " + e);
+  }
+}
+
+function recalcularTodo() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName("DIAGNÓSTICOS_2026");
+    if (!hoja) return;
+
+    const ultFila = hoja.getLastRow();
+    for (let f = 2; f <= ultFila; f++) {
+      // Llenar Z (col 26) = "Diagnosticado"
+      const estadoDiag = hoja.getRange(f, 26).getValue();
+      if (!estadoDiag || estadoDiag === "") {
+        hoja.getRange(f, 26).setValue("Diagnosticado");
+      }
+
+      // Dejar AA (col 27) en blanco
+      hoja.getRange(f, 27).setValue("");
+
+      // Recalcular subtotales
+      calcularSubtotales(hoja, f);
+    }
+
+    SpreadsheetApp.getUi().alert("✅ RECALCULADO");
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
+  }
+}
+
+function onEdit(e) {
+  try {
+    const ss = e.source;
+    const sheet = e.range.getSheet();
+    if (sheet.getName() !== "DIAGNÓSTICOS_2026") return;
+
+    const col = e.range.getColumn();
+    const fila = e.range.getRow();
+    const valor = e.value;
+
+    // Col 27 = AA (ESTADO_APROBACION), Col 28 = AB (FECHA_APROBACION)
+    if (col === 27 && valor && valor.toString().toLowerCase().includes("aprobado")) {
+      sheet.getRange(fila, 28).setValue(new Date());
+    }
+  } catch (e) {
+    Logger.log("❌ Error en onEdit: " + e);
+  }
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu("🚀 EYM V3.0")
+    .addItem("📥 Procesar Última", "procesarRespuestaFormulario")
+    .addItem("📤 Procesar Aprobados", "procesarAprobadosAOP")
+    .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
+    .addSeparator()
+    .addItem("🔄 Recalcular Todo", "recalcularTodo")
+    .addToUi();
+}
+
+function instalarTriggerAutomatico() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(t => {
+      if (t.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT) {
+        ScriptApp.deleteTrigger(t);
+      }
+    });
+
+    ScriptApp.newTrigger('procesarRespuestaFormulario')
+      .forForm(FormApp.openById(ID_FORMULARIO))
+      .onFormSubmit()
+      .create();
+
+    SpreadsheetApp.getUi().alert("✅ TRIGGER INSTALADO");
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
   }
 }
 
@@ -263,83 +368,5 @@ function crearOP(hojaDiag, hojaOP, fila) {
     hojaDiag.getRange(fila, 29).setValue(refRMA);
   } catch (e) {
     Logger.log("❌ Error crearOP: " + e);
-  }
-}
-
-function instalarTriggerAutomatico() {
-  try {
-    const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(t => {
-      if (t.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT) {
-        ScriptApp.deleteTrigger(t);
-      }
-    });
-
-    ScriptApp.newTrigger('procesarRespuestaFormulario')
-      .forForm(FormApp.openById(ID_FORMULARIO))
-      .onFormSubmit()
-      .create();
-
-    SpreadsheetApp.getUi().alert("✅ TRIGGER INSTALADO");
-  } catch (e) {
-    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
-  }
-}
-
-function onOpen() {
-  SpreadsheetApp.getUi().createMenu("🚀 EYM V3.0")
-    .addItem("📥 Procesar Última", "procesarRespuestaFormulario")
-    .addItem("📤 Procesar Aprobados", "procesarAprobadosAOP")
-    .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
-    .addSeparator()
-    .addItem("🔄 Recalcular Todo", "recalcularTodo")
-    .addToUi();
-}
-
-function recalcularTodo() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const hoja = ss.getSheetByName("DIAGNÓSTICOS_2026");
-    if (!hoja) return;
-
-    const ultFila = hoja.getLastRow();
-    for (let f = 2; f <= ultFila; f++) {
-      // Llenar columnas fijas que NO deberían estar vacías
-      const estadoDiag = hoja.getRange(f, 26).getValue(); // Z
-      if (!estadoDiag || estadoDiag === "") {
-        hoja.getRange(f, 26).setValue("Diagnosticado"); // Z
-      }
-
-      const estadoAprobacion = hoja.getRange(f, 27).getValue(); // AA
-      if (!estadoAprobacion || estadoAprobacion === "") {
-        hoja.getRange(f, 27).setValue(""); // AA = blanco
-      }
-
-      // Recalcular subtotales
-      calcularSubtotales(hoja, f);
-    }
-
-    SpreadsheetApp.getUi().alert("✅ RECALCULADO - Columnas Y,Z,AA,AB restauradas");
-  } catch (e) {
-    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
-  }
-}
-
-function onEdit(e) {
-  try {
-    const ss = e.source;
-    const sheet = e.range.getSheet();
-    if (sheet.getName() !== "DIAGNÓSTICOS_2026") return;
-
-    const col = e.range.getColumn();
-    const fila = e.range.getRow();
-    const valor = e.value;
-
-    // Si cambió columna AA (27) y ahora contiene "Aprobado", llenar AB con fecha
-    if (col === 27 && valor && valor.toString().toLowerCase().includes("aprobado")) {
-      sheet.getRange(fila, 28).setValue(new Date());
-    }
-  } catch (e) {
-    Logger.log("❌ Error en onEdit: " + e);
   }
 }
