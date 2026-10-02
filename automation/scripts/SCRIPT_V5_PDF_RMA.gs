@@ -947,9 +947,20 @@ function consolidarProductosTotal(diagnosticos, hoja) {
 
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
+    Logger.log("Iniciando generación de PDF para: " + nombreOportunidad);
+    Logger.log("Sillas encontradas: " + silasDatos.length);
+
+    if (!silasDatos || silasDatos.length === 0) {
+      Logger.log("ERROR: No hay datos de sillas");
+      return null;
+    }
+
     const nombre = "COTIZACION - " + nombreOportunidad + " - " + new Date().toLocaleDateString();
+    Logger.log("Creando documento: " + nombre);
+
     const doc = DocumentApp.create(nombre);
     const body = doc.getBody();
+    body.clear();
 
     body.setMarginTop(36);
     body.setMarginBottom(36);
@@ -983,20 +994,20 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
         sila.tipoSilla || "",
         sila.color || "",
         sila.ubicacion || "",
-        "$" + formatearNumero(sila.subtotalPartes),
-        "$" + formatearNumero(sila.subtotalServicios),
-        "$" + formatearNumero(sila.subtotalTapiceria),
-        "$" + formatearNumero(sila.subtotalMO),
-        "$" + formatearNumero(sila.total)
+        "$" + formatearNumero(sila.subtotalPartes || 0),
+        "$" + formatearNumero(sila.subtotalServicios || 0),
+        "$" + formatearNumero(sila.subtotalTapiceria || 0),
+        "$" + formatearNumero(sila.subtotalMO || 0),
+        "$" + formatearNumero(sila.total || 0)
       ]);
     });
 
     let totalPartes = 0, totalServicios = 0, totalTapiceria = 0, totalMO = 0;
     silasDatos.forEach(sila => {
-      totalPartes += sila.subtotalPartes || 0;
-      totalServicios += sila.subtotalServicios || 0;
-      totalTapiceria += sila.subtotalTapiceria || 0;
-      totalMO += sila.subtotalMO || 0;
+      totalPartes += (sila.subtotalPartes || 0);
+      totalServicios += (sila.subtotalServicios || 0);
+      totalTapiceria += (sila.subtotalTapiceria || 0);
+      totalMO += (sila.subtotalMO || 0);
     });
 
     tablaDatos.push([
@@ -1011,6 +1022,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral)
     ]);
 
+    Logger.log("Creando tabla con " + tablaDatos.length + " filas");
     const tabla = body.appendTable(tablaDatos);
 
     tabla.setColumnWidth(0, 70);
@@ -1049,6 +1061,9 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     nota.setFontSize(9);
     nota.setItalic(true);
 
+    Logger.log("Guardando PDF...");
+    doc.saveAndClose();
+
     const file = DriveApp.getFileById(doc.getId());
     const pdfBlob = file.getAs("application/pdf");
     const pdfFile = DriveApp.createFile(pdfBlob.setName("COTIZACION_" + nombreOportunidad + ".pdf"));
@@ -1059,7 +1074,8 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     return pdfFile.getUrl();
 
   } catch (e) {
-    Logger.log("Error: " + e);
+    Logger.log("ERROR EN generarPDFDiagnosticos: " + e.toString());
+    Logger.log("Stack: " + e.stack);
     return null;
   }
 }
