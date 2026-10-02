@@ -1190,13 +1190,11 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
 
     Logger.log("📝 Creando RMA para: " + cliente);
 
+    // Buscar cliente en Odoo (NO crear automáticamente)
     let clienteOdooId = buscarClienteOdoo(cliente, creds);
     if (!clienteOdooId) {
-      Logger.log("Creando cliente en Odoo...");
-      clienteOdooId = crearClienteOdoo(cliente, creds);
-      if (!clienteOdooId) {
-        return { exito: false, error: "No se pudo crear cliente" };
-      }
+      Logger.log("⚠️ Cliente no encontrado en Odoo: " + cliente);
+      return { exito: false, error: "Cliente '" + cliente + "' no encontrado en Odoo. Por favor selecciona un cliente válido de la lista desplegable." };
     }
 
     const rmaData = {
