@@ -398,6 +398,7 @@ function buscarCodigoOdooDelCatalogo(nombreProducto) {
 
 function llamarOdooXMLRPC(modelo, metodo, args, creds) {
   try {
+    const url = creds.url + "/jsonrpc";
     const payload = {
       jsonrpc: "2.0",
       method: "call",
@@ -413,25 +414,50 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
       method: "post",
       contentType: "application/json",
       payload: JSON.stringify(payload),
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      headers: {
+        "Accept": "application/json"
+      }
     };
 
-    const response = UrlFetchApp.fetch(
-      creds.url + "/jsonrpc",
-      options
-    );
+    Logger.log("📤 Enviando a: " + url);
+    Logger.log("📋 Payload: " + JSON.stringify(payload));
 
-    const resultado = JSON.parse(response.getContentText());
+    const response = UrlFetchApp.fetch(url, options);
+
+    Logger.log("📥 Status: " + response.getResponseCode());
+    const responseText = response.getContentText();
+    Logger.log("📥 Response (primeros 500 chars): " + responseText.substring(0, 500));
+
+    if (!responseText) {
+      Logger.log("❌ CRÍTICO: Respuesta vacía del servidor");
+      return null;
+    }
+
+    let resultado;
+    try {
+      resultado = JSON.parse(responseText);
+    } catch (parseError) {
+      Logger.log("❌ CRÍTICO: No se pudo parsear JSON: " + parseError.toString());
+      Logger.log("📥 Contenido recibido: " + responseText);
+      return null;
+    }
 
     if (resultado.error) {
-      Logger.log("❌ Error Odoo XML-RPC: " + resultado.error.message);
+      Logger.log("❌ Error Odoo JSON-RPC: " + JSON.stringify(resultado.error));
       return null;
+    }
+
+    if (!resultado.result && resultado.result !== 0 && resultado.result !== false) {
+      Logger.log("⚠️ ADVERTENCIA: Resultado vacío pero sin error en respuesta");
+      Logger.log("📥 Respuesta completa: " + JSON.stringify(resultado));
     }
 
     return resultado.result;
 
   } catch (e) {
-    Logger.log("❌ Error en llamada XML-RPC: " + e.toString());
+    Logger.log("❌ CRÍTICO en llamada XML-RPC: " + e.toString());
+    Logger.log("Stack trace: " + e.stack);
     return null;
   }
 }
@@ -1607,32 +1633,66 @@ function pruebaConexionOdoo() {
   try {
     const creds = obtenerCredencialesOdoo();
 
-    SpreadsheetApp.getUi().alert("🔍 Probando conexión a Odoo...\n\nURL: " + creds.url + "\nBD: " + creds.database + "\nUsuario: " + creds.username);
+    SpreadsheetApp.getUi().alert("🔍 Probando conexión a Odoo...\n\nURL: " + creds.url + "\nBD: " + creds.database + "\nUsuario: " + creds.username + "\n\nRevisa los Logs para detalles...");
 
-    Logger.log("Intentando conectar a Odoo...");
+    Logger.log("═══════════════════════════════════════════════════════════════");
+    Logger.log("🔍 INICIANDO PRUEBA DE CONEXIÓN ODOO");
+    Logger.log("═══════════════════════════════════════════════════════════════");
     Logger.log("URL: " + creds.url);
     Logger.log("Database: " + creds.database);
     Logger.log("Username: " + creds.username);
+    Logger.log("URL completa JSON-RPC: " + creds.url + "/jsonrpc");
 
-    // Prueba 1: Buscar en crm.lead
-    Logger.log("\n📌 PRUEBA 1: Buscando en CRM LEADS...");
-    const leadsAll = llamarOdooXMLRPC("crm.lead", "search", [[[], ["name"]]], creds);
-    Logger.log("✅ CRM Leads encontrados: " + leadsAll.length);
-    if (leadsAll && leadsAll.length > 0) {
+    // Prueba 1: Buscar en crm.lead (sin filtros)
+    Logger.log("\n📌 PRUEBA 1: Buscando TODOS los CRM LEADS (sin filtros)...");
+    const leadsAll = llamarOdooXMLRPC("crm.lead", "search", [[]], creds);
+
+    if (leadsAll === null) {
+      Logger.log("❌ FALLO: llamarOdooXMLRPC retornó null");
+      SpreadsheetApp.getUi().alert("❌ CONEXIÓN FALLIDA\n\nError: La llamada a Odoo retornó null.\n\nVerifica en Logs (Extensiones → Apps Script → Ejecuciones):\n1. El status HTTP\n2. Si hay error de Odoo\n3. Si la respuesta está vacía");
+      return;
+    }
+
+    Logger.log("✅ Búsqueda exitosa");
+    Logger.log("CRM Leads encontrados: " + (Array.isArray(leadsAll) ? leadsAll.length : "NO ES ARRAY: " + typeof leadsAll));
+
+    if (Array.isArray(leadsAll) && leadsAll.length > 0) {
       Logger.log("Primeros 5 lead IDs: " + leadsAll.slice(0, 5).join(", "));
     }
 
     // Prueba 2: Buscar una oportunidad específica
-    Logger.log("\n📌 PRUEBA 2: Buscando 'Mic 25'...");
+    Logger.log("\n📌 PRUEBA 2: Buscando 'Mic 25' en CRM LEADS...");
     const resultado = llamarOdooXMLRPC("crm.lead", "search", [[["name", "ilike", "Mic 25"]]], creds);
-    Logger.log("Resultados encontrados: " + (resultado ? resultado.length : 0));
-    if (resultado && resultado.length > 0) {
-      Logger.log("✅ ENCONTRADA! IDs: " + resultado.join(", "));
+
+    if (resultado === null) {
+      Logger.log("❌ FALLO: Búsqueda específica retornó null");
     } else {
-      Logger.log("❌ NO encontrada");
+      Logger.log("Resultados encontrados: " + (Array.isArray(resultado) ? resultado.length : "NO ES ARRAY"));
+      if (Array.isArray(resultado) && resultado.length > 0) {
+        Logger.log("✅ ENCONTRADA! IDs: " + resultado.join(", "));
+      } else {
+        Logger.log("⚠️ No encontrada (pero la búsqueda fue exitosa)");
+      }
     }
 
-    SpreadsheetApp.getUi().alert("✅ CONEXIÓN EXITOSA\n\nCRM Leads totales: " + leadsAll.length + "\n\nRevisa los Logs (Extensiones → Apps Script → Ejecuciones) para ver detalles");
+    // Prueba 3: Verificar acceso a res.partner
+    Logger.log("\n📌 PRUEBA 3: Verificando acceso a PARTNERS...");
+    const partnersAll = llamarOdooXMLRPC("res.partner", "search", [[]], creds);
+    if (partnersAll === null) {
+      Logger.log("❌ No se puede acceder a Partners");
+    } else {
+      Logger.log("✅ Partners encontrados: " + (Array.isArray(partnersAll) ? partnersAll.length : "NO ES ARRAY"));
+    }
+
+    Logger.log("\n═══════════════════════════════════════════════════════════════");
+    Logger.log("✅ PRUEBA COMPLETADA - Revisa los detalles arriba");
+    Logger.log("═══════════════════════════════════════════════════════════════");
+
+    if (Array.isArray(leadsAll) && leadsAll.length > 0) {
+      SpreadsheetApp.getUi().alert("✅ CONEXIÓN EXITOSA!\n\nCRM Leads totales: " + leadsAll.length + "\n\nRevisa los Logs para ver detalles completos de las 3 pruebas");
+    } else {
+      SpreadsheetApp.getUi().alert("⚠️ CONEXIÓN PARCIAL\n\nNo se encontraron leads, pero la conexión respondió.\n\nRevisa los Logs para más detalles");
+    }
 
   } catch (e) {
     Logger.log("❌ ERROR DE CONEXIÓN: " + e.toString());
