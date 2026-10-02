@@ -328,7 +328,7 @@ function obtenerCredencialesOdoo() {
   return {
     url: "https://eym-oficinas.ovh",
     urlWeb: "https://eym-oficinas.ovh/web",
-    database: "eym_oficinas",
+    database: "Eym1",
     username: "eymclaude@eym-oficinas.com",
     password: "Camilo1973*"
   };
