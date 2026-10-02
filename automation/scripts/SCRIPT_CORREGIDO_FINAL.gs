@@ -88,7 +88,7 @@ function procesarRespuestaFormulario() {
       repuestos.join("; "),resp[25] || "",resp[26] || "",
       resp[27] || "",resp[28] || "","",
       0,0,0,0,0,
-      resp[29] || "","Diagnosticado","","","",""
+      resp[30] || "","Diagnosticado","","",""
     ];
 
     const newFila = hojaDiag.getLastRow() + 1;
@@ -129,21 +129,22 @@ function calcularSubtotales(hoja, fila) {
     }
 
     // V (col 22): Suma precios en Q (col 17) + R (col 18)
-    // Si ambas tienen el mismo item (ej: "Abollonado y Tapizado general"), contar solo una vez
+    // NO duplicar SOLO si ambas son exactamente "Abollonado y Tapizado general"
     const asiento = hoja.getRange(fila, 17).getValue() || "";
     const espaldar = hoja.getRange(fila, 18).getValue() || "";
     let totalV = 0;
 
     const asientoNormalizado = normalizarTexto(asiento);
     const espaldarNormalizado = normalizarTexto(espaldar);
+    const textoAbollonado = "abollonado y tapizado general";
 
     if (asiento && espaldar) {
       // Ambas tienen datos
-      if (asientoNormalizado === espaldarNormalizado) {
-        // Son iguales - contar solo una vez
+      if (asientoNormalizado === textoAbollonado && espaldarNormalizado === textoAbollonado) {
+        // Ambas son "Abollonado y Tapizado general" - contar solo una vez
         totalV = obtenerPrecioDelCatalogo(asiento, catalogo);
       } else {
-        // Son diferentes - contar ambas
+        // En cualquier otro caso - contar ambas (Tapizado, Abollonado separados, etc.)
         totalV = obtenerPrecioDelCatalogo(asiento, catalogo) + obtenerPrecioDelCatalogo(espaldar, catalogo);
       }
     } else if (asiento) {
@@ -291,5 +292,24 @@ function recalcularTodo() {
     SpreadsheetApp.getUi().alert("✅ RECALCULADO");
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
+  }
+}
+
+function onEdit(e) {
+  try {
+    const ss = e.source;
+    const sheet = e.range.getSheet();
+    if (sheet.getName() !== "DIAGNÓSTICOS_2026") return;
+
+    const col = e.range.getColumn();
+    const fila = e.range.getRow();
+    const valor = e.value;
+
+    // Si cambió columna AA (27) y ahora contiene "Aprobado", llenar AB con fecha
+    if (col === 27 && valor && valor.toString().toLowerCase().includes("aprobado")) {
+      sheet.getRange(fila, 28).setValue(new Date());
+    }
+  } catch (e) {
+    Logger.log("❌ Error en onEdit: " + e);
   }
 }
