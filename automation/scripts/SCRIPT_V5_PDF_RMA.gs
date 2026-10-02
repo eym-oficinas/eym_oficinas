@@ -618,12 +618,12 @@ function onEdit(e) {
           Logger.log("✅ RMA creada en Odoo: " + resultadoRMA.referenciaRMA);
         } else {
           Logger.log("❌ Error creando RMA: " + resultadoRMA.error);
-          sheet.getRange(fila, 29).setValue("ERROR: " + resultadoRMA.error);
+          sheet.getRange(fila, 29).setValue("");
         }
 
       } catch (rmaError) {
         Logger.log("⚠️ Error en integración Odoo: " + rmaError);
-        sheet.getRange(fila, 29).setValue("ERROR RMA");
+        sheet.getRange(fila, 29).setValue("");
       }
 
       // 4. Crear OP automáticamente
@@ -661,8 +661,8 @@ function crearOP(hojaDiag, hojaOP, fila) {
       hojaDiag.getRange(fila, 6).getValue(),
       hojaDiag.getRange(fila, 14).getValue(),
       hojaDiag.getRange(fila, 15).getValue(),
-      "",
-      "",
+      hojaDiag.getRange(fila, 17).getValue(),
+      hojaDiag.getRange(fila, 18).getValue(),
       numeroEyM
     ];
 
