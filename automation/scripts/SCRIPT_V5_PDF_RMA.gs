@@ -608,40 +608,9 @@ function onEdit(e) {
         }
       }
 
-      // CASO 2: COTIZACIÓN - genera PDF + RMA consolidado
+      // CASO 2: COTIZACIÓN - Solo marca, no genera PDF aquí
       else if (estadoLower.includes("cotización")) {
-        Logger.log("Generando PDF + RMA para: " + sheet.getRange(fila, 2).getValue());
-
-        try {
-          const nombreOportunidad = sheet.getRange(fila, 2).getValue();
-          const diagnosticos = obtenerDiagnosticosDeOportunidad(sheet, nombreOportunidad);
-
-          if (diagnosticos.length > 0) {
-            const silasDatos = agruparPorSilla(diagnosticos, sheet);
-            const totalGeneral = calcularTotalGeneral(silasDatos);
-            const cliente = diagnosticos[0].cliente;
-            const numeroEYM = diagnosticos[0].numeroEYM;
-
-            const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
-
-            if (urlPDF) {
-              const productosConsolidados = consolidarProductosTotal(diagnosticos, sheet);
-              const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, nombreOportunidad);
-
-              if (resultadoRMA.exito) {
-                for (let diag of diagnosticos) {
-                  sheet.getRange(diag.fila, 29).setValue(resultadoRMA.referenciaRMA);
-                  sheet.getRange(diag.fila, 29).setFormula('=HYPERLINK("' + resultadoRMA.linkRMA + '","' + resultadoRMA.referenciaRMA + '")');
-                  sheet.getRange(diag.fila, 29).setFontColor("#0000FF");
-                  sheet.getRange(diag.fila, 29).setFontLine("underline");
-                }
-                Logger.log("RMA creada: " + resultadoRMA.referenciaRMA);
-              }
-            }
-          }
-        } catch (cotError) {
-          Logger.log("Error en Cotización: " + cotError);
-        }
+        Logger.log("⏳ Estado 'Cotización' marcado - Usar botón 'Finalizar Oportunidad' para generar RMA");
       }
     }
   } catch (e) {
@@ -820,17 +789,13 @@ function finalizarOportunidad() {
     }
 
     if (!hojaDiag) {
-      let nombresDisponibles = "Hojas encontradas:\n";
-      for (let h of hojas) {
-        nombresDisponibles += "- " + h.getName() + "\n";
-      }
-      SpreadsheetApp.getUi().alert("Hoja DIAGNOSTICOS_2026 no encontrada.\n\n" + nombresDisponibles);
+      SpreadsheetApp.getUi().alert("Hoja DIAGNOSTICOS_2026 no encontrada");
       return;
     }
 
     const ui = SpreadsheetApp.getUi();
     const response = ui.prompt("Ingresa el NOMBRE DE LA OPORTUNIDAD:");
-    
+
     if (response.getSelectedButton() == ui.Button.CANCEL) return;
 
     const nombreOportunidad = response.getResponseText().trim();
@@ -847,18 +812,11 @@ function finalizarOportunidad() {
       return;
     }
 
-    const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
-    const totalGeneral = calcularTotalGeneral(silasDatos);
     const cliente = diagnosticos[0].cliente;
     const numeroEYM = diagnosticos[0].numeroEYM;
-
-    const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
-    if (!urlPDF) {
-      ui.alert("Error generando PDF");
-      return;
-    }
-
     const productosConsolidados = consolidarProductosTotal(diagnosticos, hojaDiag);
+
+    // CREAR RMA (rápido, sin PDF)
     const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, nombreOportunidad);
 
     if (!resultadoRMA.exito) {
@@ -866,6 +824,7 @@ function finalizarOportunidad() {
       return;
     }
 
+    // Escribir RMA en columna AC
     for (let diag of diagnosticos) {
       hojaDiag.getRange(diag.fila, 29).setValue(resultadoRMA.referenciaRMA);
       hojaDiag.getRange(diag.fila, 29).setFormula('=HYPERLINK("' + resultadoRMA.linkRMA + '","' + resultadoRMA.referenciaRMA + '")');
@@ -873,7 +832,10 @@ function finalizarOportunidad() {
       hojaDiag.getRange(diag.fila, 29).setFontLine("underline");
     }
 
-    ui.alert("OPORTUNIDAD FINALIZADA\n\nRMA: " + resultadoRMA.referenciaRMA + "\n\nLink: " + resultadoRMA.linkRMA);
+    // Guardar oportunidad para generar PDF después
+    guardarOportunidadParaPDF(nombreOportunidad, numeroEYM, resultadoRMA.numeroRMA);
+
+    ui.alert("✅ RMA CREADA: " + resultadoRMA.referenciaRMA + "\n\n⏳ El PDF se generará automáticamente en los próximos minutos.\n\nLink RMA: " + resultadoRMA.linkRMA);
 
   } catch (e) {
     Logger.log("Error: " + e);
@@ -1169,14 +1131,210 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, n
   }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════════════════
+// NUEVAS FUNCIONES V6: GENERACIÓN DE PDF CON TRIGGER + ADJUNTAR A RMA
+// ═════════════════════════════════════════════════════════════════════════════════════════
+
+function guardarOportunidadParaPDF(nombreOportunidad, numeroEYM, numeroRMA) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
+    if (!hojaDiag) return;
+
+    const hojaPending = ss.getSheetByName("PDF_PENDIENTES");
+    if (!hojaPending) {
+      ss.insertSheet("PDF_PENDIENTES");
+      const newSheet = ss.getSheetByName("PDF_PENDIENTES");
+      newSheet.appendRow(["Oportunidad", "EYM", "RMA", "Fecha", "Estado"]);
+    }
+
+    const hoja = ss.getSheetByName("PDF_PENDIENTES");
+    hoja.appendRow([nombreOportunidad, numeroEYM, numeroRMA, new Date(), "Pendiente"]);
+
+    Logger.log("✅ Oportunidad registrada para generación de PDF: " + nombreOportunidad);
+  } catch (e) {
+    Logger.log("⚠️ Error guardando oportunidad: " + e);
+  }
+}
+
+function generarPDFsAutomaticamente() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
+    const hojaPending = ss.getSheetByName("PDF_PENDIENTES");
+
+    if (!hojaPending || !hojaDiag) {
+      Logger.log("⚠️ Hoja PDF_PENDIENTES no encontrada");
+      return;
+    }
+
+    const dataPending = hojaPending.getDataRange().getValues();
+
+    for (let i = 1; i < dataPending.length; i++) {
+      const nombreOportunidad = dataPending[i][0];
+      const numeroRMA = dataPending[i][2];
+      const estado = dataPending[i][4];
+
+      if (estado === "Pendiente") {
+        Logger.log("🔄 Generando PDF para: " + nombreOportunidad + " (RMA: " + numeroRMA + ")");
+
+        const diagnosticos = obtenerDiagnosticosDeOportunidad(hojaDiag, nombreOportunidad);
+        if (diagnosticos.length > 0) {
+          const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
+          const totalGeneral = calcularTotalGeneral(silasDatos);
+          const cliente = diagnosticos[0].cliente;
+
+          const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
+          if (urlPDF) {
+            const resultadoAdjunto = adjuntarPDFaRMA(numeroRMA, urlPDF, nombreOportunidad);
+            if (resultadoAdjunto.exito) {
+              hojaPending.getRange(i + 1, 5).setValue("Completado");
+              Logger.log("✅ PDF generado y adjunto: " + nombreOportunidad);
+            } else {
+              Logger.log("⚠️ Error adjuntando PDF: " + resultadoAdjunto.error);
+            }
+          }
+        }
+      }
+    }
+
+  } catch (e) {
+    Logger.log("❌ Error en generarPDFsAutomaticamente: " + e);
+  }
+}
+
+function adjuntarPDFaRMA(numeroRMA, urlPDF, nombreOportunidad) {
+  try {
+    const creds = obtenerCredencialesOdoo();
+
+    // Descargar PDF desde Google Drive
+    const fileId = extraerFileIdDeURL(urlPDF);
+    if (!fileId) {
+      return { exito: false, error: "No se pudo extraer ID del PDF" };
+    }
+
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+    const base64 = Utilities.base64Encode(blob.getBytes());
+
+    // Crear attachment en Odoo
+    const attachmentData = {
+      name: "COTIZACION_" + nombreOportunidad + ".pdf",
+      datas: base64,
+      datas_fname: "COTIZACION_" + nombreOportunidad + ".pdf",
+      res_model: "rma.rma",
+      res_id: numeroRMA,
+      type: "binary",
+      mimetype: "application/pdf"
+    };
+
+    const resultadoAttach = llamarOdooXMLRPC("ir.attachment", "create", [attachmentData], creds);
+
+    if (resultadoAttach) {
+      Logger.log("✅ PDF adjunto a RMA en Odoo: " + numeroRMA);
+      return { exito: true, attachmentId: resultadoAttach };
+    } else {
+      return { exito: false, error: "Error en XML-RPC" };
+    }
+
+  } catch (e) {
+    Logger.log("❌ Error adjuntando a RMA: " + e);
+    return { exito: false, error: e.toString() };
+  }
+}
+
+function extraerFileIdDeURL(url) {
+  try {
+    // URL de Google Drive: https://drive.google.com/file/d/FILE_ID/view
+    const match = url.match(/\/d\/([a-zA-Z0-9-_]+)\//);
+    return match ? match[1] : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function instalarTriggerGeneradorPDF() {
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+
+    // Eliminar trigger existente de generarPDFsAutomaticamente
+    triggers.forEach(t => {
+      if (t.getHandlerFunction() === "generarPDFsAutomaticamente") {
+        ScriptApp.deleteTrigger(t);
+      }
+    });
+
+    // Crear nuevo trigger cada 5 minutos
+    ScriptApp.newTrigger("generarPDFsAutomaticamente")
+      .timeBased()
+      .everyMinutes(5)
+      .create();
+
+    SpreadsheetApp.getUi().alert("✅ TRIGGER GENERADOR DE PDF INSTALADO\n\nLos PDFs se generarán automáticamente cada 5 minutos");
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════
+// WEBHOOK ENDPOINT PARA ODOO → EXCEL (Fase 2)
+// ═════════════════════════════════════════════════════════════════════════════════════════
+
+function doPost(e) {
+  try {
+    const payload = JSON.parse(e.postData.contents);
+    Logger.log("🔔 Webhook recibido de Odoo: " + JSON.stringify(payload));
+
+    if (payload.evento === "rma_confirmada") {
+      const numeroEYM = payload.numeroEYM;
+      const estadoNuevo = "Aprobado";
+
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
+      if (!hojaDiag) {
+        return ContentService.createTextOutput(JSON.stringify({ exito: false, error: "Hoja no encontrada" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      const ultFila = hojaDiag.getLastRow();
+      let actualizado = false;
+
+      for (let f = 2; f <= ultFila; f++) {
+        const eyM = hojaDiag.getRange(f, 5).getValue();
+        if (eyM == numeroEYM) {
+          hojaDiag.getRange(f, 31).setValue(estadoNuevo); // Columna AE
+          actualizado = true;
+          Logger.log("✅ Estado actualizado a 'Aprobado' para EYM: " + numeroEYM);
+          break;
+        }
+      }
+
+      if (actualizado) {
+        return ContentService.createTextOutput(JSON.stringify({ exito: true, mensaje: "Estado actualizado" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ exito: false, error: "Evento no reconocido" }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (e) {
+    Logger.log("❌ Error en webhook: " + e);
+    return ContentService.createTextOutput(JSON.stringify({ exito: false, error: e.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("EYM v5.0")
+  SpreadsheetApp.getUi().createMenu("EYM v6.0")
     .addItem("Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
     .addItem("Finalizar Oportunidad", "finalizarOportunidad")
-    .addItem("Recalcular Todo", "recalcularTodo")
+    .addItem("Generar PDFs Ahora", "generarPDFsAutomaticamente")
+    .addItem("Instalar Trigger PDF", "instalarTriggerGeneradorPDF")
     .addSeparator()
+    .addItem("Recalcular Todo", "recalcularTodo")
     .addItem("Configurar Listas Desplegables", "configurarValidacionAprobacion")
     .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
     .addToUi();
