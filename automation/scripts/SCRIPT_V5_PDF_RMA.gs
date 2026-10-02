@@ -579,7 +579,7 @@ function onEdit(e) {
     const fila = e.range.getRow();
     const valor = e.value;
 
-    if (col === 27 && valor) {
+    if (col === 31 && valor) {
       const estadoLower = valor.toString().toLowerCase();
 
       // CASO 1: APROBADO - genera EYM + OP
@@ -724,7 +724,7 @@ function procesarAprobadosAOP() {
     let procesadas = 0;
 
     for (let f = 2; f <= ultFila; f++) {
-      const estadoAprobacion = hojaDiag.getRange(f, 27).getValue();
+      const estadoAprobacion = hojaDiag.getRange(f, 31).getValue();
       if (estadoAprobacion && estadoAprobacion.toString().toLowerCase().includes("aprobado")) {
         crearOP(hojaDiag, hojaOP, f);
         procesadas++;
