@@ -441,16 +441,36 @@ function procesarAprobadosAOP() {
   }
 }
 
+function obtenerProximoOP(hojaOP) {
+  try {
+    const columnaA = hojaOP.getRange("A:A").getValues();
+    let maxOP = 7559; // Valor inicial por defecto
+
+    for (let i = 1; i < columnaA.length; i++) {
+      const valor = columnaA[i][0];
+      if (valor && !isNaN(valor)) {
+        const num = parseInt(valor);
+        if (num > maxOP) {
+          maxOP = num;
+        }
+      }
+    }
+
+    return maxOP + 1;
+  } catch (e) {
+    Logger.log("⚠️ Error obteniendo próximo OP: " + e);
+    return 7560;
+  }
+}
+
 function crearOP(hojaDiag, hojaOP, fila) {
   try {
     const numeroEyM = hojaDiag.getRange(fila, 5).getValue();
-    const refRMA = "RMA-" + numeroEyM;
-
-    CONFIG.PROXIMO_OP++;
+    const nuevoOP = obtenerProximoOP(hojaOP);
 
     const filaOP = [
-      CONFIG.PROXIMO_OP,
-      refRMA,
+      nuevoOP,
+      "",                                          // RMA vacía (viene de Odoo)
       "",
       hojaDiag.getRange(fila, 1).getValue(),
       hojaDiag.getRange(fila, 2).getValue(),
@@ -470,7 +490,7 @@ function crearOP(hojaDiag, hojaOP, fila) {
     const newFilaOP = hojaOP.getLastRow() + 1;
     hojaOP.getRange(newFilaOP, 1, 1, filaOP.length).setValues([filaOP]);
 
-    hojaDiag.getRange(fila, 29).setValue(refRMA);
+    Logger.log("✅ OP " + nuevoOP + " creada automáticamente");
   } catch (e) {
     Logger.log("❌ Error: " + e);
   }
