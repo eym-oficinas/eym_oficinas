@@ -399,12 +399,14 @@ function buscarCodigoOdooDelCatalogo(nombreProducto) {
 function llamarOdooXMLRPC(modelo, metodo, args, creds) {
   try {
     const url = creds.url + "/jsonrpc";
+    // Para Odoo v14: siempre usar "execute_kw" como method en JSON-RPC
+    // El método real (search, read, write, etc.) va dentro del args
     const payload = {
       jsonrpc: "2.0",
       method: "call",
       params: {
         service: "object",
-        method: metodo,
+        method: "execute_kw",
         args: [creds.database, creds.username, creds.password, modelo, metodo, ...args],
         kwargs: {}
       }
