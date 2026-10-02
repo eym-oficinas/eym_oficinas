@@ -119,9 +119,28 @@ function procesarRespuestaFormulario() {
 
     let procesadas = 0;
 
-    // Procesar TODAS las respuestas nuevas (desde la última procesada + 1)
-    for (let r = ultimaProcesada + 1; r <= ultFilaResp; r++) {
-      const resp = hojaResp.getRange(r, 1, 1, 31).getValues()[0];
+    // Procesar TODAS las respuestas (desde fila 2), evitando duplicados
+    const ultFilaDiag = hojaDiag.getLastRow();
+    for (let r = 2; r <= ultFilaResp; r++) {
+      const resp = hojaResp.getRange(r, 1, 1, 34).getValues()[0];
+
+      // Verificar si esta respuesta ya existe en diagnósticos (por fecha + cliente)
+      const fechaResp = resp[1];
+      const clienteResp = resp[3];
+      let yaExiste = false;
+
+      if (ultFilaDiag > 1) {
+        for (let d = 2; d <= ultFilaDiag; d++) {
+          const fechaDiag = hojaDiag.getRange(d, 1).getValue();
+          const clienteDiag = hojaDiag.getRange(d, 3).getValue();
+          if (Math.abs(new Date(fechaResp) - new Date(fechaDiag)) < 60000 && clienteResp === clienteDiag) {
+            yaExiste = true;
+            break;
+          }
+        }
+      }
+
+      if (yaExiste) continue;
 
       const componentes = [];
       if (resp[14]) componentes.push(resp[14]);
@@ -159,7 +178,7 @@ function procesarRespuestaFormulario() {
         0,                                   // 22: V
         0,                                   // 23: W
         0,                                   // 24: X
-        resp[30] || "",                      // 25: Y - OPERARIO
+        resp[29] || "",                      // 25: Y - OPERARIO (AD de respuestas)
         "Diagnosticado",                     // 26: Z
         "",                                  // 27: AA
         "",                                  // 28: AB
