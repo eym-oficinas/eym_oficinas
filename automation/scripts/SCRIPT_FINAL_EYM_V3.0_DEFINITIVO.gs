@@ -132,8 +132,8 @@ function SUMAR_PIEZAS(fila) {
     const hoja = ss.getSheetByName("DIAGNÓSTICOS_2026");
     if (!hoja) return 0;
 
-    // Columna 17 = Repuestos (según nuevos nombres)
-    const repuestos = hoja.getRange(fila, 17).getValue() || "";
+    // Columna 14 = N (Repuestos)
+    const repuestos = hoja.getRange(fila, 14).getValue() || "";
     if (!repuestos) return 0;
 
     const catalogo = obtenerCatalogoPreciosDesdeSheet();
@@ -166,8 +166,8 @@ function SUMAR_SERVICIOS(fila) {
     const hoja = ss.getSheetByName("DIAGNÓSTICOS_2026");
     if (!hoja) return 0;
 
-    // Columna 19 = OTROS SERVICIOS
-    const otrosServicios = hoja.getRange(fila, 19).getValue() || "";
+    // Columna 15 = O (OTROS SERVICIOS)
+    const otrosServicios = hoja.getRange(fila, 15).getValue() || "";
     if (!otrosServicios) return 0;
 
     const catalogo = obtenerCatalogoPreciosDesdeSheet();
@@ -200,10 +200,10 @@ function SUMAR_TAPICERIA(fila) {
     const catalogo = obtenerCatalogoPreciosDesdeSheet();
     let total = 0;
 
-    // Columna 21 = TAPICERIA Asiento
-    const asiento = hoja.getRange(fila, 21).getValue() || "";
-    // Columna 22 = TAPICERIA Espaldar
-    const espaldar = hoja.getRange(fila, 22).getValue() || "";
+    // Columna 17 = Q (TAPICERIA Asiento)
+    const asiento = hoja.getRange(fila, 17).getValue() || "";
+    // Columna 18 = R (TAPICERIA Espaldar)
+    const espaldar = hoja.getRange(fila, 18).getValue() || "";
 
     if (asiento) {
       const precioAsiento = obtenerPrecioDelCatalogo(asiento, catalogo);
@@ -312,7 +312,7 @@ function procesarRespuestaFormulario() {
     aplicarFormulasCalculos(hojaDiag, newFila);
 
     // Generar número EyM si es nueva
-    generarNumerosEyMSiEs Nueva(hojaDiag, newFila, resp);
+    generarNumerosEyMSiEsNueva(hojaDiag, newFila, resp);
 
     SpreadsheetApp.getUi().alert("✅ Diagnóstico procesado - Fila " + newFila);
 
@@ -328,26 +328,27 @@ function procesarRespuestaFormulario() {
 
 function aplicarFormulasCalculos(hoja, fila) {
   try {
-    // X: Subtotal de partes
-    hoja.getRange(fila, 24).setFormula('=SUMAR_PIEZAS(' + fila + ')');
+    // T (col 20): Subtotal de partes
+    hoja.getRange(fila, 20).setFormula('=SUMAR_PIEZAS(' + fila + ')');
 
-    // Y: Subtotal de Otros Servicios (con lógica de resalte amarillo)
-    const otrosServicios = hoja.getRange(fila, 19).getValue();
+    // U (col 21): Subtotal de Otros Servicios (con lógica de resalte amarillo)
+    const otrosServicios = hoja.getRange(fila, 15).getValue();
     if (otrosServicios && otrosServicios.toString().trim() !== "") {
-      hoja.getRange(fila, 25).setFormula('=SUMAR_SERVICIOS(' + fila + ')');
-      // Se resaltará amarillo solo si el valor es > 0
+      hoja.getRange(fila, 21).setFormula('=SUMAR_SERVICIOS(' + fila + ')');
+      hoja.getRange(fila, 21).setBackground("#FFFF00"); // Resaltar amarillo
     } else {
-      hoja.getRange(fila, 25).setValue(0);
+      hoja.getRange(fila, 21).setValue(0);
+      hoja.getRange(fila, 21).setBackground("#FFFFFF");
     }
 
-    // Z: Subtotal Tapiceria
-    hoja.getRange(fila, 26).setFormula('=SUMAR_TAPICERIA(' + fila + ')');
+    // V (col 22): Subtotal Tapiceria
+    hoja.getRange(fila, 22).setFormula('=SUMAR_TAPICERIA(' + fila + ')');
 
-    // AA: Subtotal M.O. (fijo)
-    hoja.getRange(fila, 27).setValue(CONFIG.MANTENIMIENTO_GENERAL);
+    // W (col 23): Subtotal M.O. (fijo)
+    hoja.getRange(fila, 23).setValue(CONFIG.MANTENIMIENTO_GENERAL);
 
-    // AB: TOTAL PPTTO Antes de IVA (X + Y + Z + AA)
-    hoja.getRange(fila, 28).setFormula('=X' + fila + '+Y' + fila + '+Z' + fila + '+AA' + fila);
+    // X (col 24): TOTAL PPTTO Antes de IVA (T + U + V + W)
+    hoja.getRange(fila, 24).setFormula('=T' + fila + '+U' + fila + '+V' + fila + '+W' + fila);
 
   } catch (e) {
     Logger.log("❌ Error en aplicarFormulasCalculos: " + e.toString());
@@ -596,11 +597,11 @@ function recalcularTodasLasFormulas() {
       aplicarFormulasCalculos(hoja, f);
 
       // Resaltar amarillo si hay otros servicios
-      const otrosServicios = hoja.getRange(f, 19).getValue();
+      const otrosServicios = hoja.getRange(f, 15).getValue();
       if (otrosServicios && otrosServicios.toString().trim() !== "") {
-        hoja.getRange(f, 25).setBackground("#FFFF00"); // Columna Y
+        hoja.getRange(f, 21).setBackground("#FFFF00"); // Columna U
       } else {
-        hoja.getRange(f, 25).setBackground("#FFFFFF");
+        hoja.getRange(f, 21).setBackground("#FFFFFF");
       }
     }
 
