@@ -9,46 +9,45 @@ const CONFIG = {
   CELDA_CONTROL: "AE1" // Guardar cuántas respuestas se procesaron
 };
 
-const PRECIOS = {
-  "deslizadores x 4": 15000,
-  "rodachinas goma 60mm x5": 28000,
-  "rodachinas goma 50mm x5": 25000,
-  "rodachinas nylon 50mm x5": 20000,
-  "base naylon 64cm": 56000,
-  "base cromada 64cms": 69000,
-  "base aluminio 64cm": 165000,
-  "telescopio": 5000,
-  "cilindro secretarial negro": 24000,
-  "cilindro cromado negro gerente": 28000,
-  "cilindro butaco": 44000,
-  "cilindro mini negro": 20000,
-  "cilindro mini cromado": 22000,
-  "platina espaldar": 35000,
-  "platina curva": 65000,
-  "perilla": 20000,
-  "plato sencillo": 28000,
-  "kit contacto 2palancas": 92000,
-  "kit contacto permanente": 76000,
-  "contacto permanente": 48000,
-  "contacto 3palancas": 111400,
-  "concha interna asiento f02 05": 50000,
-  "concha interna herradura": 53000,
-  "concha interna rudy gills": 36000,
-  "modulo de madera": 48000,
-  "plato basculante": 38000,
-  "base cromada": 53000,
-  "aro nylon": 70000,
-  "brazo ajustable 2d par": 50000,
-  "brazo ajustable 3d par": 73600,
-  "servicio de mantenimiento y mdo": 46000,
-  "tapizado asiento": 30000,
-  "abollonado asiento": 30000,
-  "tapizado espaldar": 30000,
-  "abollonado espaldar": 30000,
-  "abollonado y tapizado general": 100000,
-  "abollonado especial": 0,
-  "costura especial": 0
-};
+let CATALOGO_CACHE = null; // Caché global para evitar lecturas repetidas
+
+function obtenerCatalogoPreciosDesdeSheet() {
+  if (CATALOGO_CACHE !== null) {
+    return CATALOGO_CACHE; // Devolver caché si ya está cargado
+  }
+
+  try {
+    const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
+    const hojaCatalogo = ssDiag.getSheetByName("CATÁLOGO_PRECIOS_2026");
+
+    if (!hojaCatalogo) {
+      Logger.log("⚠️ ADVERTENCIA: Hoja CATÁLOGO_PRECIOS_2026 no encontrada");
+      return {};
+    }
+
+    const datos = hojaCatalogo.getDataRange().getValues();
+    const catalogo = {};
+
+    // Estructura esperada:
+    // Fila 1: Encabezados (Nombre | Precio | Código Odoo)
+    // Filas 2+: Datos
+    for (let i = 1; i < datos.length; i++) {
+      const nombre = datos[i][0] ? datos[i][0].toString().toLowerCase().trim() : "";
+      const precio = datos[i][1] ? parseInt(datos[i][1]) : 0;
+
+      if (nombre && precio > 0) {
+        catalogo[nombre] = precio;
+      }
+    }
+
+    CATALOGO_CACHE = catalogo;
+    Logger.log("✅ Catálogo cargado: " + Object.keys(catalogo).length + " artículos");
+    return catalogo;
+  } catch (e) {
+    Logger.log("❌ Error al obtener catálogo: " + e.toString());
+    return {};
+  }
+}
 
 function normalizarTexto(texto) {
   if (!texto) return "";
@@ -57,16 +56,28 @@ function normalizarTexto(texto) {
 
 function obtenerPrecioDelCatalogo(nombreProducto) {
   if (!nombreProducto) return 0;
+
+  const catalogo = obtenerCatalogoPreciosDesdeSheet();
+  if (!catalogo || Object.keys(catalogo).length === 0) {
+    Logger.log("⚠️ Catálogo vacío");
+    return 0;
+  }
+
   const nombreNormalizado = normalizarTexto(nombreProducto);
-  if (PRECIOS[nombreNormalizado]) return PRECIOS[nombreNormalizado];
+
+  // Búsqueda exacta
+  if (catalogo[nombreNormalizado]) return catalogo[nombreNormalizado];
+
+  // Búsqueda fuzzy (por palabras clave)
   const palabras = nombreNormalizado.split(" ");
-  for (const [comp, precio] of Object.entries(PRECIOS)) {
+  for (const [comp, precio] of Object.entries(catalogo)) {
     let coincidencias = 0;
     for (const palabra of palabras) {
       if (palabra.length > 2 && comp.includes(palabra)) coincidencias++;
     }
     if (coincidencias > 0) return precio;
   }
+
   return 0;
 }
 
