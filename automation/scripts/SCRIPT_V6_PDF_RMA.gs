@@ -326,7 +326,8 @@ function obtenerProximoOP(hojaOP) {
 
 function obtenerCredencialesOdoo() {
   return {
-    url: "https://eym-oficinas.ovh/web",
+    url: "https://eym-oficinas.ovh",
+    urlWeb: "https://eym-oficinas.ovh/web",
     database: "eym_oficinas",
     username: "eymclaude@eym-oficinas.com",
     password: "Camilo1973*"
@@ -533,7 +534,7 @@ function crearRMAenOdoo(datosRMA) {
       return { exito: false, error: "Error en llamada XML-RPC" };
     }
 
-    const linkRMA = creds.url + "/web#id=" + numeroRMA + "&model=rma.rma&view_type=form";
+    const linkRMA = creds.urlWeb + "#id=" + numeroRMA + "&model=rma.rma&view_type=form";
 
     Logger.log("✅ RMA creada exitosamente: RMA-" + numeroRMA);
 
@@ -1245,7 +1246,7 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
       Logger.log("✅ Servicios agregados: " + resultadoServicios.cantidad);
     }
 
-    const linkRMA = creds.url + "/web#id=" + numeroRMA + "&model=rma.rma&view_type=form";
+    const linkRMA = creds.urlWeb + "#id=" + numeroRMA + "&model=rma.rma&view_type=form";
 
     Logger.log("✅ RMA completada: " + numeroRMA);
 
