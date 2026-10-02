@@ -399,15 +399,43 @@ function buscarCodigoOdooDelCatalogo(nombreProducto) {
 function llamarOdooXMLRPC(modelo, metodo, args, creds) {
   try {
     const url = creds.url + "/jsonrpc";
-    // Para Odoo v14: siempre usar "execute_kw" como method en JSON-RPC
-    // El método real (search, read, write, etc.) va dentro del args
+
+    // Paso 1: Obtener UID mediante autenticación
+    Logger.log("🔐 Obteniendo UID...");
+    const authPayload = {
+      jsonrpc: "2.0",
+      method: "call",
+      params: {
+        service: "common",
+        method: "authenticate",
+        args: [creds.database, creds.username, creds.password, {}]
+      }
+    };
+
+    const authResponse = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(authPayload),
+      muteHttpExceptions: true
+    });
+
+    const authResult = JSON.parse(authResponse.getContentText());
+    if (authResult.error || !authResult.result) {
+      Logger.log("❌ Error en autenticación: " + JSON.stringify(authResult.error || "Sin UID"));
+      return null;
+    }
+
+    const uid = authResult.result;
+    Logger.log("✅ UID obtenido: " + uid);
+
+    // Paso 2: Llamar al método usando el UID (no username)
     const payload = {
       jsonrpc: "2.0",
       method: "call",
       params: {
         service: "object",
         method: "execute_kw",
-        args: [creds.database, creds.username, creds.password, modelo, metodo, ...args],
+        args: [creds.database, uid, creds.password, modelo, metodo, ...args],
         kwargs: {}
       }
     };
