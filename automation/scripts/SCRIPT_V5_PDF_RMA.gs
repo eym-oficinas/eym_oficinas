@@ -1271,9 +1271,9 @@ function agregarLineasProductosRMA(numeroRMA, productosConsolidados, creds) {
 
       // Calcular impuestos
       const subtotal = producto.cantidad * producto.precio;
-      const impuestos = calcularImpuestos(subtotal);
+      const impuestos = calcularImpuestos(subtotal, creds);
 
-      // Crear línea RMA
+      // Crear línea RMA (Piezas)
       const lineaData = {
         rma_id: numeroRMA,
         product_id: productoOdooId,
@@ -1324,9 +1324,9 @@ function agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds) {
 
       // Calcular impuestos
       const subtotal = servicio.cantidad * servicio.precio;
-      const impuestos = calcularImpuestos(subtotal);
+      const impuestos = calcularImpuestos(subtotal, creds);
 
-      // Crear línea RMA (Operaciones/Servicios)
+      // Crear línea RMA (Operaciones/Servicios) - SIN campo "type"
       const lineaData = {
         rma_id: numeroRMA,
         product_id: servicioOdooId,
@@ -1335,8 +1335,7 @@ function agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds) {
         product_uom_id: 1, // Unidades
         price_unit: servicio.precio,
         price_subtotal: subtotal,
-        tax_ids: impuestos.taxIds,
-        type: "operaciones" // Operaciones/Servicios
+        tax_ids: impuestos.taxIds
       };
 
       const lineaRmaId = llamarOdooXMLRPC("rma.rma.line", "create", [lineaData], creds);
@@ -1393,7 +1392,7 @@ function buscarProductoOdooPorCodigo(codigo, creds) {
   }
 }
 
-function calcularImpuestos(subtotal) {
+function calcularImpuestos(subtotal, creds) {
   // IVA 19% + RFTFE 4% (si >= $550.000)
   const impuestos = {
     iva: 19,
@@ -1405,15 +1404,33 @@ function calcularImpuestos(subtotal) {
     impuestos.rftfe = 4;
   }
 
-  // IDs de impuestos en Odoo (ajustar según tu configuración)
-  // Estos son ejemplos, debes verificar en tu Odoo
-  impuestos.taxIds = [1]; // IVA 19% (verificar ID real)
+  // Buscar IDs de impuestos en Odoo por nombre
+  const ivaId = buscarImpuestoPorNombre("IVA Ventas 19%", creds);
+  const rftfeId = buscarImpuestoPorNombre("RTFTE 4%", creds);
 
-  if (impuestos.rftfe > 0) {
-    impuestos.taxIds.push(2); // RFTFE 4% (verificar ID real)
+  if (ivaId) {
+    impuestos.taxIds.push(ivaId);
+  }
+
+  if (impuestos.rftfe > 0 && rftfeId) {
+    impuestos.taxIds.push(rftfeId);
   }
 
   return impuestos;
+}
+
+function buscarImpuestoPorNombre(nombreImpuesto, creds) {
+  try {
+    const resultado = llamarOdooXMLRPC("account.tax", "search", [[["name", "=", nombreImpuesto]]], creds);
+    if (resultado && resultado.length > 0) {
+      return resultado[0];
+    }
+    Logger.log("⚠️ Impuesto no encontrado: " + nombreImpuesto);
+    return null;
+  } catch (e) {
+    Logger.log("Error buscando impuesto: " + e);
+    return null;
+  }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════════
