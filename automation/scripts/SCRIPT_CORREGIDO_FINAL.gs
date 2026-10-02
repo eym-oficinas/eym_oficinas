@@ -272,13 +272,17 @@ function calcularSubtotales(hoja, fila) {
 
 function generarEyMSiEsNueva(hoja, fila, resp) {
   try {
-    const condicion = resp[8];
-    if (condicion && condicion.toString().toLowerCase().includes("nueva")) {
+    // Si la columna E (resp[4]) viene en blanco, asignar nuevo número EYM
+    const numeroEYMFormulario = resp[4];
+
+    if (!numeroEYMFormulario || numeroEYMFormulario.toString().trim() === "") {
+      // Generar nuevo EYM
       CONFIG.PROXIMO_EYM++;
       const celda = hoja.getRange(fila, 5);
       celda.setValue(CONFIG.PROXIMO_EYM);
       celda.setBackground("#FFFF00");
       celda.setFontColor("#0000FF");
+      Logger.log("✅ Nuevo EYM asignado: " + CONFIG.PROXIMO_EYM);
     }
   } catch (e) {
     Logger.log("❌ Error: " + e);
