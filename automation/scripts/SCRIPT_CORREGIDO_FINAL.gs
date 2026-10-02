@@ -288,8 +288,21 @@ function onEdit(e) {
     const fila = e.range.getRow();
     const valor = e.value;
 
+    // Si se escribe "aprobado" en la columna AE (27) - ESTADO_APROBACION
     if (col === 27 && valor && valor.toString().toLowerCase().includes("aprobado")) {
+      // 1. Rellenar fecha de aprobación en AB (28)
       sheet.getRange(fila, 28).setValue(new Date());
+
+      // 2. Crear OP automáticamente
+      try {
+        const hojaOP = ss.getSheetByName("OP_2026");
+        if (hojaOP) {
+          crearOP(sheet, hojaOP, fila);
+          Logger.log("✅ OP creada automáticamente para fila " + fila);
+        }
+      } catch (opError) {
+        Logger.log("⚠️ Error creando OP: " + opError);
+      }
     }
   } catch (e) {
     Logger.log("❌ Error: " + e);
