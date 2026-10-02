@@ -822,11 +822,12 @@ function finalizarOportunidad() {
     const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, serviciosConsolidados, nombreOportunidad);
 
     if (!resultadoRMA.exito) {
-      ui.alert("Error creando RMA: " + resultadoRMA.error);
+      ui.alert("❌ ERROR:\n\n" + resultadoRMA.error);
       return;
     }
 
     Logger.log("✅ RMA creada: " + resultadoRMA.referenciaRMA);
+    ui.alert("✅ OPORTUNIDAD ENCONTRADA en Odoo\n✅ RMA Creada: " + resultadoRMA.referenciaRMA + "\n\nProcediendo con productos, servicios y PDF...");
 
     // PASO 2: ESCRIBIR RMA EN COLUMNA AC
     for (let diag of diagnosticos) {
@@ -1188,21 +1189,34 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
   try {
     const creds = obtenerCredencialesOdoo();
 
-    Logger.log("📝 Creando RMA para: " + cliente);
+    Logger.log("📝 Buscando Oportunidad en Odoo: " + nombreOportunidad);
 
-    // Buscar cliente en Odoo (NO crear automáticamente)
-    let clienteOdooId = buscarClienteOdoo(cliente, creds);
-    if (!clienteOdooId) {
-      Logger.log("⚠️ Cliente no encontrado en Odoo: " + cliente);
-      return { exito: false, error: "Cliente '" + cliente + "' no encontrado en Odoo. Por favor selecciona un cliente válido de la lista desplegable." };
+    // PASO 1: Buscar oportunidad en Odoo
+    const oportunidadOdooId = buscarOportunidadOdoo(nombreOportunidad, creds);
+    if (!oportunidadOdooId) {
+      Logger.log("❌ Oportunidad no encontrada en Odoo: " + nombreOportunidad);
+      return { exito: false, error: "❌ Oportunidad '" + nombreOportunidad + "' NO encontrada en Odoo.\n\nPor favor:\n1. Crea la oportunidad en Odoo\n2. Asegúrate que el nombre coincida exactamente\n3. Intenta de nuevo" };
     }
 
+    Logger.log("✅ Oportunidad encontrada en Odoo: " + oportunidadOdooId);
+
+    // PASO 2: Obtener cliente desde la oportunidad
+    const clienteOdooId = obtenerClienteDeOportunidad(oportunidadOdooId, creds);
+    if (!clienteOdooId) {
+      Logger.log("⚠️ No se pudo obtener cliente de la oportunidad");
+      return { exito: false, error: "Error obteniendo cliente de la oportunidad" };
+    }
+
+    Logger.log("✅ Cliente obtenido de la oportunidad: " + clienteOdooId);
+
+    // PASO 3: Crear RMA vinculada a la oportunidad
     const rmaData = {
       partner_id: clienteOdooId,
       reference: "RMA-" + numeroEYM,
       description: "Reparacion de sillas - Oportunidad: " + nombreOportunidad + " | EyM: " + numeroEYM,
       type: "customer",
-      state: "draft"
+      state: "draft",
+      opportunity_id: oportunidadOdooId // Vincular a la oportunidad
     };
 
     const numeroRMA = llamarOdooXMLRPC("rma.rma", "create", [rmaData], creds);
@@ -1386,6 +1400,45 @@ function buscarProductoOdooPorCodigo(codigo, creds) {
     return null;
   } catch (e) {
     Logger.log("Error buscando producto: " + e);
+    return null;
+  }
+}
+
+function buscarOportunidadOdoo(nombreOportunidad, creds) {
+  try {
+    // Buscar en sale.order (Órdenes de Venta/Oportunidades)
+    const resultado = llamarOdooXMLRPC("sale.order", "search", [[["name", "ilike", nombreOportunidad]]], creds);
+    if (resultado && resultado.length > 0) {
+      Logger.log("✅ Oportunidad/Sale.Order encontrada: ID " + resultado[0]);
+      return resultado[0];
+    }
+
+    // Si no encuentra en sale.order, buscar en crm.lead (Leads/Oportunidades)
+    const resultadoLead = llamarOdooXMLRPC("crm.lead", "search", [[["name", "ilike", nombreOportunidad]]], creds);
+    if (resultadoLead && resultadoLead.length > 0) {
+      Logger.log("✅ Oportunidad/Lead encontrada: ID " + resultadoLead[0]);
+      return resultadoLead[0];
+    }
+
+    return null;
+  } catch (e) {
+    Logger.log("Error buscando oportunidad: " + e);
+    return null;
+  }
+}
+
+function obtenerClienteDeOportunidad(oportunidadId, creds) {
+  try {
+    // Obtener datos de la oportunidad
+    const oportunidad = llamarOdooXMLRPC("sale.order", "read", [[oportunidadId], ["partner_id"]], creds);
+    if (oportunidad && oportunidad.length > 0 && oportunidad[0].partner_id) {
+      const clienteId = oportunidad[0].partner_id[0]; // partner_id es array [id, nombre]
+      Logger.log("✅ Cliente obtenido de oportunidad: " + clienteId);
+      return clienteId;
+    }
+    return null;
+  } catch (e) {
+    Logger.log("Error obteniendo cliente: " + e);
     return null;
   }
 }
