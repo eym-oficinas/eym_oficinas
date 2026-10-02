@@ -266,13 +266,13 @@ function procesarRespuestaFormulario() {
     if (resp[23]) repuestos.push(resp[23]); // Otros
     if (resp[24]) repuestos.push(resp[24]); // Otros repuestos
 
-    // Mapear datos
+    // Mapear datos CORRECTOS A COLUMNAS
     const fila = [
-      resp[1] || new Date(),              // A: FECHA DIAGNOSTICO
+      resp[1] || new Date(),              // A: FECHA_DIAGNOSTICO
       resp[2] || "",                      // B: OPORTUNIDAD
       resp[3] || "",                      // C: CLIENTE
       resp[4] || "",                      // D: TIPO_SILLA
-      "",                                 // E: NUMERO_EYM (se genera automático)
+      "",                                 // E: NUMERO_EYM (auto)
       resp[6] || "",                      // F: #_TEMPORAL
       resp[13] || "",                     // G: FOTO
       resp[7] || "",                      // H: ACTIVO
@@ -281,27 +281,23 @@ function procesarRespuestaFormulario() {
       resp[10] || "",                     // K: COLOR
       resp[11] || "",                     // L: UBICACION
       resp[12] || "",                     // M: GARANTIA
-      "",                                 // N: TIPO de TRABAJO (eliminado)
-      "",                                 // O: TIPO de REPARACION (eliminado)
-      "",                                 // P: OTROS (eliminado)
-      repuestos.join("; "),               // Q: Repuestos
-      "",                                 // R: Otros detalles (eliminado)
-      resp[25] || "",                     // S: OTROS SERVICIOS
-      resp[26] || "",                     // T: OBSERVACIONES_ESPECIALES
-      resp[27] || "",                     // U: TAPICERIA Asiento
-      resp[28] || "",                     // V: TAPICERIA Espaldar
-      "",                                 // W: PRESUPUESTO_GENERADO
-      "",                                 // X: Subtotal de partes (fórmula)
-      "",                                 // Y: Subtotal de Otros Servicios (fórmula)
-      "",                                 // Z: Subtotal Tapiceria (fórmula)
-      "",                                 // AA: Subtotal M.O. (fórmula)
-      "",                                 // AB: TOTAL PPTTO Antes de IVA (fórmula)
-      resp[29] || "",                     // AC: OPERARIO_DIAGNOSTICA
-      "Diagnosticado",                    // AD: ESTADO_DIAGNOSTICO
-      "",                                 // AE: ESTADO_APROBACION
-      "",                                 // AF: FECHA_APROBACION
-      "",                                 // AG: REFERENCIA_RMA
-      ""                                  // AH: NOTAS_INTERNAS
+      repuestos.join("; "),               // N: Repuestos (ítems)
+      resp[25] || "",                     // O: OTROS SERVICIOS
+      resp[26] || "",                     // P: OBSERVACIONES_ESPECIALES
+      resp[27] || "",                     // Q: TAPICERIA Asiento
+      resp[28] || "",                     // R: TAPICERIA Espaldar
+      "",                                 // S: PRESUPUESTO_GENERADO
+      0,                                  // T: Subtotal partes (calcula)
+      0,                                  // U: Subtotal Otros Servicios (calcula)
+      0,                                  // V: Subtotal Tapicería (calcula)
+      0,                                  // W: Subtotal M.O. (calcula)
+      0,                                  // X: TOTAL (calcula)
+      resp[29] || "",                     // Y: OPERARIO_DIAGNOSTICA
+      "Diagnosticado",                    // Z: ESTADO_DIAGNOSTICO
+      "",                                 // AA: ESTADO_APROBACION
+      "",                                 // AB: FECHA_APROBACION
+      "",                                 // AC: REFERENCIA_RMA
+      ""                                  // AD: NOTAS_INTERNAS
     ];
 
     // Insertar fila
@@ -328,27 +324,45 @@ function procesarRespuestaFormulario() {
 
 function aplicarFormulasCalculos(hoja, fila) {
   try {
-    // T (col 20): Subtotal de partes
-    hoja.getRange(fila, 20).setFormula('=SUMAR_PIEZAS(' + fila + ')');
+    const catalogo = obtenerCatalogoPreciosDesdeSheet();
 
-    // U (col 21): Subtotal de Otros Servicios (con lógica de resalte amarillo)
-    const otrosServicios = hoja.getRange(fila, 15).getValue();
+    // T (col 20): Subtotal de partes - suma precios de ítems en N
+    const repuestos = hoja.getRange(fila, 14).getValue() || "";
+    let totalT = 0;
+    if (repuestos) {
+      repuestos.toString().split(";").forEach(item => {
+        const precio = obtenerPrecioDelCatalogo(item, catalogo);
+        totalT += precio;
+      });
+    }
+    hoja.getRange(fila, 20).setValue(totalT);
+
+    // U (col 21): Subtotal Otros Servicios - amarillo si hay datos
+    const otrosServicios = hoja.getRange(fila, 15).getValue() || "";
     if (otrosServicios && otrosServicios.toString().trim() !== "") {
-      hoja.getRange(fila, 21).setFormula('=SUMAR_SERVICIOS(' + fila + ')');
-      hoja.getRange(fila, 21).setBackground("#FFFF00"); // Resaltar amarillo
+      hoja.getRange(fila, 21).setBackground("#FFFF00");
+      hoja.getRange(fila, 21).setValue("");
     } else {
       hoja.getRange(fila, 21).setValue(0);
       hoja.getRange(fila, 21).setBackground("#FFFFFF");
     }
 
-    // V (col 22): Subtotal Tapiceria
-    hoja.getRange(fila, 22).setFormula('=SUMAR_TAPICERIA(' + fila + ')');
+    // V (col 22): Subtotal Tapicería - suma Q + R
+    const asiento = hoja.getRange(fila, 17).getValue() || "";
+    const espaldar = hoja.getRange(fila, 18).getValue() || "";
+    let totalV = 0;
+    if (asiento) totalV += obtenerPrecioDelCatalogo(asiento, catalogo);
+    if (espaldar) totalV += obtenerPrecioDelCatalogo(espaldar, catalogo);
+    hoja.getRange(fila, 22).setValue(totalV);
 
-    // W (col 23): Subtotal M.O. (fijo)
+    // W (col 23): Subtotal M.O. - siempre 46,000
     hoja.getRange(fila, 23).setValue(CONFIG.MANTENIMIENTO_GENERAL);
 
-    // X (col 24): TOTAL PPTTO Antes de IVA (T + U + V + W)
-    hoja.getRange(fila, 24).setFormula('=T' + fila + '+U' + fila + '+V' + fila + '+W' + fila);
+    // X (col 24): TOTAL = T + U + V + W
+    const valorU = hoja.getRange(fila, 21).getValue();
+    const totalU = (valorU === "" || isNaN(valorU)) ? 0 : parseFloat(valorU);
+    const totalX = totalT + totalU + totalV + CONFIG.MANTENIMIENTO_GENERAL;
+    hoja.getRange(fila, 24).setValue(totalX);
 
   } catch (e) {
     Logger.log("❌ Error en aplicarFormulasCalculos: " + e.toString());
