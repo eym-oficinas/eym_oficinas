@@ -579,62 +579,69 @@ function onEdit(e) {
     const fila = e.range.getRow();
     const valor = e.value;
 
-    if (col === 27 && valor && valor.toString().toLowerCase().includes("aprobado")) {
-      // 1. Asignar EYM si aún no tiene
-      const celdaEYM = sheet.getRange(fila, 5);
-      const numeroEYM = celdaEYM.getValue();
+    if (col === 27 && valor) {
+      const estadoLower = valor.toString().toLowerCase();
 
-      if (!numeroEYM || numeroEYM.toString().trim() === "") {
-        const nuevoEYM = obtenerProximoEYM(sheet);
-        celdaEYM.setValue(nuevoEYM);
-        celdaEYM.setBackground("#FFFF00");
-        celdaEYM.setFontColor("#0000FF");
-        Logger.log("✅ Nuevo EYM asignado al aprobar: " + nuevoEYM);
-      }
+      // CASO 1: APROBADO - genera EYM + OP
+      if (estadoLower.includes("aprobado")) {
+        const celdaEYM = sheet.getRange(fila, 5);
+        const numeroEYM = celdaEYM.getValue();
 
-      // 2. Rellenar fecha de aprobación
-      sheet.getRange(fila, 28).setValue(new Date());
-
-      // 3. CREAR RMA EN ODOO
-      try {
-        const cliente = sheet.getRange(fila, 3).getValue();
-        const numeroEYMFinal = sheet.getRange(fila, 5).getValue();
-        const componentes = sheet.getRange(fila, 14).getValue();
-        const totalPresupuesto = sheet.getRange(fila, 24).getValue();
-
-        const datosRMA = {
-          cliente: cliente,
-          numeroEyM: numeroEYMFinal,
-          componentes: componentes,
-          total: totalPresupuesto,
-          hojaDiag: sheet,
-          fila: fila
-        };
-
-        const resultadoRMA = crearRMAenOdoo(datosRMA);
-
-        if (resultadoRMA.exito) {
-          escribirRMAenHoja(sheet, fila, resultadoRMA.referenciaRMA, resultadoRMA.linkRMA);
-          Logger.log("✅ RMA creada en Odoo: " + resultadoRMA.referenciaRMA);
-        } else {
-          Logger.log("❌ Error creando RMA: " + resultadoRMA.error);
-          sheet.getRange(fila, 29).setValue("");
+        if (!numeroEYM || numeroEYM.toString().trim() === "") {
+          const nuevoEYM = obtenerProximoEYM(sheet);
+          celdaEYM.setValue(nuevoEYM);
+          celdaEYM.setBackground("#FFFF00");
+          celdaEYM.setFontColor("#0000FF");
+          Logger.log("Nuevo EYM asignado: " + nuevoEYM);
         }
 
-      } catch (rmaError) {
-        Logger.log("⚠️ Error en integración Odoo: " + rmaError);
-        sheet.getRange(fila, 29).setValue("");
+        sheet.getRange(fila, 28).setValue(new Date());
+
+        try {
+          const hojaOP = ss.getSheetByName("OP_2026");
+          if (hojaOP) {
+            crearOP(sheet, hojaOP, fila);
+            Logger.log("OP creada para fila " + fila);
+          }
+        } catch (opError) {
+          Logger.log("Error creando OP: " + opError);
+        }
       }
 
-      // 4. Crear OP automáticamente
-      try {
-        const hojaOP = ss.getSheetByName("OP_2026");
-        if (hojaOP) {
-          crearOP(sheet, hojaOP, fila);
-          Logger.log("✅ OP creada automáticamente para fila " + fila);
+      // CASO 2: COTIZACIÓN - genera PDF + RMA consolidado
+      else if (estadoLower.includes("cotización")) {
+        Logger.log("Generando PDF + RMA para: " + sheet.getRange(fila, 2).getValue());
+
+        try {
+          const nombreOportunidad = sheet.getRange(fila, 2).getValue();
+          const diagnosticos = obtenerDiagnosticosDeOportunidad(sheet, nombreOportunidad);
+
+          if (diagnosticos.length > 0) {
+            const silasDatos = agruparPorSilla(diagnosticos, sheet);
+            const totalGeneral = calcularTotalGeneral(silasDatos);
+            const cliente = diagnosticos[0].cliente;
+            const numeroEYM = diagnosticos[0].numeroEYM;
+
+            const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
+
+            if (urlPDF) {
+              const productosConsolidados = consolidarProductosTotal(diagnosticos, sheet);
+              const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, nombreOportunidad);
+
+              if (resultadoRMA.exito) {
+                for (let diag of diagnosticos) {
+                  sheet.getRange(diag.fila, 29).setValue(resultadoRMA.referenciaRMA);
+                  sheet.getRange(diag.fila, 29).setFormula('=HYPERLINK("' + resultadoRMA.linkRMA + '","' + resultadoRMA.referenciaRMA + '")');
+                  sheet.getRange(diag.fila, 29).setFontColor("#0000FF");
+                  sheet.getRange(diag.fila, 29).setFontLine("underline");
+                }
+                Logger.log("RMA creada: " + resultadoRMA.referenciaRMA);
+              }
+            }
+          }
+        } catch (cotError) {
+          Logger.log("Error en Cotización: " + cotError);
         }
-      } catch (opError) {
-        Logger.log("⚠️ Error creando OP: " + opError);
       }
     }
   } catch (e) {
@@ -781,7 +788,7 @@ function configurarValidacionAprobacion() {
     const columnaAE = hoja.getRange("AE2:AE" + ultFila);
 
     const rule = SpreadsheetApp.newDataValidation()
-      .allowList(["Aprobado", "Pendiente", "Rechazado"])
+      .allowList(["Aprobado", "Cotización", "Pendiente", "Rechazado"])
       .setHelpText("Selecciona una opción: Aprobado, Pendiente o Rechazado")
       .setShowDropdown(true)
       .build();
