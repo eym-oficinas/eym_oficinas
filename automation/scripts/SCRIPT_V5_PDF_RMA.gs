@@ -92,7 +92,7 @@ function obtenerPrecioDelCatalogo(nombreProducto) {
 function obtenerUltimaRespuestaProcesada() {
   try {
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
+    const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
     if (!hojaDiag) return 1;
 
     const celda = hojaDiag.getRange(CONFIG.CELDA_CONTROL);
@@ -106,7 +106,7 @@ function obtenerUltimaRespuestaProcesada() {
 function guardarUltimaRespuestaProcesada(numRespuesta) {
   try {
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
+    const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
     if (!hojaDiag) return;
 
     hojaDiag.getRange(CONFIG.CELDA_CONTROL).setValue(numRespuesta);
@@ -120,7 +120,7 @@ function procesarRespuestaFormulario() {
     const ssResp = SpreadsheetApp.openById(ID_RESPUESTAS_NUEVA);
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
     const hojaResp = ssResp.getSheetByName("Respuestas de formulario 1");
-    const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
+    const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
 
     if (!hojaResp || !hojaDiag) {
       Logger.log("❌ ERROR: Hojas no encontradas");
@@ -573,7 +573,7 @@ function onEdit(e) {
   try {
     const ss = e.source;
     const sheet = e.range.getSheet();
-    if (sheet.getName() !== "DIAGNÓSTICOS_2026") return;
+    if (sheet.getName() !== "DIAGNOSTICOS_2026") return;
 
     const col = e.range.getColumn();
     const fila = e.range.getRow();
@@ -693,7 +693,7 @@ function instalarTriggerAutomatico() {
     });
 
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaDiag = ssDiag.getSheetByName("DIAGNÓSTICOS_2026");
+    const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
     if (hojaDiag) {
       hojaDiag.getRange(CONFIG.CELDA_CONTROL).setValue(1);
     }
@@ -712,7 +712,7 @@ function instalarTriggerAutomatico() {
 function procesarAprobadosAOP() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const hojaDiag = ss.getSheetByName("DIAGNÓSTICOS_2026");
+    const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
     const hojaOP = ss.getSheetByName("OP_2026");
 
     if (!hojaDiag || !hojaOP) {
@@ -740,7 +740,7 @@ function procesarAprobadosAOP() {
 function recalcularTodo() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const hoja = ss.getSheetByName("DIAGNÓSTICOS_2026");
+    const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
     if (!hoja) return;
 
     const ultFila = hoja.getLastRow();
