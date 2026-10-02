@@ -815,10 +815,11 @@ function finalizarOportunidad() {
     const cliente = diagnosticos[0].cliente;
     const numeroEYM = diagnosticos[0].numeroEYM;
     const productosConsolidados = consolidarProductosTotal(diagnosticos, hojaDiag);
+    const serviciosConsolidados = consolidarServiciosTotal(diagnosticos, hojaDiag);
 
     // PASO 1: CREAR RMA
     Logger.log("📝 Creando RMA en Odoo...");
-    const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, nombreOportunidad);
+    const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, serviciosConsolidados, nombreOportunidad);
 
     if (!resultadoRMA.exito) {
       ui.alert("Error creando RMA: " + resultadoRMA.error);
@@ -971,6 +972,79 @@ function consolidarProductosTotal(diagnosticos, hoja) {
   return Object.values(productosMap);
 }
 
+function consolidarServiciosTotal(diagnosticos, hoja) {
+  const serviciosMap = {};
+
+  for (let diag of diagnosticos) {
+    // OTROS SERVICIOS
+    if (diag.otrosServicios) {
+      const servicios = diag.otrosServicios.toString().split(";");
+      servicios.forEach(serv => {
+        const servLimpio = serv.trim();
+        if (!servLimpio) return;
+        const nombreNormalizado = normalizarTexto(servLimpio);
+        if (!serviciosMap[nombreNormalizado]) {
+          serviciosMap[nombreNormalizado] = {
+            nombre: servLimpio,
+            cantidad: 0,
+            precio: obtenerPrecioDelCatalogo(servLimpio),
+            tipo: "Servicios"
+          };
+        }
+        serviciosMap[nombreNormalizado].cantidad += 1;
+      });
+    }
+
+    // TAPICERÍA (ASIENTO + ESPALDAR)
+    if (diag.tapiceriaAsiento) {
+      const tapiceria = diag.tapiceriaAsiento.toString().trim();
+      if (tapiceria) {
+        const nombreNormalizado = normalizarTexto(tapiceria);
+        if (!serviciosMap[nombreNormalizado]) {
+          serviciosMap[nombreNormalizado] = {
+            nombre: tapiceria,
+            cantidad: 0,
+            precio: obtenerPrecioDelCatalogo(tapiceria),
+            tipo: "Tapicería"
+          };
+        }
+        serviciosMap[nombreNormalizado].cantidad += 1;
+      }
+    }
+
+    if (diag.tapiceriaEspaldar) {
+      const tapiceria = diag.tapiceriaEspaldar.toString().trim();
+      if (tapiceria) {
+        const nombreNormalizado = normalizarTexto(tapiceria);
+        if (!serviciosMap[nombreNormalizado]) {
+          serviciosMap[nombreNormalizado] = {
+            nombre: tapiceria,
+            cantidad: 0,
+            precio: obtenerPrecioDelCatalogo(tapiceria),
+            tipo: "Tapicería"
+          };
+        }
+        serviciosMap[nombreNormalizado].cantidad += 1;
+      }
+    }
+
+    // MANTENIMIENTO GENERAL (siempre se suma)
+    const mo = 46000; // Valor fijo
+    if (!serviciosMap["mantenimiento general"]) {
+      serviciosMap["mantenimiento general"] = {
+        nombre: "Mantenimiento General",
+        cantidad: 1,
+        precio: mo,
+        tipo: "Mantenimiento"
+      };
+    } else {
+      serviciosMap["mantenimiento general"].cantidad += 1;
+    }
+  }
+
+  return Object.values(serviciosMap);
+}
+
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
     Logger.log("Iniciando generación de PDF para: " + nombreOportunidad);
@@ -1110,11 +1184,11 @@ function formatearNumero(numero) {
   return Math.round(numero).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, nombreOportunidad) {
+function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, serviciosConsolidados, nombreOportunidad) {
   try {
     const creds = obtenerCredencialesOdoo();
 
-    Logger.log("Creando RMA para: " + cliente);
+    Logger.log("📝 Creando RMA para: " + cliente);
 
     let clienteOdooId = buscarClienteOdoo(cliente, creds);
     if (!clienteOdooId) {
@@ -1134,14 +1208,34 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, n
     };
 
     const numeroRMA = llamarOdooXMLRPC("rma.rma", "create", [rmaData], creds);
-    
+
     if (!numeroRMA) {
       return { exito: false, error: "Error creando RMA" };
     }
 
+    Logger.log("✅ RMA base creada: " + numeroRMA);
+
+    // PASO 2: AGREGAR LÍNEAS DE PRODUCTOS (PIEZAS)
+    Logger.log("📦 Agregando líneas de productos...");
+    const resultadoLineas = agregarLineasProductosRMA(numeroRMA, productosConsolidados, creds);
+    if (!resultadoLineas.exito) {
+      Logger.log("⚠️ Error agregando productos: " + resultadoLineas.error);
+    } else {
+      Logger.log("✅ Productos agregados: " + resultadoLineas.cantidad);
+    }
+
+    // PASO 3: AGREGAR LÍNEAS DE SERVICIOS (OPERACIONES)
+    Logger.log("🔧 Agregando líneas de servicios...");
+    const resultadoServicios = agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds);
+    if (!resultadoServicios.exito) {
+      Logger.log("⚠️ Error agregando servicios: " + resultadoServicios.error);
+    } else {
+      Logger.log("✅ Servicios agregados: " + resultadoServicios.cantidad);
+    }
+
     const linkRMA = creds.url + "/web#id=" + numeroRMA + "&model=rma.rma&view_type=form";
-    
-    Logger.log("RMA creada: " + numeroRMA);
+
+    Logger.log("✅ RMA completada: " + numeroRMA);
 
     return {
       exito: true,
@@ -1151,9 +1245,175 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, n
     };
 
   } catch (e) {
-    Logger.log("Error: " + e.toString());
+    Logger.log("❌ Error creando RMA: " + e.toString());
     return { exito: false, error: e.toString() };
   }
+}
+
+function agregarLineasProductosRMA(numeroRMA, productosConsolidados, creds) {
+  try {
+    let cantidadAgregada = 0;
+
+    for (let producto of productosConsolidados) {
+      // Buscar código de producto en catálogo
+      const codigoProducto = obtenerCodigoProductoDelCatalogo(producto.nombre);
+      if (!codigoProducto) {
+        Logger.log("⚠️ Código no encontrado para: " + producto.nombre);
+        continue;
+      }
+
+      // Buscar producto en Odoo
+      const productoOdooId = buscarProductoOdooPorCodigo(codigoProducto, creds);
+      if (!productoOdooId) {
+        Logger.log("⚠️ Producto no encontrado en Odoo: " + codigoProducto);
+        continue;
+      }
+
+      // Calcular impuestos
+      const subtotal = producto.cantidad * producto.precio;
+      const impuestos = calcularImpuestos(subtotal);
+
+      // Crear línea RMA
+      const lineaData = {
+        rma_id: numeroRMA,
+        product_id: productoOdooId,
+        name: producto.nombre,
+        product_qty: producto.cantidad,
+        product_uom_id: 1, // Unidades
+        price_unit: producto.precio,
+        price_subtotal: subtotal,
+        tax_ids: impuestos.taxIds, // [19% IVA, 4% RFTFE]
+        type: "piezas"
+      };
+
+      const lineaRmaId = llamarOdooXMLRPC("rma.rma.line", "create", [lineaData], creds);
+      if (lineaRmaId) {
+        Logger.log("✅ Línea agregada: " + codigoProducto + " x" + producto.cantidad);
+        cantidadAgregada++;
+      } else {
+        Logger.log("⚠️ Error agregando línea: " + codigoProducto);
+      }
+    }
+
+    return { exito: true, cantidad: cantidadAgregada };
+
+  } catch (e) {
+    Logger.log("❌ Error en agregarLineasProductosRMA: " + e);
+    return { exito: false, error: e.toString() };
+  }
+}
+
+function agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds) {
+  try {
+    let cantidadAgregada = 0;
+
+    for (let servicio of serviciosConsolidados) {
+      // Buscar código de servicio en catálogo
+      const codigoServicio = obtenerCodigoProductoDelCatalogo(servicio.nombre);
+      if (!codigoServicio) {
+        Logger.log("⚠️ Código no encontrado para servicio: " + servicio.nombre);
+        continue;
+      }
+
+      // Buscar servicio en Odoo
+      const servicioOdooId = buscarProductoOdooPorCodigo(codigoServicio, creds);
+      if (!servicioOdooId) {
+        Logger.log("⚠️ Servicio no encontrado en Odoo: " + codigoServicio);
+        continue;
+      }
+
+      // Calcular impuestos
+      const subtotal = servicio.cantidad * servicio.precio;
+      const impuestos = calcularImpuestos(subtotal);
+
+      // Crear línea RMA (Operaciones/Servicios)
+      const lineaData = {
+        rma_id: numeroRMA,
+        product_id: servicioOdooId,
+        name: servicio.nombre,
+        product_qty: servicio.cantidad,
+        product_uom_id: 1, // Unidades
+        price_unit: servicio.precio,
+        price_subtotal: subtotal,
+        tax_ids: impuestos.taxIds,
+        type: "operaciones" // Operaciones/Servicios
+      };
+
+      const lineaRmaId = llamarOdooXMLRPC("rma.rma.line", "create", [lineaData], creds);
+      if (lineaRmaId) {
+        Logger.log("✅ Servicio agregado: " + codigoServicio + " x" + servicio.cantidad);
+        cantidadAgregada++;
+      } else {
+        Logger.log("⚠️ Error agregando servicio: " + codigoServicio);
+      }
+    }
+
+    return { exito: true, cantidad: cantidadAgregada };
+
+  } catch (e) {
+    Logger.log("❌ Error en agregarLineasServiciosRMA: " + e);
+    return { exito: false, error: e.toString() };
+  }
+}
+
+function obtenerCodigoProductoDelCatalogo(nombreProducto) {
+  try {
+    const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
+    const hojaCatalogo = ssDiag.getSheetByName("CATÁLOGO_PRECIOS_2026");
+    if (!hojaCatalogo) return null;
+
+    const datos = hojaCatalogo.getDataRange().getValues();
+
+    for (let i = 1; i < datos.length; i++) {
+      const nombre = datos[i][0] ? datos[i][0].toString().toLowerCase().trim() : "";
+      const codigo = datos[i][2] ? datos[i][2].toString() : "";
+
+      if (nombre && nombre.includes(normalizarTexto(nombreProducto))) {
+        return codigo;
+      }
+    }
+
+    return null;
+  } catch (e) {
+    Logger.log("Error obtener código: " + e);
+    return null;
+  }
+}
+
+function buscarProductoOdooPorCodigo(codigo, creds) {
+  try {
+    const resultado = llamarOdooXMLRPC("product.product", "search", [[["default_code", "=", codigo]]], creds);
+    if (resultado && resultado.length > 0) {
+      return resultado[0];
+    }
+    return null;
+  } catch (e) {
+    Logger.log("Error buscando producto: " + e);
+    return null;
+  }
+}
+
+function calcularImpuestos(subtotal) {
+  // IVA 19% + RFTFE 4% (si >= $550.000)
+  const impuestos = {
+    iva: 19,
+    rftfe: 0,
+    taxIds: []
+  };
+
+  if (subtotal >= 550000) {
+    impuestos.rftfe = 4;
+  }
+
+  // IDs de impuestos en Odoo (ajustar según tu configuración)
+  // Estos son ejemplos, debes verificar en tu Odoo
+  impuestos.taxIds = [1]; // IVA 19% (verificar ID real)
+
+  if (impuestos.rftfe > 0) {
+    impuestos.taxIds.push(2); // RFTFE 4% (verificar ID real)
+  }
+
+  return impuestos;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════════
