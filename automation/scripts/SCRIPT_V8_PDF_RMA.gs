@@ -137,22 +137,34 @@ function procesarRespuestaFormulario() {
     const ultimaProcesada = obtenerUltimaRespuestaProcesada();
     let procesadas = 0;
 
+    // Cargar TODOS los datos de DIAGNOSTICOS_2026 una sola vez para comparación eficiente
     const ultFilaDiag = hojaDiag.getLastRow();
+    const datoDiagnosticos = ultFilaDiag > 1 ? hojaDiag.getRange(2, 1, ultFilaDiag - 1, 29).getValues() : [];
+
+    Logger.log("🔍 Verificando " + (ultFilaResp - 1) + " respuestas contra " + datoDiagnosticos.length + " diagnósticos existentes");
+
     for (let r = 2; r <= ultFilaResp; r++) {
       const resp = hojaResp.getRange(r, 1, 1, 34).getValues()[0];
 
       const fechaResp = resp[1];
       const clienteResp = resp[3];
+      const tipoSillaResp = resp[4]; // Agregamos tipo de silla para mejor identificación
+
       let yaExiste = false;
 
-      if (ultFilaDiag > 1) {
-        for (let d = 2; d <= ultFilaDiag; d++) {
-          const fechaDiag = hojaDiag.getRange(d, 1).getValue();
-          const clienteDiag = hojaDiag.getRange(d, 3).getValue();
-          if (Math.abs(new Date(fechaResp) - new Date(fechaDiag)) < 60000 && clienteResp === clienteDiag) {
-            yaExiste = true;
-            break;
-          }
+      // Búsqueda mejorada: comparar timestamp + cliente + tipo de silla
+      for (let diagRow of datoDiagnosticos) {
+        const fechaDiag = diagRow[0]; // Columna A (0-indexed)
+        const clienteDiag = diagRow[2]; // Columna C
+        const tipoSillaDiag = diagRow[3]; // Columna D
+
+        // Validación: mismo cliente + mismo tipo de silla + timestamp muy cercano (± 5 minutos)
+        const diferenciaTiempo = Math.abs(new Date(fechaResp) - new Date(fechaDiag));
+
+        if (clienteResp === clienteDiag && tipoSillaResp === tipoSillaDiag && diferenciaTiempo < 300000) {
+          Logger.log("⚠️ Respuesta duplicada detectada: " + clienteResp + " - " + tipoSillaResp + " (timestamp diff: " + (diferenciaTiempo / 1000) + "s)");
+          yaExiste = true;
+          break;
         }
       }
 
@@ -935,6 +947,90 @@ function finalizarOportunidad() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// NUEVA FUNCIÓN: Procesar RMAs pendientes de creación en Odoo
+// Esta función procesa todas las filas "Aprobado" que aún no tienen REFERENCIA_RMA
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function procesarRMAsPendientes() {
+  try {
+    Logger.log("\n🟠 ════════════════════════════════════════════════════════");
+    Logger.log("🟠 Iniciando procesamiento de RMAs pendientes");
+    Logger.log("🟠 ════════════════════════════════════════════════════════");
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
+
+    if (!hojaDiag) {
+      SpreadsheetApp.getUi().alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada");
+      return;
+    }
+
+    const ultFila = hojaDiag.getLastRow();
+    let procesadas = 0;
+    let errores = [];
+
+    for (let f = 2; f <= ultFila; f++) {
+      try {
+        const estadoAprobacion = hojaDiag.getRange(f, 27).getValue() || ""; // Columna AA
+        const referenciaRMA = hojaDiag.getRange(f, 29).getValue() || ""; // Columna AC
+        const nombreOportunidad = hojaDiag.getRange(f, 2).getValue() || ""; // Columna B
+
+        // Buscar filas marcadas como "Aprobado" O "⏳ Pendiente RMA" sin REFERENCIA_RMA
+        const esAprobado = estadoAprobacion.toString().toLowerCase().includes("aprobado");
+        const esPendienteRMA = estadoAprobacion.toString().toLowerCase().includes("pendiente rma") ||
+                                referenciaRMA.toString().includes("⏳");
+        const sinRMA = !referenciaRMA || referenciaRMA.toString().trim() === "" || referenciaRMA.toString().includes("⏳");
+
+        if ((esAprobado || esPendienteRMA) && sinRMA && nombreOportunidad) {
+          Logger.log("\n📍 Fila " + f + ": Procesando RMA para " + nombreOportunidad);
+
+          // Procesar la oportunidad completa (RMA + PDF + Adjunto)
+          const resultado = procesarOportunidadCompleta(hojaDiag, nombreOportunidad, false);
+
+          if (resultado.exito) {
+            Logger.log("✅ RMA creada: " + resultado.referenciaRMA);
+
+            // Limpiar marca de pendiente
+            const marcaPendiente = hojaDiag.getRange(f, 27).getValue();
+            if (marcaPendiente && marcaPendiente.toString().includes("pendiente")) {
+              hojaDiag.getRange(f, 27).setValue("Aprobado");
+            }
+
+            procesadas++;
+          } else {
+            Logger.log("❌ Error: " + resultado.error);
+            errores.push("Fila " + f + ": " + resultado.error);
+          }
+        }
+      } catch (rowError) {
+        Logger.log("❌ Error procesando fila " + f + ": " + rowError.toString());
+        errores.push("Fila " + f + ": " + rowError.toString());
+      }
+    }
+
+    Logger.log("\n🟢 ════════════════════════════════════════════════════════");
+    Logger.log("🟢 Resultado: " + procesadas + " RMA(s) creada(s)");
+    if (errores.length > 0) {
+      Logger.log("🟢 Errores: " + errores.length);
+      errores.forEach(e => Logger.log("  - " + e));
+    }
+    Logger.log("🟢 ════════════════════════════════════════════════════════\n");
+
+    const mensaje = "✅ RMAs procesadas: " + procesadas + (errores.length > 0 ? "\n\n⚠️ Errores: " + errores.length + "\n\nRevisar logs para detalles" : "");
+    SpreadsheetApp.getUi().alert(mensaje);
+
+  } catch (e) {
+    Logger.log("\n❌ ════════════════════════════════════════════════════════");
+    Logger.log("❌ ERROR en procesarRMAsPendientes:");
+    Logger.log("❌ " + e.toString());
+    Logger.log("❌ Stack: " + e.stack);
+    Logger.log("❌ ════════════════════════════════════════════════════════\n");
+
+    SpreadsheetApp.getUi().alert("❌ ERROR:\n\n" + e.toString());
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
 // NUEVA FUNCIÓN: PROCESAR OPORTUNIDAD COMPLETA
 // Consolida todo el flujo: RMA + PDF + Adjuntar
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -1040,35 +1136,48 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
 
 function onEdit(e) {
   try {
+    Logger.log("\n🟣 ════════════════════════════════════════════════════════");
+    Logger.log("🟣 onEdit ACTIVADO");
+
     const range = e.range;
     const hoja = range.getSheet();
     const hojaName = hoja.getName();
+    const columna = range.getColumn();
+    const fila = range.getRow();
+
+    Logger.log("🟣 Hoja: " + hojaName + " | Columna: " + columna + " | Fila: " + fila);
 
     // Solo procesar si es DIAGNOSTICOS_2026
     if (hojaName !== "DIAGNOSTICOS_2026") {
+      Logger.log("🟣 ⊘ No es DIAGNOSTICOS_2026, ignorando");
       return;
     }
 
     // Solo procesar si se cambió columna AA (ESTADO_APROBACION - columna 27)
-    if (range.getColumn() !== 27) {
+    if (columna !== 27) {
+      Logger.log("🟣 ⊘ Columna " + columna + " no es AA (27), ignorando");
+      return;
+    }
+
+    // Validar que sea encabezado o datos
+    if (fila === 1) {
+      Logger.log("🟣 ⊘ Es encabezado (fila 1), ignorando");
       return;
     }
 
     const nuevoValor = range.getValue();
+    Logger.log("🟣 Valor: '" + nuevoValor + "' (tipo: " + typeof nuevoValor + ")");
+
     if (!nuevoValor) {
-      return; // Celda vacía, ignorar
+      Logger.log("🟣 ⊘ Celda vacía, ignorando");
+      return;
     }
 
     const nuevoValorStr = nuevoValor.toString().trim();
     const nuevoValorLower = nuevoValorStr.toLowerCase();
-    const fila = range.getRow();
 
-    // Validar que sea encabezado o datos
-    if (fila === 1) {
-      return; // Es encabezado, ignorar
-    }
-
-    Logger.log("🔄 onEdit: Fila " + fila + ", Columna AA: '" + nuevoValorStr + "'");
+    Logger.log("🟣 Valor normalizado: '" + nuevoValorStr + "'");
+    Logger.log("🟣 Valor lowercase: '" + nuevoValorLower + "'");
 
     // ✅ MÉTODO 1: Dropdown selection - "Aprobado" (con cualquier capitalización)
     // ✅ MÉTODO 2: Copy/paste - Captura el valor exacto pegado
@@ -1077,84 +1186,101 @@ function onEdit(e) {
     // ✅ MÉTODO 5: Odoo sync - Escrito por función sincronización (ver sincronizarRMAsDesdeOdoo)
 
     if (nuevoValorLower.includes("cotización")) {
-      // COTIZACIÓN: Usuario marca para preparar RMA
-      // Debe hacer clic manualmente en "Finalizar Oportunidad" para crear RMA en Odoo
       Logger.log("📋 Cotización marcada en fila " + fila);
     }
     else if (nuevoValorLower.includes("aprobado")) {
-      // APROBADO: Se ejecuta después que RMA se confirma en Odoo
-      // Dispara automáticamente: EYM + Fecha Aprobación + OP
-      Logger.log("✅ Aprobado detectado en fila " + fila + " - Generando EYM + OP");
+      Logger.log("✅ DETECTADO 'APROBADO' en fila " + fila + " - Disparando procesarAprobacionEnFila()");
       procesarAprobacionEnFila(hoja, fila);
+      Logger.log("✅ procesarAprobacionEnFila() completado");
     }
     else if (nuevoValorLower.includes("rechazado")) {
-      // RECHAZADO: Solo registra
       Logger.log("❌ Rechazado marcado en fila " + fila);
     }
+    else {
+      Logger.log("🟣 ⊘ Valor '" + nuevoValorStr + "' no coincide con opciones esperadas");
+    }
+
+    Logger.log("🟣 ════════════════════════════════════════════════════════\n");
 
   } catch (e) {
-    Logger.log("⚠️ Error en onEdit: " + e.toString());
+    Logger.log("\n❌ ════════════════════════════════════════════════════════");
+    Logger.log("❌ ERROR CRÍTICO en onEdit:");
+    Logger.log("❌ Mensaje: " + e.toString());
+    Logger.log("❌ Stack: " + e.stack);
+    Logger.log("❌ ════════════════════════════════════════════════════════\n");
   }
 }
 
 function procesarAprobacionEnFila(hoja, fila) {
   try {
+    Logger.log("\n🔵 ════════════════════════════════════════════════════════");
+    Logger.log("🔵 INICIANDO PROCESAMIENTO DE APROBACIÓN - Fila " + fila);
+    Logger.log("🔵 ════════════════════════════════════════════════════════");
+
     const ss = SpreadsheetApp.getParent();
     const hojaOP = ss.getSheetByName("OP_2026");
 
     if (!hojaOP) {
-      Logger.log("⚠️ Hoja OP_2026 no encontrada");
+      Logger.log("❌ ERROR: Hoja OP_2026 no encontrada");
       return;
     }
 
     // PASO 1: Generar número EYM si no existe
+    Logger.log("\n📍 PASO 1: Generando número EYM...");
     const celdaEYM = hoja.getRange(fila, 5);
-    const numeroEYM = celdaEYM.getValue();
+    const numeroEYMActual = celdaEYM.getValue();
+    let numeroEYMFinal = numeroEYMActual;
 
-    if (!numeroEYM || numeroEYM.toString().trim() === "") {
-      const nuevoEYM = obtenerProximoEYM(hoja);
-      celdaEYM.setValue(nuevoEYM);
+    if (!numeroEYMActual || numeroEYMActual.toString().trim() === "") {
+      numeroEYMFinal = obtenerProximoEYM(hoja);
+      celdaEYM.setValue(numeroEYMFinal);
       celdaEYM.setBackground("#FFFF00");
       celdaEYM.setFontColor("#0000FF");
-      Logger.log("✅ Número EYM generado: " + nuevoEYM);
+      Logger.log("✅ Número EYM generado: " + numeroEYMFinal);
+      SpreadsheetApp.flush(); // Garantiza que se escriba antes de continuar
     } else {
-      Logger.log("✓ Número EYM ya existe: " + numeroEYM);
+      Logger.log("✅ Número EYM ya existe: " + numeroEYMActual);
     }
 
     // PASO 2: Registrar fecha de aprobación en columna AB (28)
-    hoja.getRange(fila, 28).setValue(new Date());
-    Logger.log("✅ Fecha de aprobación registrada en columna AB");
+    Logger.log("\n📍 PASO 2: Registrando fecha de aprobación...");
+    const ahora = new Date();
+    hoja.getRange(fila, 28).setValue(ahora);
+    Logger.log("✅ Fecha de aprobación registrada: " + ahora.toLocaleString());
+    SpreadsheetApp.flush();
 
     // PASO 3: Crear OP
+    Logger.log("\n📍 PASO 3: Creando Orden de Producción...");
     crearOP(hoja, hojaOP, fila);
-    Logger.log("✅ OP creada automáticamente");
+    Logger.log("✅ OP creada correctamente");
+    SpreadsheetApp.flush();
 
-    // PASO 4: CREAR RMA EN ODOO (COMPLETO)
-    // Obtener datos necesarios de la fila
+    // PASO 4: PROGRAMAR RMA en Odoo para ejecución SEPARADA (evita timeout en onEdit)
+    // Esto se ejecutará de forma separada para no bloquear onEdit
     const nombreOportunidad = hoja.getRange(fila, 2).getValue();
-
     if (!nombreOportunidad) {
-      Logger.log("⚠️ No hay nombre de oportunidad en fila " + fila);
+      Logger.log("⚠️ ADVERTENCIA: No hay nombre de oportunidad en fila " + fila);
       return;
     }
 
-    Logger.log("📝 Iniciando creación de RMA en Odoo para: " + nombreOportunidad);
+    Logger.log("\n📍 PASO 4: Programando creación de RMA en Odoo (ejecución separada)...");
+    Logger.log("📝 Oportunidad: " + nombreOportunidad);
+    Logger.log("✅ RMA será creada en próxima ejecución automática");
 
-    // Usar la función que maneja todo: RMA + PDF + Adjunto + Link
-    const resultadoRMA = procesarOportunidadCompleta(hoja, nombreOportunidad, false);
+    // Marcar para procesamiento de RMA
+    hoja.getRange(fila, 29).setValue("⏳ Pendiente RMA");
+    SpreadsheetApp.flush();
 
-    if (resultadoRMA.exito) {
-      Logger.log("✅ RMA COMPLETA:");
-      Logger.log("   RMA: " + resultadoRMA.referenciaRMA);
-      Logger.log("   PDF: " + (resultadoRMA.pdfGenerado ? "✅" : "❌"));
-      Logger.log("   Adjunto: " + (resultadoRMA.adjunto ? "✅" : "❌"));
-      Logger.log("   Link en AC: ✅ Escrito");
-    } else {
-      Logger.log("❌ Error creando RMA: " + resultadoRMA.error);
-    }
+    Logger.log("\n🟢 ════════════════════════════════════════════════════════");
+    Logger.log("🟢 APROBACIÓN COMPLETADA - EYM: " + numeroEYMFinal);
+    Logger.log("🟢 ════════════════════════════════════════════════════════\n");
 
   } catch (e) {
-    Logger.log("❌ Error en procesarAprobacionEnFila: " + e.toString());
+    Logger.log("\n❌ ════════════════════════════════════════════════════════");
+    Logger.log("❌ ERROR en procesarAprobacionEnFila (Fila " + fila + "):");
+    Logger.log("❌ " + e.toString());
+    Logger.log("❌ Stack: " + e.stack);
+    Logger.log("❌ ════════════════════════════════════════════════════════\n");
   }
 }
 
@@ -2075,14 +2201,16 @@ function buscarRMAsConfirmadasEnOdoo(creds) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu("EYM v7.0")
-    .addItem("Procesar Manualmente", "procesarRespuestaFormulario")
-    .addItem("Instalar Trigger", "instalarTriggerAutomatico")
+    .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
+    .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
-    .addItem("Finalizar Oportunidad", "finalizarOportunidad")
+    .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")
+    .addItem("📝 Procesar RMAs Pendientes", "procesarRMAsPendientes")
     .addItem("🔄 Sincronizar RMAs desde Odoo", "sincronizarRMAsDesdeOdoo")
     .addSeparator()
-    .addItem("Recalcular Todo", "recalcularTodo")
-    .addItem("Configurar Listas Desplegables", "configurarValidacionAprobacion")
+    .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
+    .addItem("🔁 Recalcular Todo", "recalcularTodo")
+    .addItem("📋 Configurar Listas Desplegables", "configurarValidacionAprobacion")
     .addSeparator()
     .addItem("⚙️ Configurar Credenciales Odoo", "configurarCredencialesOdoo")
     .addItem("🔧 PRUEBA: Conectar Odoo", "pruebaConexionOdoo")
