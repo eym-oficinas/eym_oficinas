@@ -1045,13 +1045,13 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
 
     Logger.log("✅ RMA creada: " + resultadoRMA.referenciaRMA);
 
-    // PASO 3: ESCRIBIR RMA CON HYPERLINK EN COLUMNA AC
-    Logger.log("🔗 Escribiendo RMA link en DIAGNOSTICOS_2026...");
+    // PASO 3: ESCRIBIR RMA CON HYPERLINK EN COLUMNA T (REFERENCIA_N)
+    Logger.log("🔗 Escribiendo RMA link en DIAGNOSTICOS_2026 (columna T)...");
     for (let diag of diagnosticos) {
-      hojaDiag.getRange(diag.fila, 29).setValue(resultadoRMA.referenciaRMA);
-      hojaDiag.getRange(diag.fila, 29).setFormula('=HYPERLINK("' + resultadoRMA.linkRMA + '","' + resultadoRMA.referenciaRMA + '")');
-      hojaDiag.getRange(diag.fila, 29).setFontColor("#0000FF");
-      hojaDiag.getRange(diag.fila, 29).setFontLine("underline");
+      hojaDiag.getRange(diag.fila, 20).setValue(resultadoRMA.referenciaRMA);
+      hojaDiag.getRange(diag.fila, 20).setFormula('=HYPERLINK("' + resultadoRMA.linkRMA + '","' + resultadoRMA.referenciaRMA + '")');
+      hojaDiag.getRange(diag.fila, 20).setFontColor("#0000FF");
+      hojaDiag.getRange(diag.fila, 20).setFontLine("underline");
     }
 
     // PASO 4: GENERAR PDF CONSOLIDADO
@@ -1126,15 +1126,15 @@ function onEdit(e) {
       return;
     }
 
-    // Solo procesar si se cambió columna AA (ESTADO_APROBACION - columna 27)
-    if (range.getColumn() !== 27) {
+    // Solo procesar si se cambió columna Q (ESTADO_APROBACION - columna 17)
+    if (range.getColumn() !== 17) {
       return;
     }
 
     const nuevoValor = range.getValue().toString().toLowerCase();
     const fila = range.getRow();
 
-    Logger.log("🔄 onEdit: Fila " + fila + ", Columna AA: " + nuevoValor);
+    Logger.log("🔄 onEdit: Fila " + fila + ", Columna Q (ESTADO_APROBACION): " + nuevoValor);
 
     // Si es "Aprobado", generar EYM + OP + RMA en Odoo
     if (nuevoValor.includes("aprobado")) {
@@ -1171,9 +1171,9 @@ function procesarAprobacionEnFila(hoja, fila) {
       Logger.log("✓ Número EYM ya existe: " + numeroEYM);
     }
 
-    // PASO 2: Registrar fecha de aprobación en columna AB (28)
-    hoja.getRange(fila, 28).setValue(new Date());
-    Logger.log("✅ Fecha de aprobación registrada");
+    // PASO 2: Registrar fecha de aprobación en columna S (19)
+    hoja.getRange(fila, 19).setValue(new Date());
+    Logger.log("✅ Fecha de aprobación registrada en columna S");
 
     // PASO 3: Crear OP
     crearOP(hoja, hojaOP, fila);
