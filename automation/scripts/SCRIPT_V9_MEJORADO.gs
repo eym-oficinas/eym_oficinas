@@ -1755,39 +1755,25 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       Logger.log("⚠️ No se pudo configurar orientación landscape, continuando con defaults");
     }
 
-    // Encabezado con Logo e información en tabla (layout horizontal)
-    const encabezadoTable = body.appendTable();
-    encabezadoTable.setWidth(100);
-    const encabezadoRow = encabezadoTable.appendTableRow();
+    // Encabezado simplificado (removido: setWidth no existe en DocumentApp)
+    const logoText = body.appendParagraph("EYM OFICINAS");
+    logoText.setFontSize(10);
+    logoText.setBold(true);
 
-    // Celda 1: Logo/Texto EYM
-    const logoCelda = encabezadoRow.appendTableCell("EYM\nOFICINAS");
-    logoCelda.getChild(0).asParagraph().setFontSize(12);
-    logoCelda.getChild(0).asParagraph().setBold(true);
-    logoCelda.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    logoCelda.setWidth(50);
-    logoCelda.setBackgroundColor("#E8F0FE");
+    const titulo = body.appendParagraph("COTIZACIÓN DE REPARACIÓN DE SILLAS");
+    titulo.setFontSize(10);
+    titulo.setBold(true);
+    titulo.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
 
-    // Celda 2: Títulos y datos
-    const infoCell = encabezadoRow.appendTableCell("");
-    const p1 = infoCell.getChild(0).asParagraph();
-    p1.setText("COTIZACIÓN DE REPARACIÓN DE SILLAS");
-    p1.setFontSize(10);
-    p1.setBold(true);
-    p1.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+    const cliente_info = body.appendParagraph("CLIENTE: " + cliente);
+    cliente_info.setFontSize(8);
 
-    const p2 = infoCell.appendParagraph("CLIENTE: " + cliente);
-    p2.setFontSize(8);
+    const fecha_info = body.appendParagraph("FECHA: " + ahora.toLocaleDateString("es-CO"));
+    fecha_info.setFontSize(8);
 
-    const p3 = infoCell.appendParagraph("FECHA: " + ahora.toLocaleDateString("es-CO"));
-    p3.setFontSize(8);
-
-    const p4 = infoCell.appendParagraph("Referencia: " + nombreOportunidad);
-    p4.setFontSize(8);
-    p4.setBold(true);
-
-    encabezadoTable.setColumnWidth(0, 50);
-    encabezadoTable.setColumnWidth(1, 550);
+    const referencia_info = body.appendParagraph("Referencia: " + nombreOportunidad);
+    referencia_info.setFontSize(8);
+    referencia_info.setBold(true);
 
     body.appendParagraph("");
 
