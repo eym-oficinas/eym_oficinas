@@ -877,6 +877,56 @@ function diagnosticarHojas() {
   SpreadsheetApp.getUi().alert(nombres);
 }
 
+function pruebaOnEdit() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
+
+    if (!hoja) {
+      SpreadsheetApp.getUi().alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada");
+      return;
+    }
+
+    // Simular cambio en columna AA (27) con valor "Aprobado"
+    const ultimaFila = hoja.getLastRow();
+    if (ultimaFila < 2) {
+      SpreadsheetApp.getUi().alert("❌ No hay datos en la hoja");
+      return;
+    }
+
+    Logger.log("\n🧪 ════════════════════════════════════════════════════════");
+    Logger.log("🧪 PRUEBA DE onEdit()");
+    Logger.log("🧪 Simulando edición en columna AA, fila " + ultimaFila);
+    Logger.log("🧪 Escribiendo valor: 'Aprobado'");
+    Logger.log("🧪 ════════════════════════════════════════════════════════\n");
+
+    // IMPORTANTE: Esta es una PRUEBA manual
+    // Para que onEdit() se dispare automáticamente:
+    // 1. Abre Google Sheets
+    // 2. Ve a DIAGNOSTICOS_2026
+    // 3. Haz clic en columna AA (ESTADO_APROBACION)
+    // 4. Digita "Aprobado" y presiona Enter
+    // 5. Revisa los logs (Extensiones > Apps Script > Ejecuciones)
+
+    SpreadsheetApp.getUi().alert(
+      "🧪 INSTRUCCIONES DE PRUEBA:\n\n" +
+      "onEdit() se dispara AUTOMÁTICAMENTE en Google Sheets.\n\n" +
+      "Para probar:\n" +
+      "1. Ve a columna AA (ESTADO_APROBACION)\n" +
+      "2. En cualquier fila (ej: fila 2)\n" +
+      "3. Digita: Aprobado\n" +
+      "4. Presiona ENTER\n" +
+      "5. Verifica los logs en:\n" +
+      "   Extensiones > Apps Script > Ejecuciones\n\n" +
+      "Si los logs no aparecen, hay un error en onEdit().\n" +
+      "Revisa en: Extensiones > Apps Script > Mis ejecuciones > (ícono de error)"
+    );
+
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error en prueba: " + e.toString());
+  }
+}
+
 function configurarValidacionAprobacion() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1141,8 +1191,12 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
 
 function onEdit(e) {
   try {
+    // ⚠️ IMPORTANTE: Este logging es CRÍTICO para diagnóstico
+    // Si no ves estos mensajes en los logs, onEdit() NO se está disparando
+    const ahora = new Date().toLocaleTimeString();
     Logger.log("\n🟣 ════════════════════════════════════════════════════════");
-    Logger.log("🟣 onEdit ACTIVADO");
+    Logger.log("🟣 onEdit ACTIVADO a las " + ahora);
+    Logger.log("🟣 ════════════════════════════════════════════════════════");
 
     const range = e.range;
     const hoja = range.getSheet();
@@ -1150,7 +1204,9 @@ function onEdit(e) {
     const columna = range.getColumn();
     const fila = range.getRow();
 
-    Logger.log("🟣 Hoja: " + hojaName + " | Columna: " + columna + " | Fila: " + fila);
+    Logger.log("🟣 Hoja: " + hojaName);
+    Logger.log("🟣 Columna: " + columna + " (AA=27)");
+    Logger.log("🟣 Fila: " + fila);
 
     // Solo procesar si es DIAGNOSTICOS_2026
     if (hojaName !== "DIAGNOSTICOS_2026") {
@@ -2219,6 +2275,7 @@ function onOpen() {
     .addSeparator()
     .addItem("⚙️ Configurar Credenciales Odoo", "configurarCredencialesOdoo")
     .addItem("🔧 PRUEBA: Conectar Odoo", "pruebaConexionOdoo")
+    .addItem("🧪 PRUEBA: onEdit() funciona?", "pruebaOnEdit")
     .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
     .addToUi();
 }
