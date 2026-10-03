@@ -325,13 +325,56 @@ function obtenerProximoOP(hojaOP) {
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 function obtenerCredencialesOdoo() {
-  return {
-    url: "https://eym-oficinas.ovh",
-    urlWeb: "https://eym-oficinas.ovh/web",
-    database: "Eym1",
-    username: "eymclaude@gmail.com",
-    password: "Camilo1973*"
+  const props = PropertiesService.getUserProperties();
+
+  // Obtener credenciales del almacenamiento seguro
+  const creds = {
+    url: props.getProperty("ODOO_URL") || "https://eym-oficinas.ovh",
+    urlWeb: props.getProperty("ODOO_URL_WEB") || "https://eym-oficinas.ovh/web",
+    database: props.getProperty("ODOO_DATABASE") || "Eym1",
+    username: props.getProperty("ODOO_USERNAME"),
+    password: props.getProperty("ODOO_PASSWORD")
   };
+
+  // Si faltan credenciales, avisar
+  if (!creds.username || !creds.password) {
+    Logger.log("⚠️ Credenciales no configuradas. Usa: Menú → EYM v6.0 → ⚙️ Configurar Credenciales");
+    return null;
+  }
+
+  return creds;
+}
+
+function configurarCredencialesOdoo() {
+  const ui = SpreadsheetApp.getUi();
+
+  const response = ui.prompt(
+    "🔐 CONFIGURAR CREDENCIALES ODOO\n\n" +
+    "Formato: usuario|password|database|url\n\n" +
+    "Ejemplo:\neymclaude@gmail.com|Camilo1973*|Eym1|https://eym-oficinas.ovh",
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const input = response.getText().trim();
+  const partes = input.split("|");
+
+  if (partes.length < 2) {
+    ui.alert("❌ Formato incorrecto");
+    return;
+  }
+
+  const props = PropertiesService.getUserProperties();
+  props.setProperty("ODOO_USERNAME", partes[0].trim());
+  props.setProperty("ODOO_PASSWORD", partes[1].trim());
+  props.setProperty("ODOO_DATABASE", partes[2]?.trim() || "Eym1");
+  props.setProperty("ODOO_URL", partes[3]?.trim() || "https://eym-oficinas.ovh");
+  props.setProperty("ODOO_URL_WEB", partes[3]?.trim() + "/web" || "https://eym-oficinas.ovh/web");
+
+  ui.alert("✅ Credenciales guardadas de forma segura");
 }
 
 function listarBaseDatosOdoo(creds) {
@@ -1732,6 +1775,7 @@ function onOpen() {
     .addItem("Recalcular Todo", "recalcularTodo")
     .addItem("Configurar Listas Desplegables", "configurarValidacionAprobacion")
     .addSeparator()
+    .addItem("⚙️ Configurar Credenciales Odoo", "configurarCredencialesOdoo")
     .addItem("🔧 PRUEBA: Conectar Odoo", "pruebaConexionOdoo")
     .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
     .addToUi();
