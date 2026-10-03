@@ -1239,26 +1239,31 @@ function onEdit(e) {
 
     Logger.log("🟣 Valor normalizado: '" + nuevoValorStr + "'");
     Logger.log("🟣 Valor lowercase: '" + nuevoValorLower + "'");
+    Logger.log("🟣 Tipo de dato: " + typeof nuevoValor);
+    Logger.log("🟣 Largo: " + nuevoValorStr.length + " caracteres");
 
-    // ✅ MÉTODO 1: Dropdown selection - "Aprobado" (con cualquier capitalización)
-    // ✅ MÉTODO 2: Copy/paste - Captura el valor exacto pegado
-    // ✅ MÉTODO 3: Drag operation - Copia valores de celdas adyacentes
-    // ✅ MÉTODO 4: Manual text entry - Digita el usuario
-    // ✅ MÉTODO 5: Odoo sync - Escrito por función sincronización (ver sincronizarRMAsDesdeOdoo)
+    // ✅ MÉTODO 1: Lista desplegable (dropdown selection) - "Aprobado"
+    // ✅ MÉTODO 2: Copiado y pegado (copy/paste) - Captura el valor exacto pegado
+    // ✅ MÉTODO 3: Arrastrado (drag operation) - Copia valores de celdas adyacentes
+    // ✅ MÉTODO 4: Escrito manualmente (manual text entry) - El usuario digita
+    // ✅ MÉTODO 5: Sincronizado desde Odoo (Odoo sync) - Escrito por función sincronizarRMAsDesdeOdoo()
 
+    // Detectar estado con máxima tolerancia (cualquier variación)
     if (nuevoValorLower.includes("cotización")) {
-      Logger.log("📋 Cotización marcada en fila " + fila);
+      Logger.log("📋 [MÉTODO DETECTADO] Cotización marcada en fila " + fila);
     }
     else if (nuevoValorLower.includes("aprobado")) {
-      Logger.log("✅ DETECTADO 'APROBADO' en fila " + fila + " - Disparando procesarAprobacionEnFila()");
+      Logger.log("✅ [MÉTODO DETECTADO] 'APROBADO' encontrado en fila " + fila);
+      Logger.log("✅ [MÉTODO] Podría ser: 1=Dropdown, 2=Copy/Paste, 3=Drag, 4=Manual, o 5=Odoo");
+      Logger.log("✅ Disparando procesarAprobacionEnFila()...");
       procesarAprobacionEnFila(hoja, fila);
-      Logger.log("✅ procesarAprobacionEnFila() completado");
+      Logger.log("✅ procesarAprobacionEnFila() completado exitosamente");
     }
     else if (nuevoValorLower.includes("rechazado")) {
-      Logger.log("❌ Rechazado marcado en fila " + fila);
+      Logger.log("❌ [MÉTODO DETECTADO] Rechazado marcado en fila " + fila);
     }
     else {
-      Logger.log("🟣 ⊘ Valor '" + nuevoValorStr + "' no coincide con opciones esperadas");
+      Logger.log("🟣 ⊘ Valor '" + nuevoValorStr + "' no coincide con opciones (cotización/aprobado/rechazado)");
     }
 
     Logger.log("🟣 ════════════════════════════════════════════════════════\n");
@@ -2260,6 +2265,79 @@ function buscarRMAsConfirmadasEnOdoo(creds) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// FUNCIÓN: Probar los 5 métodos de entrada en columna AA
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function probarTodosLosMetodos() {
+  try {
+    const ui = SpreadsheetApp.getUi();
+    Logger.log("\n════════════════════════════════════════════════════════");
+    Logger.log("🧪 PRUEBA DE LOS 5 MÉTODOS DE ENTRADA EN COLUMNA AA");
+    Logger.log("════════════════════════════════════════════════════════\n");
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
+
+    if (!hoja) {
+      ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada");
+      return;
+    }
+
+    const ultimaFila = hoja.getLastRow();
+    const testFila = ultimaFila + 1; // Usar una fila vacía para pruebas
+
+    // Crear datos de prueba en la fila
+    Logger.log("📌 Creando fila de prueba (fila " + testFila + ")...");
+    hoja.getRange(testFila, 1).setValue(new Date()); // Fecha
+    hoja.getRange(testFila, 2).setValue("TEST_Oportunidad_5Metodos");
+    hoja.getRange(testFila, 3).setValue("TestCliente");
+    hoja.getRange(testFila, 4).setValue("TestSilla");
+
+    const metodos = [
+      { nombre: "1️⃣ DROPDOWN", descripcion: "Seleccionar de lista desplegable" },
+      { nombre: "2️⃣ COPY/PASTE", descripcion: "Copiar y pegar de otra celda" },
+      { nombre: "3️⃣ DRAG", descripcion: "Arrastrar desde otra celda" },
+      { nombre: "4️⃣ MANUAL", descripcion: "Escribir manualmente" },
+      { nombre: "5️⃣ ODOO", descripcion: "Sincronizado desde Odoo" }
+    ];
+
+    Logger.log("\n📋 MÉTODOS A PROBAR:\n");
+    for (let m of metodos) {
+      Logger.log("  " + m.nombre + " - " + m.descripcion);
+    }
+    Logger.log("\n════════════════════════════════════════════════════════");
+    Logger.log("INSTRUCCIONES:\n");
+    Logger.log("1. Haz clic en ACEPTAR");
+    Logger.log("2. Irá a fila " + testFila + " columna AA (vacía)");
+    Logger.log("3. Para CADA método, escribe 'Aprobado' de esa forma");
+    Logger.log("4. Presiona ENTER después de cada escritura");
+    Logger.log("5. Verifica en los logs que aparezca:");
+    Logger.log("   '✅ [MÉTODO DETECTADO]'");
+    Logger.log("════════════════════════════════════════════════════════\n");
+
+    // Ir a la celda AA de la fila de prueba
+    hoja.getRange(testFila, 27).activate();
+
+    ui.alert(
+      "🧪 INSTRUCCIONES PARA PROBAR LOS 5 MÉTODOS\n\n" +
+      "Fila de prueba: " + testFila + " (columna AA)\n\n" +
+      "1️⃣ DROPDOWN: Haz clic en el triángulo ▼ y selecciona 'Aprobado'\n\n" +
+      "2️⃣ COPY/PASTE: Copia 'Aprobado' de otra celda y pégalo aquí\n\n" +
+      "3️⃣ DRAG: Arrastra 'Aprobado' de otra celda a esta\n\n" +
+      "4️⃣ MANUAL: Digita manualmente: Aprobado\n\n" +
+      "5️⃣ ODOO: (Manual por ahora, simula 'Aprobado')\n\n" +
+      "Después de CADA paso, presiona ENTER.\n" +
+      "Revisa los logs buscando '✅ [MÉTODO DETECTADO]'\n\n" +
+      "¡Adelante! 🚀"
+    );
+
+  } catch (e) {
+    Logger.log("❌ ERROR en probarTodosLosMetodos(): " + e.toString());
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.toString());
+  }
+}
+
 function onOpen() {
   SpreadsheetApp.getUi().createMenu("EYM v8.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
@@ -2276,6 +2354,7 @@ function onOpen() {
     .addItem("⚙️ Configurar Credenciales Odoo", "configurarCredencialesOdoo")
     .addItem("🔧 PRUEBA: Conectar Odoo", "pruebaConexionOdoo")
     .addItem("🧪 PRUEBA: onEdit() funciona?", "pruebaOnEdit")
+    .addItem("🧪 PRUEBA: 5 Métodos de Entrada", "probarTodosLosMetodos")
     .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
     .addToUi();
 }
