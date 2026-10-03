@@ -1718,69 +1718,79 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
 
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
-    Logger.log("🖨️ Iniciando generación de PDF para: " + nombreOportunidad);
-    Logger.log("🖨️ Sillas encontradas: " + silasDatos.length);
+    Logger.log("\n🖨️ ═══════════════════════════════════════════════════════");
+    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V9");
+    Logger.log("🖨️ Oportunidad: " + nombreOportunidad);
+    Logger.log("🖨️ Cliente: " + cliente);
+    Logger.log("🖨️ Sillas: " + silasDatos.length);
+    Logger.log("🖨️ ═══════════════════════════════════════════════════════");
 
     if (!silasDatos || silasDatos.length === 0) {
       Logger.log("❌ ERROR: No hay datos de sillas");
       return null;
     }
 
-    const nombre = "COTIZACION - " + nombreOportunidad + " - " + new Date().toLocaleDateString();
-    Logger.log("🖨️ Creando documento: " + nombre);
+    // Crear documento con nombre único
+    const ahora = new Date();
+    const timestamp = ahora.getFullYear() + "-" + String(ahora.getMonth() + 1).padStart(2, '0') + "-" + String(ahora.getDate()).padStart(2, '0');
+    const nombreDoc = "COTIZACION_" + nombreOportunidad.substring(0, 25).replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp;
 
-    // Crear documento de Google Docs
-    const doc = DocumentApp.create(nombre);
-    if (!doc) {
-      Logger.log("❌ ERROR: No se pudo crear el documento");
-      return null;
-    }
-
-    Logger.log("✅ Documento creado con ID: " + doc.getId());
-
+    Logger.log("🖨️ PASO 1: Creando Google Doc...");
+    Logger.log("🖨️ Nombre: " + nombreDoc);
+    const doc = DocumentApp.create(nombreDoc);
     const body = doc.getBody();
     body.clear();
 
+    // Configurar márgenes
     body.setMarginTop(36);
     body.setMarginBottom(36);
     body.setMarginLeft(36);
     body.setMarginRight(36);
 
+    // Encabezado
     const encabezado = body.appendParagraph("EYM OFICINAS");
-    encabezado.setFontSize(18);
+    encabezado.setFontSize(20);
     encabezado.setBold(true);
     encabezado.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
 
-    const titulo = body.appendParagraph("COTIZACION DE REPARACION");
+    const titulo = body.appendParagraph("COTIZACIÓN DE REPARACIÓN - SILLA X SILLA");
     titulo.setFontSize(14);
+    titulo.setBold(true);
     titulo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
 
     body.appendParagraph("");
-    const datosGenerales = body.appendParagraph("Oportunidad: " + nombreOportunidad);
-    datosGenerales.appendText("\nCliente: " + cliente);
-    datosGenerales.appendText("\nFecha: " + new Date().toLocaleDateString());
 
+    // Información general
+    const infoGeneral = body.appendParagraph("OPORTUNIDAD: " + nombreOportunidad);
+    infoGeneral.setBold(true);
+    body.appendParagraph("CLIENTE: " + cliente);
+    body.appendParagraph("FECHA: " + ahora.toLocaleDateString("es-CO"));
     body.appendParagraph("");
 
-    // CREAR TABLA HORIZONTAL
+    // Tabla principal
+    Logger.log("🖨️ PASO 2: Creando tabla con datos...");
     const tablaDatos = [
-      ["Silla", "Tipo", "Color", "Ubicacion", "Partes", "Servicios", "Tapiceria", "M.G.", "TOTAL"]
+      ["#", "Silla", "Tipo", "Color", "Ubicación", "Partes", "Servicios", "Tapicería", "M.O.", "TOTAL"]
     ];
 
+    let numSilla = 1;
     silasDatos.forEach(sila => {
       tablaDatos.push([
-        sila.numeroTemporal || "",
-        sila.tipoSilla || "",
-        sila.color || "",
-        sila.ubicacion || "",
+        numSilla.toString(),
+        sila.numeroTemporal || "-",
+        sila.tipoSilla || "-",
+        sila.color || "-",
+        sila.ubicacion || "-",
         "$" + formatearNumero(sila.subtotalPartes || 0),
         "$" + formatearNumero(sila.subtotalServicios || 0),
         "$" + formatearNumero(sila.subtotalTapiceria || 0),
         "$" + formatearNumero(sila.subtotalMO || 0),
         "$" + formatearNumero(sila.total || 0)
       ]);
+      numSilla++;
     });
 
+    // Calcular totales
     let totalPartes = 0, totalServicios = 0, totalTapiceria = 0, totalMO = 0;
     silasDatos.forEach(sila => {
       totalPartes += (sila.subtotalPartes || 0);
@@ -1789,7 +1799,9 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       totalMO += (sila.subtotalMO || 0);
     });
 
+    // Fila de totales
     tablaDatos.push([
+      "",
       "TOTALES",
       "",
       "",
@@ -1801,85 +1813,61 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral)
     ]);
 
-    Logger.log("🖨️ Creando tabla con " + tablaDatos.length + " filas");
     const tabla = body.appendTable(tablaDatos);
 
-    tabla.setColumnWidth(0, 70);
-    tabla.setColumnWidth(1, 90);
-    tabla.setColumnWidth(2, 70);
-    tabla.setColumnWidth(3, 80);
-    tabla.setColumnWidth(4, 75);
-    tabla.setColumnWidth(5, 75);
-    tabla.setColumnWidth(6, 75);
-    tabla.setColumnWidth(7, 60);
-    tabla.setColumnWidth(8, 85);
-
+    // Formatear encabezado
     for (let i = 0; i < tabla.getRow(0).getNumCells(); i++) {
       const celda = tabla.getRow(0).getCell(i);
       celda.getChild(0).asParagraph().setBold(true);
       celda.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      celda.setBackgroundColor("#E8E8E8");
+      celda.setBackgroundColor("#1a73e8"); // Azul
+      celda.getChild(0).asParagraph().setForegroundColor("#FFFFFF"); // Texto blanco
     }
 
+    // Formatear fila de totales
     const ultimaFila = tabla.getRow(tabla.getNumRows() - 1);
     for (let i = 0; i < ultimaFila.getNumCells(); i++) {
       const celda = ultimaFila.getCell(i);
       celda.getChild(0).asParagraph().setBold(true);
       celda.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-      celda.setBackgroundColor("#FFFFCC");
+      celda.setBackgroundColor("#FFF2CC"); // Amarillo claro
     }
 
+    // Alinear números a la derecha
     for (let r = 1; r < tabla.getNumRows() - 1; r++) {
-      for (let c = 4; c < tabla.getRow(r).getNumCells(); c++) {
+      for (let c = 5; c < tabla.getRow(r).getNumCells(); c++) {
         tabla.getRow(r).getCell(c).getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
       }
     }
 
     body.appendParagraph("");
-    const nota = body.appendParagraph("Nota: El valor total antes de impuestos (IVA 19% y Retefuente segun aplique) se detallara en la RMA oficial.");
+    body.appendParagraph("");
+
+    // Nota al pie
+    const nota = body.appendParagraph("NOTA: Los valores mostrados son antes de impuestos (IVA 19% y Retención según aplique). Los detalles finales se especificarán en la RMA oficial.");
     nota.setFontSize(9);
     nota.setItalic(true);
+    nota.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
 
-    Logger.log("🖨️ Guardando documento...");
+    Logger.log("🖨️ PASO 3: Guardando documento...");
     doc.saveAndClose();
 
-    Logger.log("✅ Documento guardado y cerrado");
-
-    // Obtener el archivo del documento
-    Logger.log("🖨️ Obteniendo archivo...");
+    // Obtener URL del documento
     const docId = doc.getId();
-    const file = DriveApp.getFileById(docId);
+    const docUrl = "https://docs.google.com/document/d/" + docId + "/edit";
 
-    if (!file) {
-      Logger.log("❌ ERROR: No se pudo obtener el archivo del documento");
-      return null;
-    }
+    Logger.log("✅ PASO 4: Documento creado exitosamente");
+    Logger.log("✅ URL: " + docUrl);
+    Logger.log("🖨️ ═══════════════════════════════════════════════════════\n");
 
-    Logger.log("✅ Archivo obtenido");
-
-    // Convertir a PDF
-    Logger.log("🖨️ Convirtiendo a PDF...");
-    const pdfBlob = file.getAs("application/pdf");
-    const pdfFile = DriveApp.createFile(pdfBlob.setName("COTIZACION_" + nombreOportunidad + ".pdf"));
-
-    if (!pdfFile) {
-      Logger.log("❌ ERROR: No se pudo crear el archivo PDF");
-      return null;
-    }
-
-    Logger.log("✅ PDF creado");
-
-    // Mover documento original a papelera
-    Logger.log("🖨️ Limpiando documento temporal...");
-    DriveApp.getFileById(docId).setTrashed(true);
-
-    const urlPDF = pdfFile.getUrl();
-    Logger.log("✅ PDF generado: " + urlPDF);
-    return urlPDF;
+    return docUrl;
 
   } catch (e) {
-    Logger.log("❌ ERROR EN generarPDFDiagnosticos: " + e.toString());
-    Logger.log("❌ Stack: " + e.stack);
+    Logger.log("\n❌ ════════════════════════════════════════════════════════");
+    Logger.log("❌ ERROR EN generarPDFDiagnosticos()");
+    Logger.log("❌ Mensaje: " + e.toString());
+    Logger.log("❌ Línea: " + e.lineNumber);
+    Logger.log("❌ ════════════════════════════════════════════════════════\n");
     return null;
   }
 }
