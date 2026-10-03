@@ -1154,38 +1154,52 @@ function procesarAprobacionEnFila(hoja, fila) {
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN: Crear Orden de Producción (OP) - Mapeo de 29 columnas DIAGNOSTICOS a 16 columnas OP
+// Columnas DIAGNOSTICOS_2026 (29 columnas):
+// A=1:FECHA_DIAGNOSTICO, B=2:OPORTUNIDAD, C=3:CLIENTE, D=4:TIPO_SILLA, E=5:NUMERO_EYM,
+// F=6:#_TEMPORAL, G=7:FOTO, H=8:ACTIVO, I=9:CONDICION_SILLA, J=10:TIPO_TELA, K=11:COLOR,
+// L=12:UBICACION, M=13:GARANTIA, N=14:Repuestos, O=15:OTROS_SERVICIOS,
+// P=16:OBSERVACIONES_ESPECIALES, Q=17:TAPICERIA_Asiento, R=18:TAPICERIA_Espaldar,
+// S=19:PRESUPUESTO_GENERADO, T=20:Repuestos, U=21:Subtotal_OtrosServicios,
+// V=22:Subtotal_Tapiceria, W=23:Subtotal_MO_Mantenimiento, X=24:TOTAL_PPTTO,
+// Y=25:OPERARIO_DIAGNOSTICA, Z=26:ESTADO_DIAGNOSTICO, AA=27:ESTADO_APROBACION,
+// AB=28:FECHA_APROBACION, AC=29:REFERENCIA_RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
 function crearOP(hojaDiag, hojaOP, fila) {
   try {
-    const numeroEYM = hojaDiag.getRange(fila, 5).getValue();
+    const numeroEYM = hojaDiag.getRange(fila, 5).getValue(); // Columna E
     const nuevoOP = obtenerProximoOP(hojaOP);
 
     // Obtener servicios y combinarlos
-    const serviciosAsiento = hojaDiag.getRange(fila, 15).getValue() || "";
-    const serviciosEspaldar = hojaDiag.getRange(fila, 16).getValue() || "";
-    const serviciosCombinados = [serviciosAsiento, serviciosEspaldar].filter(s => s).join("; ");
+    // OTROS SERVICIOS está en columna 15 (O), OBSERVACIONES en 16 (P)
+    const otrosServicios = hojaDiag.getRange(fila, 15).getValue() || "";
+    const observaciones = hojaDiag.getRange(fila, 16).getValue() || "";
+    const serviciosCombinados = [otrosServicios, observaciones].filter(s => s).join("; ");
+
+    // TAPICERIA: Columna 17 (Q) = Asiento, Columna 18 (R) = Espaldar
+    const tapiceriaAsiento = hojaDiag.getRange(fila, 17).getValue() || "";
+    const tapiceriaEspaldar = hojaDiag.getRange(fila, 18).getValue() || "";
 
     // Estructura de 16 columnas para OP_2026:
     // A: OP, B: RMA, C: FACTURA, D: FECHA RECIBO, E: COTIZACION, F: OC, G: CLIENTE,
     // H: TIPO_SILLA, I: COLOR, J: TIPO_TELA, K: NUMERO_TEMP, L: PARTES,
     // M: OTROS_SERVICIOS, N: ABOLLONADO, O: TAPIZADO, P: NUM_EYM
     const filaOP = [
-      nuevoOP,                              // A: OP (consecutivo)
-      "",                                   // B: RMA (se llena después)
-      "",                                   // C: FACTURA (se llena después)
-      hojaDiag.getRange(fila, 1).getValue(),    // D: FECHA RECIBO (Fecha Diagnóstico - Col A)
-      hojaDiag.getRange(fila, 2).getValue(),    // E: COTIZACION (Nombre Oportunidad - Col B)
+      nuevoOP,                              // A: OP (consecutivo nuevo)
+      "",                                   // B: RMA (se llena después en Odoo)
+      "",                                   // C: FACTURA (se llena después en Odoo)
+      hojaDiag.getRange(fila, 1).getValue(),    // D: FECHA RECIBO ← Col A (FECHA_DIAGNOSTICO)
+      hojaDiag.getRange(fila, 2).getValue(),    // E: COTIZACION ← Col B (OPORTUNIDAD)
       "",                                   // F: OC (Orden Cliente - vacío por ahora)
-      hojaDiag.getRange(fila, 3).getValue(),    // G: CLIENTE (Col C)
-      hojaDiag.getRange(fila, 4).getValue(),    // H: TIPO_SILLA (Col D)
-      hojaDiag.getRange(fila, 11).getValue(),   // I: COLOR (Col K) - ajustar si es necesario
-      hojaDiag.getRange(fila, 10).getValue(),   // J: TIPO_TELA (Col J) - ajustar si es necesario
-      hojaDiag.getRange(fila, 6).getValue(),    // K: NUMERO_TEMP (#_Temporal - Col F)
-      hojaDiag.getRange(fila, 14).getValue(),   // L: PARTES (Componentes - Col N) - ajustar si es necesario
-      serviciosCombinados,                 // M: OTROS_SERVICIOS (combinado)
-      hojaDiag.getRange(fila, 17).getValue(),   // N: ABOLLONADO (Col Q) - ajustar si es necesario
-      hojaDiag.getRange(fila, 18).getValue(),   // O: TAPIZADO (Col R) - ajustar si es necesario
-      numeroEYM                             // P: NUM_EYM (Col E)
+      hojaDiag.getRange(fila, 3).getValue(),    // G: CLIENTE ← Col C
+      hojaDiag.getRange(fila, 4).getValue(),    // H: TIPO_SILLA ← Col D
+      hojaDiag.getRange(fila, 11).getValue(),   // I: COLOR ← Col K
+      hojaDiag.getRange(fila, 10).getValue(),   // J: TIPO_TELA ← Col J
+      hojaDiag.getRange(fila, 6).getValue(),    // K: NUMERO_TEMP ← Col F (#_TEMPORAL)
+      hojaDiag.getRange(fila, 14).getValue(),   // L: PARTES ← Col N (Repuestos)
+      serviciosCombinados,                 // M: OTROS_SERVICIOS ← Col O + Col P
+      tapiceriaAsiento,                    // N: ABOLLONADO/ASIENTO ← Col Q (TAPICERIA Asiento)
+      tapiceriaEspaldar,                   // O: TAPIZADO/ESPALDAR ← Col R (TAPICERIA Espaldar)
+      numeroEYM                             // P: NUM_EYM ← Col E (NUMERO_EYM)
     ];
 
     const newFilaOP = hojaOP.getLastRow() + 1;
@@ -1950,31 +1964,36 @@ function sincronizarRMAsDesdeOdoo() {
 
     let actualizadas = 0;
 
-    // PASO 2: Para cada RMA confirmada, buscar el EYM y actualizar la hoja
-    for (const rma of rmasConfirmadas) {
-      Logger.log("📌 Procesando RMA: " + rma.name + " (EYM: " + rma.eym + ")");
+    // PASO 2: Para cada RMA confirmada, buscar en columna AC (REFERENCIA_RMA) y actualizar
+    for (const rmaOdoo of rmasConfirmadas) {
+      Logger.log("📌 Procesando RMA Odoo: " + rmaOdoo.name);
 
-      // PASO 3: Buscar todas las filas con este EYM
+      // PASO 3: Buscar todas las filas donde AC (columna 29) = REFERENCIA_RMA
       const ultFila = hojaDiag.getLastRow();
       for (let f = 2; f <= ultFila; f++) {
-        const eymEnHoja = hojaDiag.getRange(f, 5).getValue();
+        const referenciaRMAEnHoja = hojaDiag.getRange(f, 29).getValue(); // Columna AC
         const estadoActual = hojaDiag.getRange(f, 27).getValue(); // Columna AA
 
-        if (eymEnHoja && eymEnHoja.toString() === rma.eym.toString()) {
-          // Si no está ya "Confirmado", actualizar
-          if (!estadoActual || !estadoActual.toString().toLowerCase().includes("confirmado")) {
-            hojaDiag.getRange(f, 27).setValue("Confirmado");
-            Logger.log("  ✅ Fila " + f + " actualizada a 'Confirmado'");
+        // Si la REFERENCIA_RMA coincide con la RMA de Odoo
+        if (referenciaRMAEnHoja && referenciaRMAEnHoja.toString().trim() === rmaOdoo.name.toString().trim()) {
+          // Si no está ya "Aprobado", actualizar a "Aprobado"
+          if (!estadoActual || !estadoActual.toString().toLowerCase().includes("aprobado")) {
+            Logger.log("  ⏳ Fila " + f + ": Escribiendo 'Aprobado' en columna AA...");
+            hojaDiag.getRange(f, 27).setValue("Aprobado");
+            Logger.log("  ✅ Fila " + f + " actualizada a 'Aprobado' - Esto disparará EYM + OP automáticamente");
             actualizadas++;
+
+            // Pequeña pausa para que onEdit se ejecute
+            Utilities.sleep(500);
           }
         }
       }
     }
 
     Logger.log("═══════════════════════════════════════════════════════════════");
-    Logger.log("✅ Sincronización completada: " + actualizadas + " filas actualizadas");
+    Logger.log("✅ Sincronización completada: " + actualizadas + " filas actualizadas a 'Aprobado'");
 
-    SpreadsheetApp.getUi().alert("✅ Sincronización completada\n\n" + actualizadas + " diagnósticos actualizados a 'Confirmado'");
+    SpreadsheetApp.getUi().alert("✅ Sincronización completada\n\n" + actualizadas + " diagnósticos actualizados a 'Aprobado'\n(EYM y OP se generan automáticamente)");
 
   } catch (e) {
     Logger.log("❌ Error en sincronización: " + e.toString());
@@ -1983,16 +2002,18 @@ function sincronizarRMAsDesdeOdoo() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN AUXILIAR: Buscar RMAs confirmadas en Odoo
+// FUNCIÓN AUXILIAR: Buscar RMAs confirmadas en Odoo (repair.order state=confirmed)
+// Retorna nombre de RMA para buscar en columna AC (REFERENCIA_RMA) de DIAGNOSTICOS_2026
 // ═══════════════════════════════════════════════════════════════════════════════════════
 function buscarRMAsConfirmadasEnOdoo(creds) {
   try {
-    Logger.log("🔍 Buscando RMAs confirmadas en Odoo...");
+    Logger.log("🔍 Buscando RMAs confirmadas en Odoo (repair.order state='confirmed')...");
 
     // Buscar en repair.order con state = "confirmed"
+    // Campos: name (referencia RMA), partner_id (cliente), state (estado)
     const resultados = llamarOdooXMLRPC("repair.order", "search_read", [
       [["state", "=", "confirmed"]],
-      ["id", "name", "partner_id", "operations"]
+      ["id", "name", "partner_id", "state"]
     ], creds);
 
     if (!resultados || !Array.isArray(resultados)) {
@@ -2002,14 +2023,13 @@ function buscarRMAsConfirmadasEnOdoo(creds) {
 
     const rmas = [];
     for (const rma of resultados) {
-      // Extraer EYM del nombre de la RMA (generalmente está en el nombre)
-      const eym = extraerEYMDelNombreRMA(rma.name);
       rmas.push({
         id: rma.id,
-        name: rma.name,
-        eym: eym,
+        name: rma.name,  // Este es el nombre de la RMA que se buscará en columna AC
+        estado: rma.state,
         cliente: rma.partner_id ? rma.partner_id[1] : ""
       });
+      Logger.log("  📋 RMA encontrada: " + rma.name + " (Cliente: " + (rma.partner_id ? rma.partner_id[1] : "N/A") + ")");
     }
 
     Logger.log("✅ RMAs encontradas: " + rmas.length);
@@ -2019,23 +2039,6 @@ function buscarRMAsConfirmadasEnOdoo(creds) {
     Logger.log("❌ Error buscando RMAs: " + e.toString());
     return [];
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN AUXILIAR: Extraer EYM del nombre de la RMA
-// ═══════════════════════════════════════════════════════════════════════════════════════
-function extraerEYMDelNombreRMA(nombreRMA) {
-  // Esperado: El nombre contiene EYM como "EYM-60037" o "60037"
-  if (!nombreRMA) return "";
-
-  // Intenta extraer número de 5 dígitos comenzando con 6
-  const match = nombreRMA.match(/\b6\d{4}\b/);
-  if (match) {
-    return parseInt(match[0]);
-  }
-
-  // Si no encuentra, devuelve el nombre completo (para logging)
-  return nombreRMA;
 }
 
 function onOpen() {
