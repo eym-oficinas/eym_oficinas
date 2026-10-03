@@ -1556,23 +1556,22 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
 
     Logger.log("✅ Cliente obtenido de la oportunidad: " + clienteOdooId);
 
-    // PASO 3: Crear RMA vinculada a la oportunidad
+    // PASO 3: Crear Repair Order (módulo Repair nativo de Odoo v14)
     const rmaData = {
       partner_id: clienteOdooId,
-      reference: "RMA-" + numeroEYM,
       description: "Reparacion de sillas - Oportunidad: " + nombreOportunidad + " | EyM: " + numeroEYM,
-      type: "customer",
       state: "draft",
-      opportunity_id: oportunidadOdooId // Vincular a la oportunidad
+      origin: "RMA-" + numeroEYM
     };
 
-    const numeroRMA = llamarOdooXMLRPC("rma.rma", "create", [rmaData], creds);
+    const numeroRMA = llamarOdooXMLRPC("repair.order", "create", [rmaData], creds);
 
     if (!numeroRMA) {
-      return { exito: false, error: "Error creando RMA" };
+      Logger.log("❌ Error creando Repair Order en Odoo");
+      return { exito: false, error: "Error creando RMA en Odoo" };
     }
 
-    Logger.log("✅ RMA base creada: " + numeroRMA);
+    Logger.log("✅ Repair Order creada: " + numeroRMA);
 
     // PASO 2: AGREGAR LÍNEAS DE PRODUCTOS (PIEZAS)
     Logger.log("📦 Agregando líneas de productos...");
@@ -1592,9 +1591,9 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
       Logger.log("✅ Servicios agregados: " + resultadoServicios.cantidad);
     }
 
-    const linkRMA = creds.urlWeb + "#id=" + numeroRMA + "&model=rma.rma&view_type=form";
+    const linkRMA = creds.urlWeb + "#id=" + numeroRMA + "&model=repair.order&view_type=form";
 
-    Logger.log("✅ RMA completada: " + numeroRMA);
+    Logger.log("✅ Repair Order completada: " + numeroRMA);
 
     return {
       exito: true,
@@ -1632,20 +1631,18 @@ function agregarLineasProductosRMA(numeroRMA, productosConsolidados, creds) {
       const subtotal = producto.cantidad * producto.precio;
       const impuestos = calcularImpuestos(subtotal, creds);
 
-      // Crear línea RMA (Piezas)
+      // Crear línea de reparación (Piezas)
       const lineaData = {
-        rma_id: numeroRMA,
+        repair_id: numeroRMA,
         product_id: productoOdooId,
         name: producto.nombre,
         product_qty: producto.cantidad,
         product_uom_id: 1, // Unidades
         price_unit: producto.precio,
-        price_subtotal: subtotal,
-        tax_ids: impuestos.taxIds, // [19% IVA, 4% RFTFE]
-        type: "piezas"
+        tax_ids: impuestos.taxIds // [19% IVA, 4% RFTFE]
       };
 
-      const lineaRmaId = llamarOdooXMLRPC("rma.rma.line", "create", [lineaData], creds);
+      const lineaRmaId = llamarOdooXMLRPC("repair.line", "create", [lineaData], creds);
       if (lineaRmaId) {
         Logger.log("✅ Línea agregada: " + codigoProducto + " x" + producto.cantidad);
         cantidadAgregada++;
@@ -1685,19 +1682,18 @@ function agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds) {
       const subtotal = servicio.cantidad * servicio.precio;
       const impuestos = calcularImpuestos(subtotal, creds);
 
-      // Crear línea RMA (Operaciones/Servicios) - SIN campo "type"
+      // Crear línea de honorarios/servicios en repair.order
       const lineaData = {
-        rma_id: numeroRMA,
-        product_id: servicioOdooId,
+        repair_id: numeroRMA,
         name: servicio.nombre,
+        product_id: servicioOdooId,
         product_qty: servicio.cantidad,
         product_uom_id: 1, // Unidades
         price_unit: servicio.precio,
-        price_subtotal: subtotal,
         tax_ids: impuestos.taxIds
       };
 
-      const lineaRmaId = llamarOdooXMLRPC("rma.rma.line", "create", [lineaData], creds);
+      const lineaRmaId = llamarOdooXMLRPC("repair.fee", "create", [lineaData], creds);
       if (lineaRmaId) {
         Logger.log("✅ Servicio agregado: " + codigoServicio + " x" + servicio.cantidad);
         cantidadAgregada++;
@@ -1889,12 +1885,12 @@ function adjuntarPDFaRMA(numeroRMA, urlPDF, nombreOportunidad) {
     const blob = file.getBlob();
     const base64 = Utilities.base64Encode(blob.getBytes());
 
-    // Crear attachment en Odoo (RMA)
+    // Crear attachment en Odoo (repair.order)
     const attachmentData = {
       name: "COTIZACION_" + nombreOportunidad + ".pdf",
       datas: base64,
       datas_fname: "COTIZACION_" + nombreOportunidad + ".pdf",
-      res_model: "rma.rma",
+      res_model: "repair.order",
       res_id: numeroRMA,
       type: "binary",
       mimetype: "application/pdf"
@@ -2038,16 +2034,16 @@ function sincronizarRMAsDesdeOdoo() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// FUNCIÓN AUXILIAR: Buscar RMAs confirmadas en Odoo (rma.rma state=confirmed)
+// FUNCIÓN AUXILIAR: Buscar Repair Orders confirmadas en Odoo (repair.order state=confirmed)
 // Retorna nombre de RMA para buscar en columna AC (REFERENCIA_RMA) de DIAGNOSTICOS_2026
 // ═══════════════════════════════════════════════════════════════════════════════════════
 function buscarRMAsConfirmadasEnOdoo(creds) {
   try {
-    Logger.log("🔍 Buscando RMAs confirmadas en Odoo (rma.rma state='confirmed')...");
+    Logger.log("🔍 Buscando Repair Orders confirmadas en Odoo (repair.order state='confirmed')...");
 
-    // Buscar en rma.rma con state = "confirmed"
+    // Buscar en repair.order con state = "confirmed"
     // Campos: name (referencia RMA), partner_id (cliente), state (estado)
-    const resultados = llamarOdooXMLRPC("rma.rma", "search_read", [
+    const resultados = llamarOdooXMLRPC("repair.order", "search_read", [
       [["state", "=", "confirmed"]],
       ["id", "name", "partner_id", "state"]
     ], creds);
