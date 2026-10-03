@@ -2617,6 +2617,92 @@ function onOpen() {
     .addToUi();
 }
 
+function pruebaGenerarPDFConEjemplo() {
+  try {
+    Logger.log("\n🧪 ════════════════════════════════════════════════════════");
+    Logger.log("🧪 PRUEBA: Generar PDF con datos de ejemplo");
+    Logger.log("🧪 ════════════════════════════════════════════════════════\n");
+
+    // Datos de ejemplo - 3 sillas
+    const silasDatos = [
+      {
+        numeroTemporal: "S-001",
+        tipoSilla: "Secretarial",
+        color: "Negro",
+        ubicacion: "Oficina Gerente",
+        partesYServicios: "Cilindro Butaco, Contacto Permanente, Soldadura, M.O y mantenimiento general",
+        valorPartesYMO: 165000,
+        valorOtrosServicios: 35000,
+        valorTapiceria: 0,
+        tapiceria: "-",
+        valorTotal: 200000
+      },
+      {
+        numeroTemporal: "S-002",
+        tipoSilla: "Gerencial",
+        color: "Beige",
+        ubicacion: "Sala Juntas",
+        partesYServicios: "Base Cromada, Rodachinas, Abollonado, M.O y mantenimiento general",
+        valorPartesYMO: 120000,
+        valorOtrosServicios: 25000,
+        valorTapiceria: 85000,
+        tapiceria: "Asiento: Abollonado; Espaldar: Tapizado",
+        valorTotal: 230000
+      },
+      {
+        numeroTemporal: "S-003",
+        tipoSilla: "Butaca",
+        color: "Gris",
+        ubicacion: "Recepción",
+        partesYServicios: "Platina, Brazos, Limpieza, M.O y mantenimiento general",
+        valorPartesYMO: 95000,
+        valorOtrosServicios: 30000,
+        valorTapiceria: 120000,
+        tapiceria: "Abollonado y Tapizado general",
+        valorTotal: 245000
+      }
+    ];
+
+    const nombreOportunidad = "PRUEBA_Ejemplo_" + new Date().toLocaleDateString("es-CO");
+    const cliente = "CLIENTE DE PRUEBA S.A.S.";
+    const totalGeneral = 675000;
+
+    Logger.log("📋 Datos de ejemplo preparados:");
+    Logger.log("   - Sillas: " + silasDatos.length);
+    Logger.log("   - Cliente: " + cliente);
+    Logger.log("   - Total: $" + formatearNumero(totalGeneral));
+    Logger.log("   - Oportunidad: " + nombreOportunidad);
+
+    // Generar PDF
+    const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
+
+    if (urlPDF) {
+      Logger.log("\n✅ PRUEBA EXITOSA");
+      Logger.log("✅ URL del PDF: " + urlPDF);
+      Logger.log("\n📥 DESCARGA EL PDF:");
+      Logger.log("   " + urlPDF + "?export=download");
+
+      SpreadsheetApp.getUi().alert(
+        "✅ PRUEBA COMPLETADA EXITOSAMENTE\n\n" +
+        "📄 Se generó un PDF con datos de ejemplo\n\n" +
+        "🔗 URL (para editar):\n" +
+        urlPDF + "\n\n" +
+        "📥 URL (para descargar PDF):\n" +
+        urlPDF.replace("/edit", "/export/pdf").replace("presentation", "presentation") + "?export=download"
+      );
+    } else {
+      Logger.log("❌ PRUEBA FALLIDA");
+      SpreadsheetApp.getUi().alert("❌ Error generando el PDF\n\nRevisa los logs en Extensiones > Apps Script > Ejecuciones");
+    }
+
+  } catch (e) {
+    Logger.log("\n❌ ERROR EN PRUEBA:");
+    Logger.log("❌ " + e.toString());
+    Logger.log("❌ Línea: " + e.lineNumber);
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.toString());
+  }
+}
+
 function pruebaConexionOdoo() {
   try {
     const creds = obtenerCredencialesOdoo();
