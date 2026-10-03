@@ -1813,7 +1813,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral)
     ]);
 
-    const tabla = body.appendTable(tablaDatos);
+    const tabla = body.insertTable(body.getNumChildren(), tablaDatos);
 
     // Formatear encabezado
     for (let i = 0; i < tabla.getRow(0).getNumCells(); i++) {
