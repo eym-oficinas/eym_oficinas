@@ -1790,7 +1790,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("🖨️ Nombre: " + nombreDoc);
 
     const presentacion = SlidesApp.create(nombreDoc);
-    presentacion.getPageSetup().setPageSize(SlidesApp.PageSize.LEDGER).setOrientation(SlidesApp.Orientation.LANDSCAPE);
+    presentacion.setPageSize(SlidesApp.PageSize.LEDGER, SlidesApp.Orientation.LANDSCAPE);
     Logger.log("✅ Orientación LEDGER LANDSCAPE configurada (17\" x 11\")");
 
     const slide = presentacion.getSlides()[0];
