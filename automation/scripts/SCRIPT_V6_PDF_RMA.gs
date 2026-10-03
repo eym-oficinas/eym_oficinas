@@ -336,6 +336,34 @@ function obtenerCredencialesOdoo() {
 
 function listarBaseDatosOdoo(creds) {
   try {
+    // Prueba 1: Verificar que el servidor está vivo
+    Logger.log("\n🔗 Prueba 1: Verificando servidor Odoo...");
+    try {
+      const headResponse = UrlFetchApp.fetch(creds.url, {
+        method: "head",
+        muteHttpExceptions: true,
+        followRedirects: true
+      });
+      Logger.log("✅ Servidor respondió: " + headResponse.getResponseCode());
+    } catch (headError) {
+      Logger.log("⚠️ HEAD request falló: " + headError.toString());
+    }
+
+    // Prueba 2: Intentar GET a /web
+    Logger.log("\n🔗 Prueba 2: Verificando /web...");
+    try {
+      const webResponse = UrlFetchApp.fetch(creds.url + "/web", {
+        method: "get",
+        muteHttpExceptions: true,
+        followRedirects: false
+      });
+      Logger.log("✅ /web status: " + webResponse.getResponseCode());
+    } catch (webError) {
+      Logger.log("⚠️ /web falló: " + webError.toString());
+    }
+
+    // Prueba 3: Listar BDs en /jsonrpc
+    Logger.log("\n🔗 Prueba 3: Listando BDs...");
     const url = creds.url + "/jsonrpc";
     const payload = {
       jsonrpc: "2.0",
@@ -347,19 +375,31 @@ function listarBaseDatosOdoo(creds) {
       }
     };
 
-    Logger.log("📤 Listando BDs desde: " + url);
+    Logger.log("📤 POST a: " + url);
 
     const response = UrlFetchApp.fetch(url, {
       method: "post",
       contentType: "application/json",
       payload: JSON.stringify(payload),
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      headers: {
+        "Accept": "application/json"
+      }
     });
 
-    const resultado = JSON.parse(response.getContentText());
+    Logger.log("📥 Status: " + response.getResponseCode());
+    const responseText = response.getContentText();
+    Logger.log("📥 Response: " + responseText.substring(0, 300));
+
+    if (!responseText) {
+      Logger.log("❌ Respuesta vacía");
+      return null;
+    }
+
+    const resultado = JSON.parse(responseText);
 
     if (resultado.error) {
-      Logger.log("❌ Error al listar BDs: " + JSON.stringify(resultado.error));
+      Logger.log("❌ Error: " + JSON.stringify(resultado.error));
       return null;
     }
 
@@ -367,6 +407,7 @@ function listarBaseDatosOdoo(creds) {
 
   } catch (e) {
     Logger.log("❌ Error: " + e.toString());
+    Logger.log("Stack: " + e.stack);
     return null;
   }
 }
