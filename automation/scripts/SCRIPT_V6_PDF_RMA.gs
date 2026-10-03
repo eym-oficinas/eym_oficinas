@@ -331,7 +331,7 @@ function obtenerCredencialesOdoo() {
   const creds = {
     url: props.getProperty("ODOO_URL") || "https://eym-oficinas.ovh",
     urlWeb: props.getProperty("ODOO_URL_WEB") || "https://eym-oficinas.ovh/web",
-    database: props.getProperty("ODOO_DATABASE") || "Eym1",
+    database: props.getProperty("ODOO_DATABASE") || "eym1",
     username: props.getProperty("ODOO_USERNAME"),
     password: props.getProperty("ODOO_PASSWORD")
   };
@@ -351,7 +351,7 @@ function configurarCredencialesOdoo() {
   const response = ui.prompt(
     "🔐 CONFIGURAR CREDENCIALES ODOO\n\n" +
     "Formato: usuario|password|database|url\n\n" +
-    "Ejemplo:\neymclaude@gmail.com|Camilo1973*|Eym1|https://eym-oficinas.ovh",
+    "Ejemplo:\neymclaude@gmail.com|Camilo1973*|eym1|https://eym-oficinas.ovh",
     ui.ButtonSet.OK_CANCEL
   );
 
@@ -370,7 +370,7 @@ function configurarCredencialesOdoo() {
   const props = PropertiesService.getUserProperties();
   props.setProperty("ODOO_USERNAME", partes[0].trim());
   props.setProperty("ODOO_PASSWORD", partes[1].trim());
-  props.setProperty("ODOO_DATABASE", partes[2]?.trim() || "Eym1");
+  props.setProperty("ODOO_DATABASE", partes[2]?.trim() || "eym1");
   props.setProperty("ODOO_URL", partes[3]?.trim() || "https://eym-oficinas.ovh");
   props.setProperty("ODOO_URL_WEB", partes[3]?.trim() + "/web" || "https://eym-oficinas.ovh/web");
 
