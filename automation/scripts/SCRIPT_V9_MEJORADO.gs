@@ -1790,8 +1790,8 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("🖨️ Nombre: " + nombreDoc);
 
     const presentacion = SlidesApp.create(nombreDoc);
-    presentacion.getPageSetup().setPageSize(SlidesApp.PageSize.LETTER).setOrientation(SlidesApp.Orientation.LANDSCAPE);
-    Logger.log("✅ Orientación LANDSCAPE configurada");
+    presentacion.getPageSetup().setPageSize(SlidesApp.PageSize.LEDGER).setOrientation(SlidesApp.Orientation.LANDSCAPE);
+    Logger.log("✅ Orientación LEDGER LANDSCAPE configurada (17\" x 11\")");
 
     const slide = presentacion.getSlides()[0];
     const Inches = SlidesApp.Inches;
@@ -1809,7 +1809,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     yPos += 0.5;
 
     // Título
-    const tituloShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.4));
+    const tituloShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.4));
     const tituloText = tituloShape.getText();
     tituloText.setText("COTIZACIÓN DE REPARACIÓN DE SILLAS");
     tituloText.getStyle().setFontSize(Pt(11));
@@ -1817,21 +1817,21 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     yPos += 0.5;
 
     // Cliente
-    const clienteShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.25));
+    const clienteShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.25));
     const clienteText = clienteShape.getText();
     clienteText.setText("CLIENTE: " + cliente);
     clienteText.getStyle().setFontSize(Pt(8));
     yPos += 0.3;
 
     // Fecha
-    const fechaShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.25));
+    const fechaShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.25));
     const fechaText = fechaShape.getText();
     fechaText.setText("FECHA: " + ahora.toLocaleDateString("es-CO"));
     fechaText.getStyle().setFontSize(Pt(8));
     yPos += 0.3;
 
     // Referencia
-    const refShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.25));
+    const refShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.25));
     const refText = refShape.getText();
     refText.setText("Referencia: " + nombreOportunidad);
     refText.getStyle().setFontSize(Pt(8));
@@ -1895,7 +1895,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     ]);
 
     // Insertar tabla en Slides
-    const tabla = slide.insertTable(tablaDatos.length, numColumnas, Inches(0.3), Inches(yPos), Inches(9.4), Inches(5.5));
+    const tabla = slide.insertTable(tablaDatos.length, numColumnas, Inches(0.3), Inches(yPos), Inches(16.4), Inches(5.5));
 
     // Llenar tabla
     for (let r = 0; r < tablaDatos.length; r++) {
