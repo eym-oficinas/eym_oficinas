@@ -1112,8 +1112,7 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// TRIGGER AUTOMÁTICO: AL CAMBIAR ESTADO A "APROBADO"
-// Se ejecuta cada vez que hay cambios en la hoja DIAGNOSTICOS_2026
+// TRIGGER AUTOMÁTICO: GENERAR EYM + OP AL MARCAR "APROBADO"
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 function onEdit(e) {
@@ -1122,26 +1121,25 @@ function onEdit(e) {
     const hoja = range.getSheet();
     const hojaName = hoja.getName();
 
-    // Solo procesar si es la hoja DIAGNOSTICOS_2026
+    // Solo procesar si es DIAGNOSTICOS_2026
     if (hojaName !== "DIAGNOSTICOS_2026") {
       return;
     }
 
-    // Solo procesar si se cambió la columna AE (ESTADO_APROBACION - columna 31)
-    const columnAE = 31;
-    if (range.getColumn() !== columnAE) {
+    // Solo procesar si se cambió columna AE (ESTADO_APROBACION - columna 31)
+    if (range.getColumn() !== 31) {
       return;
     }
 
-    const nuevoValor = range.getValue();
+    const nuevoValor = range.getValue().toString().toLowerCase();
     const fila = range.getRow();
 
-    Logger.log("🔄 onEdit detectado en fila " + fila + ", columna AE: " + nuevoValor);
+    Logger.log("🔄 onEdit: Fila " + fila + ", Columna AE: " + nuevoValor);
 
-    // Si es "Aprobado", procesar automáticamente
-    if (nuevoValor && nuevoValor.toString().toLowerCase().includes("aprobado")) {
-      Logger.log("✅ Detectado cambio a 'Aprobado' en fila " + fila);
-      procesarAprobacionAutomatica(hoja, fila);
+    // Si es "Aprobado", generar EYM + OP (no RMA, eso es manual)
+    if (nuevoValor.includes("aprobado")) {
+      Logger.log("✅ Marcado como Aprobado en fila " + fila);
+      procesarAprobacionEnFila(hoja, fila);
     }
 
   } catch (e) {
@@ -1149,39 +1147,64 @@ function onEdit(e) {
   }
 }
 
-function procesarAprobacionAutomatica(hoja, fila) {
+function procesarAprobacionEnFila(hoja, fila) {
   try {
-    Logger.log("🚀 Procesando aprobación automática en fila " + fila);
+    const ss = SpreadsheetApp.getParent();
+    const hojaOP = ss.getSheetByName("OP_2026");
 
-    // Obtener datos de la fila
-    const datos = hoja.getRange(fila, 1, 1, 31).getValues()[0];
+    if (!hojaOP) {
+      Logger.log("⚠️ Hoja OP_2026 no encontrada");
+      return;
+    }
 
-    // Extraer columnas necesarias
-    const numeroEYM = datos[4] || ""; // Columna E
-    const nombreOportunidad = datos[1] || ""; // Columna B
-    const cliente = datos[2] || ""; // Columna C
+    // PASO 1: Generar número EYM si no existe
+    const celdaEYM = hoja.getRange(fila, 5);
+    const numeroEYM = celdaEYM.getValue();
+
+    if (!numeroEYM || numeroEYM.toString().trim() === "") {
+      const nuevoEYM = obtenerProximoEYM(hoja);
+      celdaEYM.setValue(nuevoEYM);
+      celdaEYM.setBackground("#FFFF00");
+      celdaEYM.setFontColor("#0000FF");
+      Logger.log("✅ Número EYM generado: " + nuevoEYM);
+    } else {
+      Logger.log("✓ Número EYM ya existe: " + numeroEYM);
+    }
+
+    // PASO 2: Registrar fecha de aprobación en columna AB (28)
+    hoja.getRange(fila, 28).setValue(new Date());
+    Logger.log("✅ Fecha de aprobación registrada");
+
+    // PASO 3: Crear OP
+    crearOP(hoja, hojaOP, fila);
+    Logger.log("✅ OP creada automáticamente");
+
+    // PASO 4: CREAR RMA EN ODOO (COMPLETO)
+    // Obtener datos necesarios de la fila
+    const nombreOportunidad = hoja.getRange(fila, 2).getValue();
 
     if (!nombreOportunidad) {
       Logger.log("⚠️ No hay nombre de oportunidad en fila " + fila);
       return;
     }
 
-    Logger.log("📋 Datos extraídos: EYM=" + numeroEYM + ", Oportunidad=" + nombreOportunidad);
+    Logger.log("📝 Iniciando creación de RMA en Odoo para: " + nombreOportunidad);
 
-    // Procesar la oportunidad completa
-    const resultado = procesarOportunidadCompleta(hoja, nombreOportunidad, false);
+    // Usar la función que maneja todo: RMA + PDF + Adjunto + Link
+    const resultadoRMA = procesarOportunidadCompleta(hoja, nombreOportunidad, false);
 
-    if (resultado.exito) {
-      Logger.log("✅ Oportunidad procesada automáticamente");
-      Logger.log("   RMA: " + resultado.referenciaRMA);
-      Logger.log("   PDF: " + (resultado.pdfGenerado ? "✅" : "❌"));
-      Logger.log("   Adjunto: " + (resultado.adjunto ? "✅" : "❌"));
+    if (resultadoRMA.exito) {
+      Logger.log("✅ RMA COMPLETA:");
+      Logger.log("   RMA: " + resultadoRMA.referenciaRMA);
+      Logger.log("   PDF: " + (resultadoRMA.pdfGenerado ? "✅" : "❌"));
+      Logger.log("   Adjunto: " + (resultadoRMA.adjunto ? "✅" : "❌"));
+      Logger.log("   Link en AC: ✅ Escrito");
     } else {
-      Logger.log("❌ Error procesando oportunidad: " + resultado.error);
+      Logger.log("❌ Error creando RMA: " + resultadoRMA.error);
     }
 
   } catch (e) {
-    Logger.log("❌ Error en procesarAprobacionAutomatica: " + e.toString());
+    Logger.log("❌ Error en procesarAprobacionEnFila: " + e.toString());
   }
 }
 
