@@ -1790,8 +1790,14 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("🖨️ Nombre: " + nombreDoc);
 
     const presentacion = SlidesApp.create(nombreDoc);
-    presentacion.setPageSize(SlidesApp.PageSize.LEDGER, SlidesApp.Orientation.LANDSCAPE);
-    Logger.log("✅ Orientación LEDGER LANDSCAPE configurada (17\" x 11\")");
+    // Establecer tamaño personalizado: LEDGER Landscape (17" x 11")
+    // Valores en unidades de EMU: 1 pulgada = 914400 EMU
+    try {
+      presentacion.setPageSize(17 * 914400, 11 * 914400);
+      Logger.log("✅ Tamaño LEDGER (17\" x 11\") configurado");
+    } catch(e) {
+      Logger.log("⚠️ No se pudo configurar tamaño LEDGER, usando tamaño por defecto");
+    }
 
     const slide = presentacion.getSlides()[0];
     const Inches = SlidesApp.Inches;
