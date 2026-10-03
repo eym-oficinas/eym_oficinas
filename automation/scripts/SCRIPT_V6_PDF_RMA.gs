@@ -359,7 +359,7 @@ function configurarCredencialesOdoo() {
     return;
   }
 
-  const input = response.getText().trim();
+  const input = response.getResponseText().trim();
   const partes = input.split("|");
 
   if (partes.length < 2) {
