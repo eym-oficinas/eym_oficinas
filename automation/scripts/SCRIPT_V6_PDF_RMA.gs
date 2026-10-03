@@ -549,31 +549,20 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
     const uid = authResult.result;
     Logger.log("✅ UID obtenido: " + uid);
 
-    // Paso 2: Construir argumentos completos con parámetros por defecto
+    // Paso 2: Construir argumentos - Odoo espera: [db, uid, pwd, model, method, args_array]
     let executeKwArgs = [creds.database, uid, creds.password, modelo, metodo];
 
-    // Agregar los argumentos del método
-    if (Array.isArray(args) && args.length > 0) {
-      // args[0] = domain ([]  o [["field", "operator", "value"]])
-      executeKwArgs.push(args[0]);
-      // args[1] = offset (default 0)
-      executeKwArgs.push(args[1] !== undefined ? args[1] : 0);
-      // args[2] = limit (default null)
-      executeKwArgs.push(args[2] !== undefined ? args[2] : null);
-      // args[3] = order (default null)
-      executeKwArgs.push(args[3] !== undefined ? args[3] : null);
-      // args[4] = count (default false)
-      executeKwArgs.push(args[4] !== undefined ? args[4] : false);
+    // El sexto argumento debe ser un ARRAY con todos los parámetros del método
+    // Para search(): [domain, offset, limit, order, count]
+    // Para otros métodos: depende del método específico
+    if (Array.isArray(args)) {
+      executeKwArgs.push(args);
     } else {
-      // Si no hay args, pasar valores por defecto para search()
-      executeKwArgs.push([]);      // domain
-      executeKwArgs.push(0);       // offset
-      executeKwArgs.push(null);    // limit
-      executeKwArgs.push(null);    // order
-      executeKwArgs.push(false);   // count
+      executeKwArgs.push([]);
     }
 
     Logger.log("📊 Estructura final de args: " + JSON.stringify(executeKwArgs));
+    Logger.log("📊 Total argumentos enviados: " + executeKwArgs.length);
 
     // Paso 3: Llamar al método usando el UID
     const payload = {
