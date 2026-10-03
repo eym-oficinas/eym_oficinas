@@ -1561,7 +1561,8 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
       partner_id: clienteOdooId,
       description: "Reparacion de sillas - Oportunidad: " + nombreOportunidad + " | EyM: " + numeroEYM,
       state: "draft",
-      origin: "RMA-" + numeroEYM
+      origin: "RMA-" + numeroEYM,
+      location_id: 1  // Stock location (por defecto)
     };
 
     const numeroRMA = llamarOdooXMLRPC("repair.order", "create", [rmaData], creds);
