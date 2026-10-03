@@ -1075,8 +1075,15 @@ function onEdit(e) {
     // ✅ MÉTODO 4: Manual text entry - Digita el usuario
     // ✅ MÉTODO 5: Odoo sync - Escrito por función sincronización (ver sincronizarRMAsDesdeOdoo)
 
-    if (nuevoValorLower.includes("aprobado")) {
-      Logger.log("✅ Activado: Aprobado detectado en fila " + fila + " (Método: " + e.source.getActiveSheet().getLastColumn() + ")");
+    if (nuevoValorLower.includes("cotización")) {
+      // CASO 1: COTIZACIÓN - Usuario marca para preparar RMA manual
+      // El usuario debe hacer clic en botón "Finalizar Oportunidad" para crear RMA
+      Logger.log("📋 Estado 'Cotización' marcado en fila " + fila + " - Usar menú 'Finalizar Oportunidad' para crear RMA en Odoo");
+    }
+    else if (nuevoValorLower.includes("aprobado")) {
+      // CASO 2: APROBADO - Se ejecuta después que RMA se confirma en Odoo
+      // Dispara: EYM + Fecha Aprobación + OP
+      Logger.log("✅ Activado: Aprobado detectado en fila " + fila);
       procesarAprobacionEnFila(hoja, fila);
     }
     else if (nuevoValorLower.includes("confirmado")) {
