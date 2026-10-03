@@ -159,37 +159,29 @@ function procesarRespuestaFormulario() {
     Logger.log("🔍 Diagnósticos existentes: " + datoDiagnosticos.length);
 
     // ⚠️ CRÍTICO: Solo procesar NUEVAS respuestas desde la última procesada
-    // Pero hacer validación adicional de duplicados por seguridad
+    // Validación de duplicados por OPORTUNIDAD (es única)
     for (let r = ultimaProcesada + 1; r <= ultFilaResp; r++) {
       Logger.log("\n📌 Validando respuesta #" + r);
       const resp = hojaResp.getRange(r, 1, 1, 34).getValues()[0];
 
-      const fechaResp = resp[1];
-      const clienteResp = resp[3];
-      const tipoSillaResp = resp[4];
+      const oportunidadResp = resp[2] ? resp[2].toString().trim() : "";
 
       let yaExiste = false;
 
-      // Normalizar color de la respuesta
-      const colorResp = (resp[7] ? resp[7].toString().trim().toLowerCase() : "");
-
+      // Validación por OPORTUNIDAD (es el identificador único)
       for (let diagRow of datoDiagnosticos) {
-        const clienteDiag = diagRow[2]; // Columna C
-        const tipoSillaDiag = diagRow[3]; // Columna D
-        // Normalizar color de diagnósticos también
-        const colorDiag = (diagRow[6] ? diagRow[6].toString().trim().toLowerCase() : "");
+        const oportunidadDiag = diagRow[1] ? diagRow[1].toString().trim() : ""; // Columna B
 
-        // Validación ESTRICTA: cliente + tipo de silla + color (ambos normalizados)
-        if (clienteResp === clienteDiag && tipoSillaResp === tipoSillaDiag && colorResp === colorDiag) {
-          Logger.log("⚠️ DUPLICADO DETECTADO: " + clienteResp + " | " + tipoSillaResp + " | " + colorResp);
-          Logger.log("⚠️ Este registro ya existe en DIAGNOSTICOS_2026, saltando...");
+        if (oportunidadResp === oportunidadDiag && oportunidadResp !== "") {
+          Logger.log("⚠️ DUPLICADO DETECTADO - Oportunidad: " + oportunidadResp);
+          Logger.log("⚠️ Esta oportunidad ya existe en DIAGNOSTICOS_2026, saltando...");
           yaExiste = true;
           break;
         }
       }
 
       if (yaExiste) {
-        Logger.log("⏭️ Respuesta #" + r + " IGNORADA (ya existe)");
+        Logger.log("⏭️ Respuesta #" + r + " IGNORADA (oportunidad ya existe)");
         continue;
       }
 
