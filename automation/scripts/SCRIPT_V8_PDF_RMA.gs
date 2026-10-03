@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// SISTEMA AUTOMÁTICO EYM OFICINAS v7.0 - INTEGRACIÓN COMPLETA ODOO RMA
+// SISTEMA AUTOMÁTICO EYM OFICINAS v8.0 - INTEGRACIÓN COMPLETA ODOO RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // Versión estable: Diagnósticos + RMA en Odoo + Piezas + Operaciones + PDF + Impuestos
 // Estados columna AA: COTIZACIÓN (manual) → APROBADO (automático) → RECHAZADO
+// ✅ V8.0: Duplicados resueltos + onEdit optimizado + RMA separado
 
 const ID_RESPUESTAS_NUEVA = "151jFiyUYDKxHYgswm5-BIED8py5j1_txVxYU5qyPlW4";
 const ID_DIAGNOSTICOS = "1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y";
@@ -2200,7 +2201,7 @@ function buscarRMAsConfirmadasEnOdoo(creds) {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("EYM v7.0")
+  SpreadsheetApp.getUi().createMenu("EYM v8.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
