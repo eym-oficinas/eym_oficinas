@@ -1076,21 +1076,19 @@ function onEdit(e) {
     // ✅ MÉTODO 5: Odoo sync - Escrito por función sincronización (ver sincronizarRMAsDesdeOdoo)
 
     if (nuevoValorLower.includes("cotización")) {
-      // CASO 1: COTIZACIÓN - Usuario marca para preparar RMA manual
-      // El usuario debe hacer clic en botón "Finalizar Oportunidad" para crear RMA
-      Logger.log("📋 Estado 'Cotización' marcado en fila " + fila + " - Usar menú 'Finalizar Oportunidad' para crear RMA en Odoo");
+      // COTIZACIÓN: Usuario marca para preparar RMA
+      // Debe hacer clic manualmente en "Finalizar Oportunidad" para crear RMA en Odoo
+      Logger.log("📋 Cotización marcada en fila " + fila);
     }
     else if (nuevoValorLower.includes("aprobado")) {
-      // CASO 2: APROBADO - Se ejecuta después que RMA se confirma en Odoo
-      // Dispara: EYM + Fecha Aprobación + OP
-      Logger.log("✅ Activado: Aprobado detectado en fila " + fila);
+      // APROBADO: Se ejecuta después que RMA se confirma en Odoo
+      // Dispara automáticamente: EYM + Fecha Aprobación + OP
+      Logger.log("✅ Aprobado detectado en fila " + fila + " - Generando EYM + OP");
       procesarAprobacionEnFila(hoja, fila);
     }
-    else if (nuevoValorLower.includes("confirmado")) {
-      Logger.log("ℹ️ Estado 'Confirmado' marcado en fila " + fila + " - Ya procesado desde Odoo");
-    }
-    else {
-      Logger.log("ℹ️ Estado '" + nuevoValorStr + "' registrado en fila " + fila);
+    else if (nuevoValorLower.includes("rechazado")) {
+      // RECHAZADO: Solo registra
+      Logger.log("❌ Rechazado marcado en fila " + fila);
     }
 
   } catch (e) {
