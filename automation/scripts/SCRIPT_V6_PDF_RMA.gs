@@ -414,7 +414,7 @@ function listarBaseDatosOdoo(creds) {
       params: {
         service: "db",
         method: "list",
-        args: []
+        args: []  // db.list no necesita argumentos
       }
     };
 
@@ -556,7 +556,7 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
       params: {
         service: "object",
         method: "execute_kw",
-        args: [creds.database, uid, creds.password, modelo, metodo, ...args],
+        args: [creds.database, uid, creds.password, modelo, metodo].concat(args),
         kwargs: {}
       }
     };
