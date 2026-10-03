@@ -549,15 +549,28 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
     const uid = authResult.result;
     Logger.log("✅ UID obtenido: " + uid);
 
-    // Paso 2: Llamar al método usando el UID (no username)
+    // Paso 2: Construir argumentos de forma explícita para evitar problemas con concat
+    let executeKwArgs = [creds.database, uid, creds.password, modelo, metodo];
+
+    // Si args es un array de arrays (forma correcta), agregar cada elemento
+    if (Array.isArray(args)) {
+      for (let i = 0; i < args.length; i++) {
+        executeKwArgs.push(args[i]);
+      }
+    } else {
+      executeKwArgs.push(args);
+    }
+
+    Logger.log("📊 Estructura final de args: " + JSON.stringify(executeKwArgs));
+
+    // Paso 3: Llamar al método usando el UID
     const payload = {
       jsonrpc: "2.0",
       method: "call",
       params: {
         service: "object",
         method: "execute_kw",
-        args: [creds.database, uid, creds.password, modelo, metodo].concat(args),
-        kwargs: {}
+        args: executeKwArgs
       }
     };
 
@@ -572,7 +585,7 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
     };
 
     Logger.log("📤 Enviando a: " + url);
-    Logger.log("📋 Payload: " + JSON.stringify(payload));
+    Logger.log("📋 Payload completo: " + JSON.stringify(payload));
 
     const response = UrlFetchApp.fetch(url, options);
 
