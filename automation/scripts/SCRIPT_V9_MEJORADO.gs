@@ -1905,7 +1905,12 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
         texto.setText(tablaDatos[r][c] || "");
 
         const estilo = texto.getStyle();
-        estilo.setFontSize(Pt(7.5));
+        // Columnas de texto (5, 9) usan 6.5pt; otras usan 7pt
+        if (c === 5 || c === 9) {
+          estilo.setFontSize(Pt(6.5));
+        } else {
+          estilo.setFontSize(Pt(7));
+        }
 
         // Encabezado: azul con texto blanco
         if (r === 0) {
