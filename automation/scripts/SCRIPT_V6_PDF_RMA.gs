@@ -549,19 +549,26 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
     const uid = authResult.result;
     Logger.log("✅ UID obtenido: " + uid);
 
-    // Paso 2: Construir argumentos de forma explícita para evitar problemas con concat
+    // Paso 2: Construir argumentos - Odoo v14 usa kwargs para los parámetros del método
     let executeKwArgs = [creds.database, uid, creds.password, modelo, metodo];
+    let executeKwKwargs = {};
 
-    // Si args es un array de arrays (forma correcta), agregar cada elemento
-    if (Array.isArray(args)) {
-      for (let i = 0; i < args.length; i++) {
-        executeKwArgs.push(args[i]);
+    // Los argumentos del método van en kwargs, no en args posicionales
+    if (Array.isArray(args) && args.length > 0) {
+      executeKwKwargs.args = args[0] || [];
+      // Si hay más elementos, agregarlos como parámetros adicionales
+      if (args.length > 1) {
+        executeKwKwargs.offset = args[1];
+        executeKwKwargs.limit = args[2];
+        executeKwKwargs.order = args[3];
+        executeKwKwargs.count = args[4];
       }
     } else {
-      executeKwArgs.push(args);
+      executeKwKwargs.args = [];
     }
 
-    Logger.log("📊 Estructura final de args: " + JSON.stringify(executeKwArgs));
+    Logger.log("📊 Estructura final - args: " + JSON.stringify(executeKwArgs));
+    Logger.log("📊 Estructura final - kwargs: " + JSON.stringify(executeKwKwargs));
 
     // Paso 3: Llamar al método usando el UID
     const payload = {
@@ -570,7 +577,8 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
       params: {
         service: "object",
         method: "execute_kw",
-        args: executeKwArgs
+        args: executeKwArgs,
+        kwargs: executeKwKwargs
       }
     };
 
