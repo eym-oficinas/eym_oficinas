@@ -995,6 +995,86 @@ function configurarValidacionAprobacion() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// NUEVA FUNCIÓN: Generar Presupuesto PDF (silla por silla) - Descargable
+// El usuario puede descargarlo y guardarlo donde prefiera, luego adjuntarlo manualmente
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function generarPresupuestoDescargable() {
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
+
+    if (!hojaDiag) {
+      ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada");
+      return;
+    }
+
+    // Pedir nombre de la oportunidad
+    const response = ui.prompt("📋 Ingresa el NOMBRE DE LA OPORTUNIDAD:\n(Ej: Mensula Rubby 03/10/2026)");
+
+    if (response.getSelectedButton() === ui.Button.CANCEL) return;
+
+    const nombreOportunidad = response.getResponseText().trim();
+    if (!nombreOportunidad) {
+      ui.alert("⚠️ Debes ingresar un nombre de oportunidad");
+      return;
+    }
+
+    Logger.log("\n🖨️ ════════════════════════════════════════════════════════");
+    Logger.log("🖨️ Generando Presupuesto Descargable: " + nombreOportunidad);
+    Logger.log("🖨️ ════════════════════════════════════════════════════════");
+
+    // Obtener diagnósticos de la oportunidad
+    const diagnosticos = obtenerDiagnosticosDeOportunidad(hojaDiag, nombreOportunidad);
+
+    if (diagnosticos.length === 0) {
+      ui.alert("❌ No se encontraron diagnósticos para:\n" + nombreOportunidad);
+      return;
+    }
+
+    Logger.log("✅ Diagnósticos encontrados: " + diagnosticos.length);
+
+    // Agrupar por silla y calcular totales
+    const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
+    const totalGeneral = calcularTotalGeneral(silasDatos);
+    const cliente = diagnosticos[0].cliente;
+
+    Logger.log("✅ Sillas encontradas: " + silasDatos.length);
+
+    // Generar PDF (esto crea un documento en Google Drive)
+    const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
+
+    if (!urlPDF) {
+      ui.alert("❌ Error generando PDF");
+      return;
+    }
+
+    Logger.log("✅ PDF Generado: " + urlPDF);
+
+    // Mostrar mensaje de éxito con el link
+    ui.alert(
+      "✅ PRESUPUESTO GENERADO\n\n" +
+      "Oportunidad: " + nombreOportunidad + "\n" +
+      "Cliente: " + cliente + "\n" +
+      "Sillas: " + silasDatos.length + "\n" +
+      "Total: $" + formatearNumero(totalGeneral) + "\n\n" +
+      "📄 El PDF se creó en Google Drive.\n" +
+      "Puedes descargarlo y guardarlo donde prefieras.\n\n" +
+      "Link del documento:\n" + urlPDF
+    );
+
+    Logger.log("🖨️ ════════════════════════════════════════════════════════");
+    Logger.log("✅ PRESUPUESTO DESCARGABLE COMPLETADO");
+    Logger.log("🖨️ ════════════════════════════════════════════════════════\n");
+
+  } catch (e) {
+    Logger.log("❌ Error en generarPresupuestoDescargable(): " + e.toString());
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.toString());
+  }
+}
+
 function finalizarOportunidad() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2390,6 +2470,7 @@ function onOpen() {
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
+    .addItem("🖨️ Presupuesto silla x silla", "generarPresupuestoDescargable")
     .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")
     .addItem("📝 Procesar RMAs Pendientes", "procesarRMAsPendientes")
     .addItem("🔄 Sincronizar RMAs desde Odoo", "sincronizarRMAsDesdeOdoo")
