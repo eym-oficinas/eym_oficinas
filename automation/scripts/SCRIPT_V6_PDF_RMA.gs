@@ -1126,17 +1126,17 @@ function onEdit(e) {
       return;
     }
 
-    // Solo procesar si se cambió columna AE (ESTADO_APROBACION - columna 31)
-    if (range.getColumn() !== 31) {
+    // Solo procesar si se cambió columna AA (ESTADO_APROBACION - columna 27)
+    if (range.getColumn() !== 27) {
       return;
     }
 
     const nuevoValor = range.getValue().toString().toLowerCase();
     const fila = range.getRow();
 
-    Logger.log("🔄 onEdit: Fila " + fila + ", Columna AE: " + nuevoValor);
+    Logger.log("🔄 onEdit: Fila " + fila + ", Columna AA: " + nuevoValor);
 
-    // Si es "Aprobado", generar EYM + OP (no RMA, eso es manual)
+    // Si es "Aprobado", generar EYM + OP + RMA en Odoo
     if (nuevoValor.includes("aprobado")) {
       Logger.log("✅ Marcado como Aprobado en fila " + fila);
       procesarAprobacionEnFila(hoja, fila);
