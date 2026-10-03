@@ -1813,7 +1813,22 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral)
     ]);
 
-    const tabla = body.insertTable(body.getNumChildren(), tablaDatos);
+    // Crear tabla fila por fila (método robusto para Google Docs)
+    const tabla = body.appendTable();
+
+    // Agregar encabezado
+    const encabezadoRow = tabla.appendTableRow();
+    for (let cell of tablaDatos[0]) {
+      encabezadoRow.appendTableCell(String(cell));
+    }
+
+    // Agregar filas de datos
+    for (let i = 1; i < tablaDatos.length; i++) {
+      const dataRow = tabla.appendTableRow();
+      for (let cell of tablaDatos[i]) {
+        dataRow.appendTableCell(String(cell));
+      }
+    }
 
     // Formatear encabezado
     for (let i = 0; i < tabla.getRow(0).getNumCells(); i++) {
