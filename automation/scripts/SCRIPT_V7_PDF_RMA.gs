@@ -1786,13 +1786,26 @@ function buscarOportunidadOdoo(nombreOportunidad, creds) {
 
 function obtenerClienteDeOportunidad(oportunidadId, creds) {
   try {
-    // Obtener datos de la oportunidad
-    const oportunidad = llamarOdooXMLRPC("sale.order", "read", [[oportunidadId], ["partner_id"]], creds);
+    // PASO 1: Intentar leer de crm.lead (Oportunidades)
+    Logger.log("🔍 Intentando obtener cliente de crm.lead ID: " + oportunidadId);
+    let oportunidad = llamarOdooXMLRPC("crm.lead", "read", [[oportunidadId], ["partner_id"]], creds);
+
     if (oportunidad && oportunidad.length > 0 && oportunidad[0].partner_id) {
       const clienteId = oportunidad[0].partner_id[0]; // partner_id es array [id, nombre]
-      Logger.log("✅ Cliente obtenido de oportunidad: " + clienteId);
+      Logger.log("✅ Cliente obtenido de crm.lead: " + clienteId);
       return clienteId;
     }
+
+    // PASO 2: Si no está en crm.lead, intentar en sale.order
+    Logger.log("⚠️ No encontrado en crm.lead, intentando sale.order...");
+    oportunidad = llamarOdooXMLRPC("sale.order", "read", [[oportunidadId], ["partner_id"]], creds);
+    if (oportunidad && oportunidad.length > 0 && oportunidad[0].partner_id) {
+      const clienteId = oportunidad[0].partner_id[0];
+      Logger.log("✅ Cliente obtenido de sale.order: " + clienteId);
+      return clienteId;
+    }
+
+    Logger.log("❌ Cliente no encontrado en crm.lead ni sale.order");
     return null;
   } catch (e) {
     Logger.log("Error obteniendo cliente: " + e);
