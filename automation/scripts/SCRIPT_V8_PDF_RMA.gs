@@ -1278,7 +1278,7 @@ function procesarAprobacionEnFila(hoja, fila) {
     Logger.log("🔵 INICIANDO PROCESAMIENTO DE APROBACIÓN - Fila " + fila);
     Logger.log("🔵 ════════════════════════════════════════════════════════");
 
-    const ss = SpreadsheetApp.getParent();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const hojaOP = ss.getSheetByName("OP_2026");
 
     if (!hojaOP) {
