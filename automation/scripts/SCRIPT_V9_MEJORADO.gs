@@ -1663,7 +1663,7 @@ function consolidarTapiceria(diag) {
 function calcularTotalGeneral(silasDatos) {
   let total = 0;
   silasDatos.forEach(sila => {
-    total += sila.total || 0;
+    total += sila.valorTotal || 0;
   });
   return total;
 }
@@ -1934,16 +1934,14 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       }
     }
 
-    Logger.log("🖨️ PASO 3: Guardando presentación...");
-    presentacion.saveAndClose();
-
-    // Obtener URL de la presentación
+    Logger.log("🖨️ PASO 3: Obteniendo ID de la presentación...");
+    // IMPORTANTE: Obtener ID ANTES de saveAndClose()
     const presId = presentacion.getId();
     const presUrl = "https://docs.google.com/presentation/d/" + presId + "/edit";
-
-    // Generar PDF desde la presentación
-    Logger.log("🖨️ PASO 4: Generando PDF desde Slides...");
     const pdfUrl = "https://docs.google.com/presentation/d/" + presId + "/export/pdf";
+
+    Logger.log("🖨️ PASO 4: Guardando presentación...");
+    presentacion.saveAndClose();
 
     Logger.log("✅ PASO 5: Presentación y PDF creados exitosamente");
     Logger.log("✅ URL Presentación: " + presUrl);
