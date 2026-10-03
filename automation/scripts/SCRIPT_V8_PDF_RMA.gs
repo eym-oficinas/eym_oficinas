@@ -166,19 +166,20 @@ function procesarRespuestaFormulario() {
 
       const fechaResp = resp[1];
       const clienteResp = resp[3];
-      const tipoSillaResp = resp[4]; // Agregamos tipo de silla para mejor identificación
+      const tipoSillaResp = resp[4];
 
       let yaExiste = false;
 
-      // Búsqueda estricta: comparar cliente + tipo de silla + color (identificadores únicos)
-      const colorResp = resp[7] || "";
+      // Normalizar color de la respuesta
+      const colorResp = (resp[7] ? resp[7].toString().trim().toLowerCase() : "");
 
       for (let diagRow of datoDiagnosticos) {
         const clienteDiag = diagRow[2]; // Columna C
         const tipoSillaDiag = diagRow[3]; // Columna D
-        const colorDiag = diagRow[6]; // Columna G (color)
+        // Normalizar color de diagnósticos también
+        const colorDiag = (diagRow[6] ? diagRow[6].toString().trim().toLowerCase() : "");
 
-        // Validación ESTRICTA: cliente + tipo de silla + color (no confiar solo en tiempo)
+        // Validación ESTRICTA: cliente + tipo de silla + color (ambos normalizados)
         if (clienteResp === clienteDiag && tipoSillaResp === tipoSillaDiag && colorResp === colorDiag) {
           Logger.log("⚠️ DUPLICADO DETECTADO: " + clienteResp + " | " + tipoSillaResp + " | " + colorResp);
           Logger.log("⚠️ Este registro ya existe en DIAGNOSTICOS_2026, saltando...");
@@ -1714,18 +1715,26 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
 
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
-    Logger.log("Iniciando generación de PDF para: " + nombreOportunidad);
-    Logger.log("Sillas encontradas: " + silasDatos.length);
+    Logger.log("🖨️ Iniciando generación de PDF para: " + nombreOportunidad);
+    Logger.log("🖨️ Sillas encontradas: " + silasDatos.length);
 
     if (!silasDatos || silasDatos.length === 0) {
-      Logger.log("ERROR: No hay datos de sillas");
+      Logger.log("❌ ERROR: No hay datos de sillas");
       return null;
     }
 
     const nombre = "COTIZACION - " + nombreOportunidad + " - " + new Date().toLocaleDateString();
-    Logger.log("Creando documento: " + nombre);
+    Logger.log("🖨️ Creando documento: " + nombre);
 
+    // Crear documento de Google Docs
     const doc = DocumentApp.create(nombre);
+    if (!doc) {
+      Logger.log("❌ ERROR: No se pudo crear el documento");
+      return null;
+    }
+
+    Logger.log("✅ Documento creado con ID: " + doc.getId());
+
     const body = doc.getBody();
     body.clear();
 
@@ -1789,7 +1798,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral)
     ]);
 
-    Logger.log("Creando tabla con " + tablaDatos.length + " filas");
+    Logger.log("🖨️ Creando tabla con " + tablaDatos.length + " filas");
     const tabla = body.appendTable(tablaDatos);
 
     tabla.setColumnWidth(0, 70);
@@ -1828,21 +1837,46 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     nota.setFontSize(9);
     nota.setItalic(true);
 
-    Logger.log("Guardando PDF...");
+    Logger.log("🖨️ Guardando documento...");
     doc.saveAndClose();
 
-    const file = DriveApp.getFileById(doc.getId());
+    Logger.log("✅ Documento guardado y cerrado");
+
+    // Obtener el archivo del documento
+    Logger.log("🖨️ Obteniendo archivo...");
+    const docId = doc.getId();
+    const file = DriveApp.getFileById(docId);
+
+    if (!file) {
+      Logger.log("❌ ERROR: No se pudo obtener el archivo del documento");
+      return null;
+    }
+
+    Logger.log("✅ Archivo obtenido");
+
+    // Convertir a PDF
+    Logger.log("🖨️ Convirtiendo a PDF...");
     const pdfBlob = file.getAs("application/pdf");
     const pdfFile = DriveApp.createFile(pdfBlob.setName("COTIZACION_" + nombreOportunidad + ".pdf"));
 
-    DriveApp.getFileById(doc.getId()).setTrashed(true);
+    if (!pdfFile) {
+      Logger.log("❌ ERROR: No se pudo crear el archivo PDF");
+      return null;
+    }
 
-    Logger.log("PDF generado: " + pdfFile.getUrl());
-    return pdfFile.getUrl();
+    Logger.log("✅ PDF creado");
+
+    // Mover documento original a papelera
+    Logger.log("🖨️ Limpiando documento temporal...");
+    DriveApp.getFileById(docId).setTrashed(true);
+
+    const urlPDF = pdfFile.getUrl();
+    Logger.log("✅ PDF generado: " + urlPDF);
+    return urlPDF;
 
   } catch (e) {
-    Logger.log("ERROR EN generarPDFDiagnosticos: " + e.toString());
-    Logger.log("Stack: " + e.stack);
+    Logger.log("❌ ERROR EN generarPDFDiagnosticos: " + e.toString());
+    Logger.log("❌ Stack: " + e.stack);
     return null;
   }
 }
