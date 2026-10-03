@@ -142,9 +142,13 @@ function procesarRespuestaFormulario() {
     const ultFilaDiag = hojaDiag.getLastRow();
     const datoDiagnosticos = ultFilaDiag > 1 ? hojaDiag.getRange(2, 1, ultFilaDiag - 1, 29).getValues() : [];
 
-    Logger.log("🔍 Verificando " + (ultFilaResp - 1) + " respuestas contra " + datoDiagnosticos.length + " diagnósticos existentes");
+    Logger.log("🔍 Última respuesta procesada: " + ultimaProcesada);
+    Logger.log("🔍 Total respuestas en formulario: " + (ultFilaResp - 1));
+    Logger.log("🔍 Procesando SOLO desde fila " + (ultimaProcesada + 1) + " en adelante");
+    Logger.log("🔍 Diagnósticos existentes: " + datoDiagnosticos.length);
 
-    for (let r = 2; r <= ultFilaResp; r++) {
+    // ⚠️ CRÍTICO: Solo procesar NUEVAS respuestas desde la última procesada
+    for (let r = ultimaProcesada + 1; r <= ultFilaResp; r++) {
       const resp = hojaResp.getRange(r, 1, 1, 34).getValues()[0];
 
       const fechaResp = resp[1];
