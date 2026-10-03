@@ -1557,13 +1557,14 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
     Logger.log("✅ Cliente obtenido de la oportunidad: " + clienteOdooId);
 
     // PASO 3: Crear RMA usando repair.order (modelo nativo de Odoo v14)
+    // NOTA: NO especificamos product_id aquí - se añade en las líneas de reparación
     const rmaData = {
       partner_id: clienteOdooId,
       address_id: clienteOdooId, // Dirección de envío
-      product_id: 1, // Producto genérico (será reemplazado por líneas)
       description: "Reparacion de sillas - Oportunidad: " + nombreOportunidad + " | EyM: " + numeroEYM,
       state: "draft",
-      origin: "RMA-" + numeroEYM
+      origin: "RMA-" + numeroEYM,
+      location_id: 1 // Localización por defecto
     };
 
     const numeroRMA = llamarOdooXMLRPC("repair.order", "create", [rmaData], creds);
