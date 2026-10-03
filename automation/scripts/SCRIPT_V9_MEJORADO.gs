@@ -1770,7 +1770,7 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
     Logger.log("\n🖨️ ═══════════════════════════════════════════════════════");
-    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V9 CON SLIDES");
+    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V9 CON GOOGLE DOCS");
     Logger.log("🖨️ Oportunidad: " + nombreOportunidad);
     Logger.log("🖨️ Cliente: " + cliente);
     Logger.log("🖨️ Sillas: " + silasDatos.length);
@@ -1781,68 +1781,61 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       return null;
     }
 
-    // Crear presentación Slides con nombre único
+    // Crear documento Google Docs con nombre único
     const ahora = new Date();
     const timestamp = ahora.getFullYear() + "-" + String(ahora.getMonth() + 1).padStart(2, '0') + "-" + String(ahora.getDate()).padStart(2, '0');
     const nombreDoc = "COTIZACION_" + nombreOportunidad.substring(0, 25).replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp;
 
-    Logger.log("🖨️ PASO 1: Creando Google Slides con orientación LANDSCAPE...");
+    Logger.log("🖨️ PASO 1: Creando Google Docs (landscape)...");
     Logger.log("🖨️ Nombre: " + nombreDoc);
 
-    const presentacion = SlidesApp.create(nombreDoc);
-    // Establecer tamaño personalizado: LEDGER Landscape (17" x 11")
-    // Valores en unidades de EMU: 1 pulgada = 914400 EMU
-    try {
-      presentacion.setPageSize(17 * 914400, 11 * 914400);
-      Logger.log("✅ Tamaño LEDGER (17\" x 11\") configurado");
-    } catch(e) {
-      Logger.log("⚠️ No se pudo configurar tamaño LEDGER, usando tamaño por defecto");
+    const doc = DocumentApp.create(nombreDoc);
+    const body = doc.getBody();
+
+    // Establecer orientación landscape
+    const pageSize = DocumentApp.PageSize.LETTER;
+    const margins = {top: 0.3, bottom: 0.3, left: 0.3, right: 0.3};
+    body.getParent().setPageSize(pageSize);
+    body.getParent().setMarginTop(margins.top * 72);
+    body.getParent().setMarginBottom(margins.bottom * 72);
+    body.getParent().setMarginLeft(margins.left * 72);
+    body.getParent().setMarginRight(margins.right * 72);
+
+    // Cambiar a orientación landscape
+    const sections = doc.getSections();
+    if (sections.length > 0) {
+      sections[0].setPageHeight(7.5 * 72);
+      sections[0].setPageWidth(10 * 72);
     }
 
-    const slide = presentacion.getSlides()[0];
-    const Inches = SlidesApp.Inches;
-    const Pt = SlidesApp.Pt;
-
     // ENCABEZADO
-    let yPos = 0.3;
-
     // Logo/Nombre EYM
-    const logoShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(2), Inches(0.4));
-    const logoText = logoShape.getText();
-    logoText.setText("EYM OFICINAS");
-    logoText.getStyle().setFontSize(Pt(11));
-    logoText.getStyle().setBold(true);
-    yPos += 0.5;
+    const logoParafo = body.appendParagraph("EYM OFICINAS");
+    logoParafo.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    logoParafo.getRangeElement().getElement().asText().setFontSize(11);
+    logoParafo.getRangeElement().getElement().asText().setBold(true);
 
     // Título
-    const tituloShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.4));
-    const tituloText = tituloShape.getText();
-    tituloText.setText("COTIZACIÓN DE REPARACIÓN DE SILLAS");
-    tituloText.getStyle().setFontSize(Pt(11));
-    tituloText.getStyle().setBold(true);
-    yPos += 0.5;
+    const tituloParafo = body.appendParagraph("COTIZACIÓN DE REPARACIÓN DE SILLAS");
+    tituloParafo.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    tituloParafo.getRangeElement().getElement().asText().setFontSize(11);
+    tituloParafo.getRangeElement().getElement().asText().setBold(true);
 
     // Cliente
-    const clienteShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.25));
-    const clienteText = clienteShape.getText();
-    clienteText.setText("CLIENTE: " + cliente);
-    clienteText.getStyle().setFontSize(Pt(8));
-    yPos += 0.3;
+    const clienteParafo = body.appendParagraph("CLIENTE: " + cliente);
+    clienteParafo.getRangeElement().getElement().asText().setFontSize(8);
 
     // Fecha
-    const fechaShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.25));
-    const fechaText = fechaShape.getText();
-    fechaText.setText("FECHA: " + ahora.toLocaleDateString("es-CO"));
-    fechaText.getStyle().setFontSize(Pt(8));
-    yPos += 0.3;
+    const fechaParafo = body.appendParagraph("FECHA: " + ahora.toLocaleDateString("es-CO"));
+    fechaParafo.getRangeElement().getElement().asText().setFontSize(8);
 
     // Referencia
-    const refShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(16.4), Inches(0.25));
-    const refText = refShape.getText();
-    refText.setText("Referencia: " + nombreOportunidad);
-    refText.getStyle().setFontSize(Pt(8));
-    refText.getStyle().setBold(true);
-    yPos += 0.5;
+    const refParafo = body.appendParagraph("Referencia: " + nombreOportunidad);
+    refParafo.getRangeElement().getElement().asText().setFontSize(8);
+    refParafo.getRangeElement().getElement().asText().setBold(true);
+
+    // Espacio antes de tabla
+    body.appendParagraph("");
 
     // TABLA DE DATOS - 11 COLUMNAS
     Logger.log("🖨️ PASO 2: Creando tabla con 11 columnas...");
@@ -1900,56 +1893,53 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral2)
     ]);
 
-    // Insertar tabla en Slides (altura aumentada para que el texto se ajuste en múltiples renglones)
-    const tabla = slide.insertTable(tablaDatos.length, numColumnas, Inches(0.3), Inches(yPos), Inches(16.4), Inches(8));
+    // Insertar tabla en Docs
+    const tabla = body.appendTable(tablaDatos);
 
-    // Llenar tabla
+    // Formatear tabla
     for (let r = 0; r < tablaDatos.length; r++) {
+      const fila = tabla.getRow(r);
       for (let c = 0; c < numColumnas; c++) {
-        const celda = tabla.getCell(r, c);
+        const celda = fila.getCell(c);
         const texto = celda.getText();
-        texto.setText(tablaDatos[r][c] || "");
 
-        const estilo = texto.getStyle();
-        estilo.setFontSize(Pt(8));
+        // Establecer tamaño de fuente
+        texto.setFontSize(8);
 
         // Encabezado: azul con texto blanco
         if (r === 0) {
-          estilo.setBold(true);
-          estilo.setForegroundColor("#FFFFFF");
-          celda.setFillColor("#1a73e8");
+          texto.setBold(true);
+          celda.setBackgroundColor("#1a73e8");
+          texto.setForegroundColor("#FFFFFF");
         }
         // Fila de totales: amarillo
         else if (r === tablaDatos.length - 1) {
-          estilo.setBold(true);
-          celda.setFillColor("#FFF2CC");
+          texto.setBold(true);
+          celda.setBackgroundColor("#FFF2CC");
         }
 
         // Alineación: números a la derecha
         if (c >= 6 && r > 0) {
-          texto.getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.END);
-        } else {
-          texto.getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.START);
+          fila.getCell(c).setHorizontalAlignment(DocumentApp.HorizontalAlignment.RIGHT);
         }
       }
     }
 
-    Logger.log("🖨️ PASO 3: Obteniendo ID de la presentación...");
-    // IMPORTANTE: Obtener ID ANTES de saveAndClose()
-    const presId = presentacion.getId();
-    const presUrl = "https://docs.google.com/presentation/d/" + presId + "/edit";
-    const pdfUrl = "https://docs.google.com/presentation/d/" + presId + "/export/pdf";
+    Logger.log("🖨️ PASO 3: Obteniendo ID del documento...");
+    // IMPORTANTE: Obtener ID ANTES de guardar
+    const docId = doc.getId();
+    const docUrl = "https://docs.google.com/document/d/" + docId + "/edit";
+    const pdfUrl = "https://docs.google.com/document/d/" + docId + "/export?format=pdf";
 
-    Logger.log("🖨️ PASO 4: Guardando presentación...");
-    presentacion.saveAndClose();
+    Logger.log("🖨️ PASO 4: Guardando documento...");
 
-    Logger.log("✅ PASO 5: Presentación y PDF creados exitosamente");
-    Logger.log("✅ URL Presentación: " + presUrl);
+    Logger.log("✅ PASO 5: Documento y PDF creados exitosamente");
+    Logger.log("✅ URL Documento: " + docUrl);
     Logger.log("✅ URL PDF: " + pdfUrl);
     Logger.log("✅ CARACTERÍSTICAS IMPLEMENTADAS:");
-    Logger.log("   ✓ Orientación: LANDSCAPE (Horizontal) - REAL");
+    Logger.log("   ✓ Orientación: LANDSCAPE (Horizontal)");
     Logger.log("   ✓ Tamaño: Letter");
-    Logger.log("   ✓ Fuentes: 7.5pt (datos), 11pt (título), 8pt (cliente/fecha)");
+    Logger.log("   ✓ Fuentes: 8pt (datos), 11pt (título), 8pt (cliente/fecha)");
     Logger.log("   ✓ Logo EYM: Superior izquierda");
     Logger.log("   ✓ Referencia: Incluida bajo cliente y fecha");
     Logger.log("   ✓ COLUMNAS EXACTAS (11):");
