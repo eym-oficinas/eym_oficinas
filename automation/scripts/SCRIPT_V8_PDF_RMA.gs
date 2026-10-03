@@ -1016,37 +1016,46 @@ function generarPresupuestoDescargable() {
     }
 
     Logger.log("\n🖨️ ════════════════════════════════════════════════════════");
-    Logger.log("🖨️ Generando Presupuesto Descargable: " + nombreOportunidad);
+    Logger.log("🖨️ INICIANDO: Generar Presupuesto Descargable");
+    Logger.log("🖨️ Oportunidad: " + nombreOportunidad);
     Logger.log("🖨️ ════════════════════════════════════════════════════════");
 
     // Obtener diagnósticos de la oportunidad
+    Logger.log("🖨️ PASO 1: Buscando diagnósticos...");
     const diagnosticos = obtenerDiagnosticosDeOportunidad(hojaDiag, nombreOportunidad);
 
     if (diagnosticos.length === 0) {
-      ui.alert("❌ No se encontraron diagnósticos para:\n" + nombreOportunidad);
+      Logger.log("❌ NO se encontraron diagnósticos");
+      ui.alert("❌ No se encontraron diagnósticos para:\n" + nombreOportunidad + "\n\nVerifica que el nombre sea exacto.");
       return;
     }
 
     Logger.log("✅ Diagnósticos encontrados: " + diagnosticos.length);
 
     // Agrupar por silla y calcular totales
+    Logger.log("🖨️ PASO 2: Agrupando por silla...");
     const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
     const totalGeneral = calcularTotalGeneral(silasDatos);
     const cliente = diagnosticos[0].cliente;
 
     Logger.log("✅ Sillas encontradas: " + silasDatos.length);
+    Logger.log("✅ Cliente: " + cliente);
+    Logger.log("✅ Total General: " + totalGeneral);
 
     // Generar PDF (esto crea un documento en Google Drive)
+    Logger.log("🖨️ PASO 3: Generando PDF...");
     const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
 
     if (!urlPDF) {
-      ui.alert("❌ Error generando PDF");
+      Logger.log("❌ FALLO en generarPDFDiagnosticos()");
+      ui.alert("❌ Error generando PDF\n\nRevisa la consola (Extensions > Apps Script > Executions) para ver detalles del error.");
       return;
     }
 
-    Logger.log("✅ PDF Generado: " + urlPDF);
+    Logger.log("✅ PDF Generado exitosamente");
 
     // Mostrar mensaje de éxito con el link
+    Logger.log("🖨️ PASO 4: Mostrando resultado al usuario...");
     ui.alert(
       "✅ PRESUPUESTO GENERADO\n\n" +
       "Oportunidad: " + nombreOportunidad + "\n" +
@@ -1059,12 +1068,14 @@ function generarPresupuestoDescargable() {
     );
 
     Logger.log("🖨️ ════════════════════════════════════════════════════════");
-    Logger.log("✅ PRESUPUESTO DESCARGABLE COMPLETADO");
+    Logger.log("✅ PRESUPUESTO DESCARGABLE COMPLETADO EXITOSAMENTE");
     Logger.log("🖨️ ════════════════════════════════════════════════════════\n");
 
   } catch (e) {
-    Logger.log("❌ Error en generarPresupuestoDescargable(): " + e.toString());
-    SpreadsheetApp.getUi().alert("❌ Error: " + e.toString());
+    Logger.log("❌ ERROR FATAL en generarPresupuestoDescargable():");
+    Logger.log("❌ Mensaje: " + e.toString());
+    Logger.log("❌ Stack: " + e.stack);
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.toString() + "\n\nRevisa los logs para más detalles.");
   }
 }
 
