@@ -1770,7 +1770,7 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
     Logger.log("\n🖨️ ═══════════════════════════════════════════════════════");
-    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V9 OPTIMIZADO");
+    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V9 CON SLIDES");
     Logger.log("🖨️ Oportunidad: " + nombreOportunidad);
     Logger.log("🖨️ Cliente: " + cliente);
     Logger.log("🖨️ Sillas: " + silasDatos.length);
@@ -1781,55 +1781,70 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       return null;
     }
 
-    // Crear documento con nombre único
+    // Crear presentación Slides con nombre único
     const ahora = new Date();
     const timestamp = ahora.getFullYear() + "-" + String(ahora.getMonth() + 1).padStart(2, '0') + "-" + String(ahora.getDate()).padStart(2, '0');
     const nombreDoc = "COTIZACION_" + nombreOportunidad.substring(0, 25).replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp;
 
-    Logger.log("🖨️ PASO 1: Creando Google Doc con orientación Horizontal...");
+    Logger.log("🖨️ PASO 1: Creando Google Slides con orientación LANDSCAPE...");
     Logger.log("🖨️ Nombre: " + nombreDoc);
-    const doc = DocumentApp.create(nombreDoc);
-    const body = doc.getBody();
-    body.clear();
 
-    // Configurar márgenes más pequeños para Letter Horizontal
-    body.setMarginTop(18);
-    body.setMarginBottom(18);
-    body.setMarginLeft(20);
-    body.setMarginRight(20);
+    const presentacion = SlidesApp.create(nombreDoc);
+    presentacion.getPageSetup().setPageSize(SlidesApp.PageSize.LETTER).setOrientation(SlidesApp.Orientation.LANDSCAPE);
+    Logger.log("✅ Orientación LANDSCAPE configurada");
 
-    // Intentar configurar orientación (Letter Landscape)
-    try {
-      body.setPageSize(DocumentApp.PageSize.LETTER_LANDSCAPE);
-      Logger.log("✅ Orientación establecida: Letter Landscape");
-    } catch (e) {
-      Logger.log("⚠️ No se pudo configurar orientación landscape, continuando con defaults");
-    }
+    const slide = presentacion.getSlides()[0];
+    const Inches = SlidesApp.Inches;
+    const Pt = SlidesApp.Pt;
 
-    // Encabezado simplificado (removido: setWidth no existe en DocumentApp)
-    const logoText = body.appendParagraph("EYM OFICINAS");
-    logoText.setFontSize(10);
-    logoText.setBold(true);
+    // ENCABEZADO
+    let yPos = 0.3;
 
-    const titulo = body.appendParagraph("COTIZACIÓN DE REPARACIÓN DE SILLAS");
-    titulo.setFontSize(10);
-    titulo.setBold(true);
-    titulo.setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+    // Logo/Nombre EYM
+    const logoShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(2), Inches(0.4));
+    const logoText = logoShape.getText();
+    logoText.setText("EYM OFICINAS");
+    logoText.getStyle().setFontSize(Pt(11));
+    logoText.getStyle().setBold(true);
+    yPos += 0.5;
 
-    const cliente_info = body.appendParagraph("CLIENTE: " + cliente);
-    cliente_info.setFontSize(8);
+    // Título
+    const tituloShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.4));
+    const tituloText = tituloShape.getText();
+    tituloText.setText("COTIZACIÓN DE REPARACIÓN DE SILLAS");
+    tituloText.getStyle().setFontSize(Pt(11));
+    tituloText.getStyle().setBold(true);
+    yPos += 0.5;
 
-    const fecha_info = body.appendParagraph("FECHA: " + ahora.toLocaleDateString("es-CO"));
-    fecha_info.setFontSize(8);
+    // Cliente
+    const clienteShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.25));
+    const clienteText = clienteShape.getText();
+    clienteText.setText("CLIENTE: " + cliente);
+    clienteText.getStyle().setFontSize(Pt(8));
+    yPos += 0.3;
 
-    const referencia_info = body.appendParagraph("Referencia: " + nombreOportunidad);
-    referencia_info.setFontSize(8);
-    referencia_info.setBold(true);
+    // Fecha
+    const fechaShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.25));
+    const fechaText = fechaShape.getText();
+    fechaText.setText("FECHA: " + ahora.toLocaleDateString("es-CO"));
+    fechaText.getStyle().setFontSize(Pt(8));
+    yPos += 0.3;
 
-    body.appendParagraph("");
+    // Referencia
+    const refShape = slide.insertTextBox(Inches(0.3), Inches(yPos), Inches(9.4), Inches(0.25));
+    const refText = refShape.getText();
+    refText.setText("Referencia: " + nombreOportunidad);
+    refText.getStyle().setFontSize(Pt(8));
+    refText.getStyle().setBold(true);
+    yPos += 0.5;
 
-    // Tabla principal con datos consolidados - 11 COLUMNAS EXACTAS
-    Logger.log("🖨️ PASO 2: Creando tabla con datos consolidados (11 columnas)...");
+    // TABLA DE DATOS - 11 COLUMNAS
+    Logger.log("🖨️ PASO 2: Creando tabla con 11 columnas...");
+
+    const numFilas = silasDatos.length + 2;
+    const numColumnas = 11;
+
+    // Preparar datos para tabla
     const tablaDatos = [
       ["#", "Nº Temp", "Tipo", "Color", "Ubicación", "Partes y Servicios", "Valor Partes y M.O", "Valor Otros Servicios", "Valor Tapicería", "Tapicería", "Valor Total"]
     ];
@@ -1879,78 +1894,58 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral2)
     ]);
 
-    // Crear tabla fila por fila (método robusto para Google Docs)
-    const tabla = body.appendTable();
+    // Insertar tabla en Slides
+    const tabla = slide.insertTable(tablaDatos.length, numColumnas, Inches(0.3), Inches(yPos), Inches(9.4), Inches(5.5));
 
-    // Agregar encabezado
-    const encabezadoTableRow = tabla.appendTableRow();
-    for (let cell of tablaDatos[0]) {
-      encabezadoTableRow.appendTableCell(String(cell));
-    }
+    // Llenar tabla
+    for (let r = 0; r < tablaDatos.length; r++) {
+      for (let c = 0; c < numColumnas; c++) {
+        const celda = tabla.getCell(r, c);
+        const texto = celda.getText();
+        texto.setText(tablaDatos[r][c] || "");
 
-    // Agregar filas de datos
-    for (let i = 1; i < tablaDatos.length; i++) {
-      const dataRow = tabla.appendTableRow();
-      for (let cell of tablaDatos[i]) {
-        dataRow.appendTableCell(String(cell));
-      }
-    }
+        const estilo = texto.getStyle();
+        estilo.setFontSize(Pt(7.5));
 
-    // Formatear encabezado (fila 0) - FUENTES PEQUEÑAS
-    for (let i = 0; i < tabla.getRow(0).getNumCells(); i++) {
-      const celda = tabla.getRow(0).getCell(i);
-      const parrafo = celda.getChild(0).asParagraph();
-      parrafo.setFontSize(8);
-      parrafo.setBold(true);
-      parrafo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-      celda.setBackgroundColor("#1a73e8"); // Azul
-      parrafo.setForegroundColor("#FFFFFF"); // Texto blanco
-    }
+        // Encabezado: azul con texto blanco
+        if (r === 0) {
+          estilo.setBold(true);
+          estilo.setForegroundColor("#FFFFFF");
+          celda.setFillColor("#1a73e8");
+        }
+        // Fila de totales: amarillo
+        else if (r === tablaDatos.length - 1) {
+          estilo.setBold(true);
+          celda.setFillColor("#FFF2CC");
+        }
 
-    // Formatear filas de datos (8pt)
-    for (let r = 1; r < tabla.getNumRows() - 1; r++) {
-      for (let c = 0; c < tabla.getRow(r).getNumCells(); c++) {
-        const celda = tabla.getRow(r).getCell(c);
-        const parrafo = celda.getChild(0).asParagraph();
-        parrafo.setFontSize(8);
-        if (c >= 5) {
-          parrafo.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+        // Alineación: números a la derecha
+        if (c >= 6 && r > 0) {
+          texto.getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.END);
+        } else {
+          texto.getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.START);
         }
       }
     }
 
-    // Formatear fila de totales
-    const ultimaFila = tabla.getRow(tabla.getNumRows() - 1);
-    for (let i = 0; i < ultimaFila.getNumCells(); i++) {
-      const celda = ultimaFila.getCell(i);
-      const parrafo = celda.getChild(0).asParagraph();
-      parrafo.setFontSize(8);
-      parrafo.setBold(true);
-      parrafo.setAlignment(i >= 5 ? DocumentApp.HorizontalAlignment.RIGHT : DocumentApp.HorizontalAlignment.LEFT);
-      celda.setBackgroundColor("#FFF2CC"); // Amarillo claro
-    }
+    Logger.log("🖨️ PASO 3: Guardando presentación...");
+    presentacion.saveAndClose();
 
-    body.appendParagraph("");
+    // Obtener URL de la presentación
+    const presId = presentacion.getId();
+    const presUrl = "https://docs.google.com/presentation/d/" + presId + "/edit";
 
-    // Nota al pie (fuente pequeña)
-    const nota = body.appendParagraph("NOTA: Los valores mostrados son antes de impuestos (IVA 19% y Retención según aplique). Los detalles finales se especificarán en la RMA oficial.");
-    nota.setFontSize(7);
-    nota.setItalic(true);
-    nota.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    // Generar PDF desde la presentación
+    Logger.log("🖨️ PASO 4: Generando PDF desde Slides...");
+    const pdfUrl = "https://docs.google.com/presentation/d/" + presId + "/export/pdf";
 
-    Logger.log("🖨️ PASO 3: Guardando documento...");
-    doc.saveAndClose();
-
-    // Obtener URL del documento
-    const docId = doc.getId();
-    const docUrl = "https://docs.google.com/document/d/" + docId + "/edit";
-
-    Logger.log("✅ PASO 4: Documento creado exitosamente");
-    Logger.log("✅ URL: " + docUrl);
+    Logger.log("✅ PASO 5: Presentación y PDF creados exitosamente");
+    Logger.log("✅ URL Presentación: " + presUrl);
+    Logger.log("✅ URL PDF: " + pdfUrl);
     Logger.log("✅ CARACTERÍSTICAS IMPLEMENTADAS:");
-    Logger.log("   ✓ Orientación: Horizontal (Landscape)");
+    Logger.log("   ✓ Orientación: LANDSCAPE (Horizontal) - REAL");
     Logger.log("   ✓ Tamaño: Letter");
-    Logger.log("   ✓ Fuentes: 8pt (datos), 10pt (título), 7pt (nota)");
+    Logger.log("   ✓ Fuentes: 7.5pt (datos), 11pt (título), 8pt (cliente/fecha)");
     Logger.log("   ✓ Logo EYM: Superior izquierda");
     Logger.log("   ✓ Referencia: Incluida bajo cliente y fecha");
     Logger.log("   ✓ COLUMNAS EXACTAS (11):");
@@ -1965,9 +1960,11 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("      9. Valor Tapicería (V)");
     Logger.log("      10. Tapicería (Q+R consolidado)");
     Logger.log("      11. Valor Total (X)");
+    Logger.log("   ✓ M.O y Mantenimiento General: SIEMPRE INCLUIDO");
     Logger.log("🖨️ ═══════════════════════════════════════════════════════\n");
 
-    return docUrl;
+    // Retornar URL del PDF (para descargar directamente)
+    return pdfUrl;
 
   } catch (e) {
     Logger.log("\n❌ ════════════════════════════════════════════════════════");
