@@ -1598,20 +1598,30 @@ function buscarProductoOdooPorCodigo(codigo, creds) {
 
 function buscarOportunidadOdoo(nombreOportunidad, creds) {
   try {
-    // Buscar en sale.order (Órdenes de Venta/Oportunidades)
-    const resultado = llamarOdooXMLRPC("sale.order", "search", [[["name", "ilike", nombreOportunidad]]], creds);
+    // PASO 1: Buscar OPORTUNIDADES específicamente en crm.lead (type='opportunity')
+    Logger.log("🔍 Buscando oportunidad en CRM (type='opportunity'): " + nombreOportunidad);
+
+    // Filtro: type = 'opportunity' AND name contiene nombreOportunidad
+    const dominio = [
+      ["type", "=", "opportunity"],
+      ["name", "ilike", nombreOportunidad]
+    ];
+
+    const resultado = llamarOdooXMLRPC("crm.lead", "search", [dominio], creds);
     if (resultado && resultado.length > 0) {
-      Logger.log("✅ Oportunidad/Sale.Order encontrada: ID " + resultado[0]);
+      Logger.log("✅ Oportunidad encontrada: ID " + resultado[0]);
       return resultado[0];
     }
 
-    // Si no encuentra en sale.order, buscar en crm.lead (Leads/Oportunidades)
-    const resultadoLead = llamarOdooXMLRPC("crm.lead", "search", [[["name", "ilike", nombreOportunidad]]], creds);
-    if (resultadoLead && resultadoLead.length > 0) {
-      Logger.log("✅ Oportunidad/Lead encontrada: ID " + resultadoLead[0]);
-      return resultadoLead[0];
+    // PASO 2: Si no encuentra, intentar búsqueda parcial
+    Logger.log("⚠️ Oportunidad exacta no encontrada, buscando en sale.order...");
+    const resultadoOrder = llamarOdooXMLRPC("sale.order", "search", [[["name", "ilike", nombreOportunidad]]], creds);
+    if (resultadoOrder && resultadoOrder.length > 0) {
+      Logger.log("✅ Sale.Order encontrada: ID " + resultadoOrder[0]);
+      return resultadoOrder[0];
     }
 
+    Logger.log("❌ Oportunidad NO encontrada en CRM ni en Sale.Order");
     return null;
   } catch (e) {
     Logger.log("Error buscando oportunidad: " + e);
