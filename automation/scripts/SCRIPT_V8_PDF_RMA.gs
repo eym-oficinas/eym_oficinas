@@ -1559,9 +1559,8 @@ function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, s
     // PASO 3: Crear Repair Order (módulo Repair nativo de Odoo v14)
     const rmaData = {
       partner_id: clienteOdooId,
-      description: "Reparacion de sillas - Oportunidad: " + nombreOportunidad + " | EyM: " + numeroEYM,
+      name: "RMA-" + numeroEYM,
       state: "draft",
-      origin: "RMA-" + numeroEYM,
       location_id: 1  // Stock location (por defecto)
     };
 
