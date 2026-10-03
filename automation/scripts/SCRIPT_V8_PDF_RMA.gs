@@ -95,12 +95,19 @@ function obtenerUltimaRespuestaProcesada() {
   try {
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
     const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
-    if (!hojaDiag) return 1;
+    if (!hojaDiag) {
+      Logger.log("⚠️ No se pudo abrir DIAGNOSTICOS_2026");
+      return 1;
+    }
 
     const celda = hojaDiag.getRange(CONFIG.CELDA_CONTROL);
     const valor = celda.getValue();
-    return valor ? parseInt(valor) : 1;
+    const resultado = valor ? parseInt(valor) : 1;
+
+    Logger.log("📖 Obtenido de " + CONFIG.CELDA_CONTROL + ": " + resultado);
+    return resultado;
   } catch (e) {
+    Logger.log("⚠️ Error obteniendo control: " + e);
     return 1;
   }
 }
@@ -111,9 +118,13 @@ function guardarUltimaRespuestaProcesada(numRespuesta) {
     const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
     if (!hojaDiag) return;
 
-    hojaDiag.getRange(CONFIG.CELDA_CONTROL).setValue(numRespuesta);
+    const celda = hojaDiag.getRange(CONFIG.CELDA_CONTROL);
+    celda.setValue(numRespuesta);
+    SpreadsheetApp.flush(); // Forzar la escritura inmediatamente
+
+    Logger.log("💾 Guardado en " + CONFIG.CELDA_CONTROL + ": " + numRespuesta);
   } catch (e) {
-    Logger.log("Error guardando control: " + e);
+    Logger.log("❌ Error guardando control: " + e);
   }
 }
 
@@ -148,7 +159,9 @@ function procesarRespuestaFormulario() {
     Logger.log("🔍 Diagnósticos existentes: " + datoDiagnosticos.length);
 
     // ⚠️ CRÍTICO: Solo procesar NUEVAS respuestas desde la última procesada
+    // Pero hacer validación adicional de duplicados por seguridad
     for (let r = ultimaProcesada + 1; r <= ultFilaResp; r++) {
+      Logger.log("\n📌 Validando respuesta #" + r);
       const resp = hojaResp.getRange(r, 1, 1, 34).getValues()[0];
 
       const fechaResp = resp[1];
@@ -157,23 +170,29 @@ function procesarRespuestaFormulario() {
 
       let yaExiste = false;
 
-      // Búsqueda mejorada: comparar timestamp + cliente + tipo de silla
+      // Búsqueda estricta: comparar cliente + tipo de silla + color (identificadores únicos)
+      const colorResp = resp[7] || "";
+
       for (let diagRow of datoDiagnosticos) {
-        const fechaDiag = diagRow[0]; // Columna A (0-indexed)
         const clienteDiag = diagRow[2]; // Columna C
         const tipoSillaDiag = diagRow[3]; // Columna D
+        const colorDiag = diagRow[6]; // Columna G (color)
 
-        // Validación: mismo cliente + mismo tipo de silla + timestamp muy cercano (± 5 minutos)
-        const diferenciaTiempo = Math.abs(new Date(fechaResp) - new Date(fechaDiag));
-
-        if (clienteResp === clienteDiag && tipoSillaResp === tipoSillaDiag && diferenciaTiempo < 300000) {
-          Logger.log("⚠️ Respuesta duplicada detectada: " + clienteResp + " - " + tipoSillaResp + " (timestamp diff: " + (diferenciaTiempo / 1000) + "s)");
+        // Validación ESTRICTA: cliente + tipo de silla + color (no confiar solo en tiempo)
+        if (clienteResp === clienteDiag && tipoSillaResp === tipoSillaDiag && colorResp === colorDiag) {
+          Logger.log("⚠️ DUPLICADO DETECTADO: " + clienteResp + " | " + tipoSillaResp + " | " + colorResp);
+          Logger.log("⚠️ Este registro ya existe en DIAGNOSTICOS_2026, saltando...");
           yaExiste = true;
           break;
         }
       }
 
-      if (yaExiste) continue;
+      if (yaExiste) {
+        Logger.log("⏭️ Respuesta #" + r + " IGNORADA (ya existe)");
+        continue;
+      }
+
+      Logger.log("✅ Respuesta #" + r + " es NUEVA, procesando...");
 
       const componentes = [];
       if (resp[14]) componentes.push(resp[14]);
@@ -223,6 +242,7 @@ function procesarRespuestaFormulario() {
       hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
 
       calcularSubtotales(hojaDiag, newFila);
+      validarYResaltarColumnaU(hojaDiag, newFila);
 
       procesadas++;
     }
@@ -234,6 +254,26 @@ function procesarRespuestaFormulario() {
 
   } catch (e) {
     Logger.log("❌ ERROR: " + e);
+  }
+}
+
+function validarYResaltarColumnaU(hoja, fila) {
+  try {
+    // Columna O = 15, Columna P = 16, Columna U = 21
+    const valorO = hoja.getRange(fila, 15).getValue() || "";
+    const valorP = hoja.getRange(fila, 16).getValue() || "";
+    const celdaU = hoja.getRange(fila, 21);
+
+    // Si O o P tienen contenido, resaltar U en amarillo
+    if (valorO || valorP) {
+      celdaU.setBackground("#FFFF00"); // Amarillo
+      celdaU.setFontColor("#000000"); // Texto negro para contrastar
+      Logger.log("✅ Fila " + fila + ": Columna U resaltada en amarillo (O o P tienen contenido)");
+    } else {
+      celdaU.setBackground("#FFFFFF"); // Blanco si no hay contenido
+    }
+  } catch (e) {
+    Logger.log("⚠️ Error validando columna U: " + e);
   }
 }
 
@@ -1214,7 +1254,14 @@ function onEdit(e) {
       return;
     }
 
-    // Solo procesar si se cambió columna AA (ESTADO_APROBACION - columna 27)
+    // VALIDACIÓN 1: Si se editó columna O o P, validar y resaltar U
+    if (columna === 15 || columna === 16) {
+      Logger.log("🟣 Se editó columna " + (columna === 15 ? "O" : "P") + " - Validando columna U");
+      validarYResaltarColumnaU(hoja, fila);
+      return;
+    }
+
+    // VALIDACIÓN 2: Solo procesar si se cambió columna AA (ESTADO_APROBACION - columna 27)
     if (columna !== 27) {
       Logger.log("🟣 ⊘ Columna " + columna + " no es AA (27), ignorando");
       return;
