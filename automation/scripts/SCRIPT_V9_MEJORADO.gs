@@ -1894,8 +1894,8 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "$" + formatearNumero(totalGeneral2)
     ]);
 
-    // Insertar tabla en Slides
-    const tabla = slide.insertTable(tablaDatos.length, numColumnas, Inches(0.3), Inches(yPos), Inches(16.4), Inches(5.5));
+    // Insertar tabla en Slides (altura aumentada para que el texto se ajuste en múltiples renglones)
+    const tabla = slide.insertTable(tablaDatos.length, numColumnas, Inches(0.3), Inches(yPos), Inches(16.4), Inches(8));
 
     // Llenar tabla
     for (let r = 0; r < tablaDatos.length; r++) {
@@ -1905,12 +1905,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
         texto.setText(tablaDatos[r][c] || "");
 
         const estilo = texto.getStyle();
-        // Columnas de texto (5, 9) usan 6.5pt; otras usan 7pt
-        if (c === 5 || c === 9) {
-          estilo.setFontSize(Pt(6.5));
-        } else {
-          estilo.setFontSize(Pt(7));
-        }
+        estilo.setFontSize(Pt(8));
 
         // Encabezado: azul con texto blanco
         if (r === 0) {
