@@ -2491,7 +2491,7 @@ function probarTodosLosMetodos() {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("EYM v8.0")
+  SpreadsheetApp.getUi().createMenu("EYM v9.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
