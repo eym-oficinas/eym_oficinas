@@ -998,30 +998,55 @@ function finalizarOportunidad() {
 
     Logger.log("Finalizando: " + nombreOportunidad);
 
-    const diagnosticos = obtenerDiagnosticosDeOportunidad(hojaDiag, nombreOportunidad);
-    if (diagnosticos.length === 0) {
-      ui.alert("No se encontraron diagnosticos para: " + nombreOportunidad);
+    const resultadoFinal = procesarOportunidadCompleta(hojaDiag, nombreOportunidad, true);
+
+    if (!resultadoFinal.exito) {
+      ui.alert("❌ ERROR:\n\n" + resultadoFinal.error);
       return;
     }
+
+    ui.alert(resultadoFinal.mensaje);
+
+  } catch (e) {
+    Logger.log("Error: " + e);
+    SpreadsheetApp.getUi().alert("ERROR: " + e.toString());
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// NUEVA FUNCIÓN: PROCESAR OPORTUNIDAD COMPLETA
+// Consolida todo el flujo: RMA + PDF + Adjuntar
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta = true) {
+  try {
+    Logger.log("🚀 Iniciando procesamiento completo de oportunidad: " + nombreOportunidad);
+
+    // PASO 1: OBTENER DIAGNÓSTICOS
+    const diagnosticos = obtenerDiagnosticosDeOportunidad(hojaDiag, nombreOportunidad);
+    if (diagnosticos.length === 0) {
+      return { exito: false, error: "No se encontraron diagnósticos para: " + nombreOportunidad };
+    }
+
+    Logger.log("✅ Diagnósticos encontrados: " + diagnosticos.length);
 
     const cliente = diagnosticos[0].cliente;
     const numeroEYM = diagnosticos[0].numeroEYM;
     const productosConsolidados = consolidarProductosTotal(diagnosticos, hojaDiag);
     const serviciosConsolidados = consolidarServiciosTotal(diagnosticos, hojaDiag);
 
-    // PASO 1: CREAR RMA
+    // PASO 2: CREAR RMA EN ODOO
     Logger.log("📝 Creando RMA en Odoo...");
     const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, serviciosConsolidados, nombreOportunidad);
 
     if (!resultadoRMA.exito) {
-      ui.alert("❌ ERROR:\n\n" + resultadoRMA.error);
-      return;
+      return { exito: false, error: resultadoRMA.error };
     }
 
     Logger.log("✅ RMA creada: " + resultadoRMA.referenciaRMA);
-    ui.alert("✅ OPORTUNIDAD ENCONTRADA en Odoo\n✅ RMA Creada: " + resultadoRMA.referenciaRMA + "\n\nProcediendo con productos, servicios y PDF...");
 
-    // PASO 2: ESCRIBIR RMA EN COLUMNA AC
+    // PASO 3: ESCRIBIR RMA CON HYPERLINK EN COLUMNA AC
+    Logger.log("🔗 Escribiendo RMA link en DIAGNOSTICOS_2026...");
     for (let diag of diagnosticos) {
       hojaDiag.getRange(diag.fila, 29).setValue(resultadoRMA.referenciaRMA);
       hojaDiag.getRange(diag.fila, 29).setFormula('=HYPERLINK("' + resultadoRMA.linkRMA + '","' + resultadoRMA.referenciaRMA + '")');
@@ -1029,8 +1054,8 @@ function finalizarOportunidad() {
       hojaDiag.getRange(diag.fila, 29).setFontLine("underline");
     }
 
-    // PASO 3: GENERAR PDF Y ADJUNTAR
-    Logger.log("📄 Generando PDF por silla...");
+    // PASO 4: GENERAR PDF CONSOLIDADO
+    Logger.log("📄 Generando PDF consolidado por silla...");
     const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
     const totalGeneral = calcularTotalGeneral(silasDatos);
 
@@ -1038,27 +1063,125 @@ function finalizarOportunidad() {
 
     if (!urlPDF) {
       Logger.log("⚠️ No se pudo generar PDF, pero RMA fue creada");
-      ui.alert("✅ RMA CREADA: " + resultadoRMA.referenciaRMA + "\n\n⚠️ Error generando PDF (pero puedes intentar manualmente después)\n\nLink RMA: " + resultadoRMA.linkRMA);
-      return;
+      return {
+        exito: true,
+        rmaCreada: true,
+        pdfError: true,
+        referenciaRMA: resultadoRMA.referenciaRMA,
+        linkRMA: resultadoRMA.linkRMA,
+        mensaje: "✅ RMA CREADA: " + resultadoRMA.referenciaRMA + "\n\n⚠️ Error generando PDF (pero la RMA está lista en Odoo)\n\nLink RMA: " + resultadoRMA.linkRMA
+      };
     }
 
     Logger.log("✅ PDF generado: " + urlPDF);
 
-    // PASO 4: ADJUNTAR PDF A RMA EN ODOO
+    // PASO 5: ADJUNTAR PDF A RMA EN ODOO
     Logger.log("📎 Adjuntando PDF a RMA en Odoo...");
     const resultadoAdjunto = adjuntarPDFaRMA(resultadoRMA.numeroRMA, urlPDF, nombreOportunidad);
 
-    if (resultadoAdjunto.exito) {
-      Logger.log("✅ PDF adjunto a RMA en Odoo");
-      ui.alert("✅ COMPLETADO\n\nRMA: " + resultadoRMA.referenciaRMA + "\n✅ PDF generado y adjunto\n\nLink RMA: " + resultadoRMA.linkRMA);
-    } else {
+    if (!resultadoAdjunto.exito) {
       Logger.log("⚠️ Error adjuntando PDF: " + resultadoAdjunto.error);
-      ui.alert("✅ RMA CREADA: " + resultadoRMA.referenciaRMA + "\n⚠️ PDF generado pero error al adjuntar\n\nLink RMA: " + resultadoRMA.linkRMA);
+      return {
+        exito: true,
+        rmaCreada: true,
+        pdfGenerado: true,
+        adjuntoError: true,
+        referenciaRMA: resultadoRMA.referenciaRMA,
+        linkRMA: resultadoRMA.linkRMA,
+        mensaje: "✅ RMA CREADA: " + resultadoRMA.referenciaRMA + "\n✅ PDF generado\n\n⚠️ Error al adjuntar PDF a RMA (pero el PDF está en Drive)\n\nLink RMA: " + resultadoRMA.linkRMA
+      };
+    }
+
+    Logger.log("✅ PDF adjunto a RMA en Odoo");
+
+    return {
+      exito: true,
+      rmaCreada: true,
+      pdfGenerado: true,
+      adjunto: true,
+      referenciaRMA: resultadoRMA.referenciaRMA,
+      linkRMA: resultadoRMA.linkRMA,
+      urlPDF: urlPDF,
+      mensaje: "✅ COMPLETADO\n\nRMA: " + resultadoRMA.referenciaRMA + "\n✅ Productos y servicios agregados\n✅ PDF generado y adjunto\n\nLink RMA: " + resultadoRMA.linkRMA
+    };
+
+  } catch (e) {
+    Logger.log("❌ Error en procesarOportunidadCompleta: " + e.toString());
+    return { exito: false, error: e.toString() };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// TRIGGER AUTOMÁTICO: AL CAMBIAR ESTADO A "APROBADO"
+// Se ejecuta cada vez que hay cambios en la hoja DIAGNOSTICOS_2026
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function onEdit(e) {
+  try {
+    const range = e.range;
+    const hoja = range.getSheet();
+    const hojaName = hoja.getName();
+
+    // Solo procesar si es la hoja DIAGNOSTICOS_2026
+    if (hojaName !== "DIAGNOSTICOS_2026") {
+      return;
+    }
+
+    // Solo procesar si se cambió la columna AE (ESTADO_APROBACION - columna 31)
+    const columnAE = 31;
+    if (range.getColumn() !== columnAE) {
+      return;
+    }
+
+    const nuevoValor = range.getValue();
+    const fila = range.getRow();
+
+    Logger.log("🔄 onEdit detectado en fila " + fila + ", columna AE: " + nuevoValor);
+
+    // Si es "Aprobado", procesar automáticamente
+    if (nuevoValor && nuevoValor.toString().toLowerCase().includes("aprobado")) {
+      Logger.log("✅ Detectado cambio a 'Aprobado' en fila " + fila);
+      procesarAprobacionAutomatica(hoja, fila);
     }
 
   } catch (e) {
-    Logger.log("Error: " + e);
-    SpreadsheetApp.getUi().alert("ERROR: " + e.toString());
+    Logger.log("⚠️ Error en onEdit: " + e.toString());
+  }
+}
+
+function procesarAprobacionAutomatica(hoja, fila) {
+  try {
+    Logger.log("🚀 Procesando aprobación automática en fila " + fila);
+
+    // Obtener datos de la fila
+    const datos = hoja.getRange(fila, 1, 1, 31).getValues()[0];
+
+    // Extraer columnas necesarias
+    const numeroEYM = datos[4] || ""; // Columna E
+    const nombreOportunidad = datos[1] || ""; // Columna B
+    const cliente = datos[2] || ""; // Columna C
+
+    if (!nombreOportunidad) {
+      Logger.log("⚠️ No hay nombre de oportunidad en fila " + fila);
+      return;
+    }
+
+    Logger.log("📋 Datos extraídos: EYM=" + numeroEYM + ", Oportunidad=" + nombreOportunidad);
+
+    // Procesar la oportunidad completa
+    const resultado = procesarOportunidadCompleta(hoja, nombreOportunidad, false);
+
+    if (resultado.exito) {
+      Logger.log("✅ Oportunidad procesada automáticamente");
+      Logger.log("   RMA: " + resultado.referenciaRMA);
+      Logger.log("   PDF: " + (resultado.pdfGenerado ? "✅" : "❌"));
+      Logger.log("   Adjunto: " + (resultado.adjunto ? "✅" : "❌"));
+    } else {
+      Logger.log("❌ Error procesando oportunidad: " + resultado.error);
+    }
+
+  } catch (e) {
+    Logger.log("❌ Error en procesarAprobacionAutomatica: " + e.toString());
   }
 }
 
