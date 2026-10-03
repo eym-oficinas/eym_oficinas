@@ -1556,17 +1556,18 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
           tipoSilla: hoja.getRange(f, 4).getValue(),
           numeroEYM: hoja.getRange(f, 5).getValue(),
           numeroTemporal: hoja.getRange(f, 6).getValue(),
-          color: hoja.getRange(f, 8).getValue(),
-          ubicacion: hoja.getRange(f, 9).getValue(),
-          componentes: hoja.getRange(f, 14).getValue(),
-          otrosServicios: hoja.getRange(f, 15).getValue(),
-          tapiceriaAsiento: hoja.getRange(f, 17).getValue(),
-          tapiceriaEspaldar: hoja.getRange(f, 18).getValue(),
-          subtotalPartes: hoja.getRange(f, 20).getValue(),
-          subtotalServicios: hoja.getRange(f, 21).getValue(),
-          subtotalTapiceria: hoja.getRange(f, 22).getValue(),
-          subtotalMO: hoja.getRange(f, 23).getValue(),
-          totalPresupuesto: hoja.getRange(f, 24).getValue()
+          color: hoja.getRange(f, 11).getValue(),          // CORREGIDO: Columna K (11)
+          ubicacion: hoja.getRange(f, 12).getValue(),      // CORREGIDO: Columna L (12)
+          repuestos: hoja.getRange(f, 14).getValue(),      // Columna N (14)
+          otrosServicios: hoja.getRange(f, 15).getValue(), // Columna O (15)
+          observacionesEspeciales: hoja.getRange(f, 16).getValue(), // NUEVO: Columna P (16)
+          tapiceriaAsiento: hoja.getRange(f, 17).getValue(),      // Columna Q (17)
+          tapiceriaEspaldar: hoja.getRange(f, 18).getValue(),     // Columna R (18)
+          valorPartes: hoja.getRange(f, 20).getValue(),    // Columna T (20)
+          valorOtrosServicios: hoja.getRange(f, 21).getValue(),  // Columna U (21)
+          valorTapiceria: hoja.getRange(f, 22).getValue(), // Columna V (22)
+          valorMO: hoja.getRange(f, 23).getValue(),        // Columna W (23)
+          valorTotal: hoja.getRange(f, 24).getValue()      // Columna X (24)
         });
       }
     }
@@ -1591,22 +1592,72 @@ function agruparPorSilla(diagnosticos, hoja) {
         tipoSilla: diag.tipoSilla,
         color: diag.color,
         ubicacion: diag.ubicacion,
-        subtotalPartes: 0,
-        subtotalServicios: 0,
-        subtotalTapiceria: 0,
-        subtotalMO: 0,
-        total: 0
+        partesYServicios: consolidarPartesYServicios(diag),
+        tapiceria: consolidarTapiceria(diag),
+        valorPartesYMO: (diag.valorPartes || 0) + (diag.valorMO || 0),
+        valorOtrosServicios: diag.valorOtrosServicios || 0,
+        valorTapiceria: diag.valorTapiceria || 0,
+        valorTotal: diag.valorTotal || 0
       };
+    } else {
+      // Si hay múltiples filas para la misma silla, actualizar valores
+      silas[numTemp].valorPartesYMO = (diag.valorPartes || 0) + (diag.valorMO || 0);
+      silas[numTemp].valorOtrosServicios = diag.valorOtrosServicios || 0;
+      silas[numTemp].valorTapiceria = diag.valorTapiceria || 0;
+      silas[numTemp].valorTotal = diag.valorTotal || 0;
     }
-
-    silas[numTemp].subtotalPartes = diag.subtotalPartes || 0;
-    silas[numTemp].subtotalTapiceria = diag.subtotalTapiceria || 0;
-    silas[numTemp].subtotalServicios = diag.subtotalServicios || 0;
-    silas[numTemp].subtotalMO = diag.subtotalMO || 0;
-    silas[numTemp].total = diag.totalPresupuesto || 0;
   }
 
   return Object.values(silas);
+}
+
+// Consolidar Partes y Servicios: N + O + P + "M.O y mantenimiento General"
+function consolidarPartesYServicios(diag) {
+  const partes = [];
+
+  if (diag.repuestos) {
+    partes.push(diag.repuestos.toString().trim());
+  }
+  if (diag.otrosServicios) {
+    partes.push(diag.otrosServicios.toString().trim());
+  }
+  if (diag.observacionesEspeciales) {
+    partes.push(diag.observacionesEspeciales.toString().trim());
+  }
+
+  // SIEMPRE INCLUIR M.O y mantenimiento General
+  partes.push("M.O y mantenimiento general");
+
+  return partes.filter(p => p && p.length > 0).join(", ");
+}
+
+// Consolidar Tapicería con lógica especial
+function consolidarTapiceria(diag) {
+  const asiento = (diag.tapiceriaAsiento || "").toString().trim();
+  const espaldar = (diag.tapiceriaEspaldar || "").toString().trim();
+
+  // Si alguno contiene "Abollonado y Tapizado general", omitir el formato especial
+  if (asiento.toLowerCase().includes("abollonado y tapizado general") ||
+      espaldar.toLowerCase().includes("abollonado y tapizado general")) {
+    // Retornar solo el que tiene este texto
+    if (asiento.toLowerCase().includes("abollonado y tapizado general")) {
+      return asiento;
+    }
+    if (espaldar.toLowerCase().includes("abollonado y tapizado general")) {
+      return espaldar;
+    }
+  }
+
+  // Formato normal: "Asiento: X; Espaldar: Y"
+  const partes = [];
+  if (asiento) {
+    partes.push("Asiento: " + asiento);
+  }
+  if (espaldar) {
+    partes.push("Espaldar: " + espaldar);
+  }
+
+  return partes.join("; ");
 }
 
 function calcularTotalGeneral(silasDatos) {
@@ -1777,37 +1828,40 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
 
     body.appendParagraph("");
 
-    // Tabla principal con datos consolidados
-    Logger.log("🖨️ PASO 2: Creando tabla con datos consolidados...");
+    // Tabla principal con datos consolidados - 11 COLUMNAS EXACTAS
+    Logger.log("🖨️ PASO 2: Creando tabla con datos consolidados (11 columnas)...");
     const tablaDatos = [
-      ["#", "Nº Temp", "Tipo", "Color", "Ubicación", "Partes", "M.O y Mantenimiento", "Otros Servicios", "Tapicería Asiento", "Tapicería Espaldar", "TOTAL"]
+      ["#", "Nº Temp", "Tipo", "Color", "Ubicación", "Partes y Servicios", "Valor Partes y M.O", "Valor Otros Servicios", "Valor Tapicería", "Tapicería", "Valor Total"]
     ];
 
     let numSilla = 1;
+    let totalPartesYMO = 0, totalOtrosServ = 0, totalTapicTecho = 0, totalGeneral2 = 0;
+
     silasDatos.forEach(sila => {
+      const valPartesYMO = sila.valorPartesYMO || 0;
+      const valOtrosServ = sila.valorOtrosServicios || 0;
+      const valTapic = sila.valorTapiceria || 0;
+      const valTotal = sila.valorTotal || 0;
+
+      totalPartesYMO += valPartesYMO;
+      totalOtrosServ += valOtrosServ;
+      totalTapicTecho += valTapic;
+      totalGeneral2 += valTotal;
+
       tablaDatos.push([
         numSilla.toString(),
         sila.numeroTemporal || "-",
         sila.tipoSilla || "-",
         sila.color || "-",
         sila.ubicacion || "-",
-        "$" + formatearNumero(sila.subtotalPartes || 0),
-        "$" + formatearNumero(sila.subtotalMO || 0),
-        "$" + formatearNumero(sila.subtotalServicios || 0),
-        "$" + formatearNumero(sila.subtotalTapiceria || 0),
-        "-",
-        "$" + formatearNumero(sila.total || 0)
+        sila.partesYServicios || "-",
+        "$" + formatearNumero(valPartesYMO),
+        "$" + formatearNumero(valOtrosServ),
+        "$" + formatearNumero(valTapic),
+        sila.tapiceria || "-",
+        "$" + formatearNumero(valTotal)
       ]);
       numSilla++;
-    });
-
-    // Calcular totales
-    let totalPartes = 0, totalServicios = 0, totalTapiceria = 0, totalMO = 0;
-    silasDatos.forEach(sila => {
-      totalPartes += (sila.subtotalPartes || 0);
-      totalServicios += (sila.subtotalServicios || 0);
-      totalTapiceria += (sila.subtotalTapiceria || 0);
-      totalMO += (sila.subtotalMO || 0);
     });
 
     // Fila de totales
@@ -1817,12 +1871,12 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "",
       "",
       "",
-      "$" + formatearNumero(totalPartes),
-      "$" + formatearNumero(totalMO),
-      "$" + formatearNumero(totalServicios),
-      "$" + formatearNumero(totalTapiceria),
       "",
-      "$" + formatearNumero(totalGeneral)
+      "$" + formatearNumero(totalPartesYMO),
+      "$" + formatearNumero(totalOtrosServ),
+      "$" + formatearNumero(totalTapicTecho),
+      "",
+      "$" + formatearNumero(totalGeneral2)
     ]);
 
     // Crear tabla fila por fila (método robusto para Google Docs)
@@ -1899,8 +1953,18 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("   ✓ Fuentes: 8pt (datos), 10pt (título), 7pt (nota)");
     Logger.log("   ✓ Logo EYM: Superior izquierda");
     Logger.log("   ✓ Referencia: Incluida bajo cliente y fecha");
-    Logger.log("   ✓ Columnas: 11 (incluyendo 'M.O y Mantenimiento')");
-    Logger.log("   ✓ M.O y Mantenimiento General: SIEMPRE INCLUIDO");
+    Logger.log("   ✓ COLUMNAS EXACTAS (11):");
+    Logger.log("      1. # (Silla)");
+    Logger.log("      2. Nº Temp (columna F)");
+    Logger.log("      3. Tipo (columna D)");
+    Logger.log("      4. Color (columna K)");
+    Logger.log("      5. Ubicación (columna L)");
+    Logger.log("      6. Partes y Servicios (N+O+P+'M.O y mantenimiento general')");
+    Logger.log("      7. Valor Partes y M.O (T+W)");
+    Logger.log("      8. Valor Otros Servicios (U)");
+    Logger.log("      9. Valor Tapicería (V)");
+    Logger.log("      10. Tapicería (Q+R consolidado)");
+    Logger.log("      11. Valor Total (X)");
     Logger.log("🖨️ ═══════════════════════════════════════════════════════\n");
 
     return docUrl;
