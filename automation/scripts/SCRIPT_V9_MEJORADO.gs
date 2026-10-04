@@ -2116,6 +2116,7 @@ function resolverItemsBorradorEnOdoo(items, creds) {
 // Devuelve { exito, id, nombre, link, error, alarma, avisos }
 function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, creds) {
   const res = { exito: false, error: "", alarma: "", avisos: [] };
+  const avisos = [];
   try {
     // 1) Oportunidad EXACTA en CRM
     const op = buscarOportunidadOdoo(nombreOportunidad, creds);
@@ -2141,28 +2142,27 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
     // 2) Códigos del catálogo (col. C) y productos de Odoo
     const r = resolverItemsBorradorEnOdoo(borrador.items, creds);
     if (r.faltantes.length > 0) {
-      res.alarma = "No se creó la RMA. " + r.faltantes.join("; ");
-      return res;
+      avisos.push("Líneas NO cargadas (agregar a mano): " + r.faltantes.join("; "));
     }
+    const filasOk = r.filas.filter(x => x.prod);
 
-    // 3) El monto sin impuestos debe ser igual al subtotal del PDF ANTES de crear
+    // 3) Monto sin impuestos vs subtotal del PDF: si difiere se crea igual y se avisa
     let esperado = 0;
-    r.filas.forEach(x => { esperado += x.item.cant * (x.prod.list_price || 0); });
-    if (Math.abs(esperado - totalPDF) > 1) {
-      res.alarma = "No se creó la RMA: con los precios de Odoo el monto sin impuestos sería $" + formatearNumero(esperado) +
-        " y el PDF suma $" + formatearNumero(totalPDF) + " (dif. $" + formatearNumero(esperado - totalPDF) + "). Revisar precios.";
-      return res;
+    filasOk.forEach(x => { esperado += x.item.cant * (x.prod.list_price || 0); });
+    let avisoPrecio = false;
+    if (r.faltantes.length === 0 && Math.abs(esperado - totalPDF) > 1) {
+      avisoPrecio = true;
+      avisos.push("Con los precios de Odoo el monto sin impuestos es $" + formatearNumero(esperado) +
+        " y el PDF suma $" + formatearNumero(totalPDF) + " (dif. $" + formatearNumero(esperado - totalPDF) + "). Revisar precios.");
     }
 
-    // 4) Impuestos
+    // 4) Impuestos (si falta alguno se crea igual y se avisa)
     const imp = obtenerImpuestosRMA(totalPDF, creds);
     if (!imp.ivaId) {
-      res.alarma = "No se creó la RMA: no se encontró el impuesto '" + CONFIG.NOMBRE_IVA + "' en Odoo.";
-      return res;
+      avisos.push("No se encontró el impuesto '" + CONFIG.NOMBRE_IVA + "' en Odoo: líneas sin IVA.");
     }
     if (imp.aplicaRete && !imp.retId) {
-      res.alarma = "No se creó la RMA: el total supera $" + formatearNumero(CONFIG.LIMITE_RETEFUENTE) + " pero no se encontró el impuesto '" + CONFIG.NOMBRE_RETEFUENTE + "' en Odoo.";
-      return res;
+      avisos.push("El total supera $" + formatearNumero(CONFIG.LIMITE_RETEFUENTE) + " pero no se encontró '" + CONFIG.NOMBRE_RETEFUENTE + "' en Odoo: líneas sin Retefuente.");
     }
 
     // 5) Datos de la orden (producto a reparar, método de facturación, cliente)
@@ -2197,7 +2197,7 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
     const destinoProduccion = llamarOdooXMLRPC("stock.location", "search", [[["usage", "=", "production"]]], creds, { limit: 1 });
     const errores = [];
 
-    r.filas.forEach(x => {
+    filasOk.forEach(x => {
       const campos = x.item.grupo === 1 ? camposLinea : camposFee;
       const modelo = x.item.grupo === 1 ? "repair.line" : "repair.fee";
       const vals = {
@@ -2233,11 +2233,15 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
     res.aplicaRete = imp.aplicaRete;
 
     if (errores.length > 0) {
-      res.alarma = "RMA " + nombreRMA + " creada pero fallaron líneas: " + errores.join("; ");
-    } else if (sinImpuestos === null || Math.abs(sinImpuestos - totalPDF) > 1) {
-      res.alarma = "RMA " + nombreRMA + " creada, pero el monto sin impuestos en Odoo es $" + formatearNumero(sinImpuestos || 0) +
-        " y el PDF suma $" + formatearNumero(totalPDF) + ". Revisar antes de enviar.";
+      avisos.push("Fallaron líneas: " + errores.join("; "));
     }
+    if (!avisoPrecio && r.faltantes.length === 0 && errores.length === 0 &&
+        (sinImpuestos === null || Math.abs(sinImpuestos - totalPDF) > 1)) {
+      avisos.push("El monto sin impuestos en Odoo es $" + formatearNumero(sinImpuestos || 0) +
+        " y el PDF suma $" + formatearNumero(totalPDF) + ". Revisar antes de enviar.");
+    }
+    res.avisos = avisos;
+    res.alarma = avisos.length > 0 ? "RMA " + nombreRMA + ": " + avisos.join(" | ") : "";
     return res;
 
   } catch (e) {
@@ -2316,17 +2320,12 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
       return { exito: false, error: "No se pudo generar el PDF. Revisa el registro de ejecuciones." };
     }
 
-    // ALARMA: silla x silla vs consolidado por ítem
+    // ALARMA (no bloquea): silla x silla vs consolidado por ítem
+    const alarmas = [];
     if (Math.abs(totalGeneral - borrador.total) > 1) {
       const dif = Math.round(totalGeneral - borrador.total);
-      escribirAlarmaEnFilas(hojaDiag, filas,
-        "Total silla x silla " + formatearNumero(totalGeneral) + " ≠ consolidado por ítem " + formatearNumero(borrador.total) + " (dif. " + formatearNumero(dif) + "). Revisar precios y corregir.");
-      return {
-        exito: false, urlPDF: urlPDF,
-        error: "🚨 ALARMA: el total silla x silla ($" + formatearNumero(totalGeneral) + ") NO es igual al consolidado por ítem ($" +
-          formatearNumero(borrador.total) + "). Diferencia: $" + formatearNumero(dif) +
-          ".\n\nNo se creó la RMA. Revisa los precios del catálogo / columnas T-X (queda marcado en la columna AD).\n\nPDF para revisar:\n" + urlPDF
-      };
+      alarmas.push("Total silla x silla " + formatearNumero(totalGeneral) + " ≠ consolidado por ítem " + formatearNumero(borrador.total) +
+        " (dif. " + formatearNumero(dif) + "). Revisar precios y corregir a mano en la RMA.");
     }
 
     // Odoo
@@ -2338,7 +2337,8 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
     const rma = crearRMAenOdooDesdeBorrador(nombre, borrador, totalGeneral, creds);
 
     if (!rma.exito) {
-      if (rma.alarma) escribirAlarmaEnFilas(hojaDiag, filas, rma.alarma);
+      alarmas.push(rma.error || rma.alarma);
+      escribirAlarmaEnFilas(hojaDiag, filas, alarmas.join(" | "));
       return { exito: false, urlPDF: urlPDF, error: (rma.error || rma.alarma) + "\n\nEl PDF sí se generó:\n" + urlPDF };
     }
 
@@ -2348,7 +2348,6 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
     // Adjuntar PDF
     const adj = adjuntarPDFaRMAOdoo(rma.id, urlPDF, creds);
 
-    const alarmas = [];
     if (rma.alarma) alarmas.push(rma.alarma);
     if (!adj.exito) alarmas.push("No se pudo adjuntar el PDF a la RMA: " + adj.error);
 
