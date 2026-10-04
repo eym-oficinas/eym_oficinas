@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// SISTEMA AUTOMÁTICO EYM OFICINAS v8.0 - INTEGRACIÓN COMPLETA ODOO RMA
+// SISTEMA AUTOMÁTICO EYM OFICINAS v11.0 - INTEGRACIÓN COMPLETA ODOO RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// Versión estable: Diagnósticos + RMA en Odoo + Piezas + Operaciones + PDF + Impuestos
+// Versión estable: Diagnósticos + RMA en Odoo + Piezas + Operaciones + PDF (GOOGLE SHEETS) + Impuestos
 // Estados columna AA: COTIZACIÓN (manual) → APROBADO (automático) → RECHAZADO
-// ✅ V8.0: Duplicados resueltos + onEdit optimizado + RMA separado
+// ✅ V11.0: generarPDFDiagnosticos() reescrita para Google Sheets (confiable, landscape, wrapping)
 
 const ID_RESPUESTAS_NUEVA = "151jFiyUYDKxHYgswm5-BIED8py5j1_txVxYU5qyPlW4";
 const ID_DIAGNOSTICOS = "1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y";
