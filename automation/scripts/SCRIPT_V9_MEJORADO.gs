@@ -1905,8 +1905,8 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     rangoTotales.setBackgroundColor("#FFF2CC");
     rangoTotales.setFontWeight("bold");
     rangoTotales.setFontSize(8);
-    rangoTotales.getRange(1, 7, 1, 5).setNumberFormat("#,##0");
-    rangoTotales.getRange(1, 7, 1, 5).setHorizontalAlignment("right");
+    hojaData.getRange(fila, 7, 1, 5).setNumberFormat("#,##0");
+    hojaData.getRange(fila, 7, 1, 5).setHorizontalAlignment("right");
 
     fila++;
 
