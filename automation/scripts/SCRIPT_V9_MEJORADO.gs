@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// SISTEMA AUTOMÁTICO EYM OFICINAS v11.0 - INTEGRACIÓN COMPLETA ODOO RMA
+// SISTEMA AUTOMÁTICO EYM OFICINAS v12.0 - INTEGRACIÓN COMPLETA ODOO RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // Versión estable: Diagnósticos + RMA en Odoo + Piezas + Operaciones + PDF (GOOGLE SHEETS) + Impuestos
 // Estados columna AA: COTIZACIÓN (manual) → APROBADO (automático) → RECHAZADO
-// ✅ V11.0: generarPDFDiagnosticos() reescrita para Google Sheets (confiable, landscape, wrapping)
+// ✅ V12.0: PDF en Google Sheets + borrador RMA + RMA automática en Odoo (New Repair) + aprobación desde Odoo
 
 const ID_RESPUESTAS_NUEVA = "151jFiyUYDKxHYgswm5-BIED8py5j1_txVxYU5qyPlW4";
 const ID_DIAGNOSTICOS = "1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y";
@@ -13,7 +13,14 @@ const CONFIG = {
   PROXIMO_EYM: 60037,
   PROXIMO_OP: 7560,
   MANTENIMIENTO_GENERAL: 46000,
-  CELDA_CONTROL: "AE1"
+  CELDA_CONTROL: "AE1",
+  LIMITE_RETEFUENTE: 550000,
+  NOMBRE_IVA: "IVA Ventas 19%",
+  NOMBRE_RETEFUENTE: "RTFTE 4%",
+  PRODUCTO_REPARAR_CODIGO: "MOBILIARIO",
+  ODOO_ACCION_RMA: 529,
+  ODOO_MENU_RMA: 384,
+  COL_ALARMA: 30
 };
 
 // ID del archivo del logo EYM en Google Drive (dejar vacío para usar texto "EYM OFICINAS")
@@ -420,7 +427,7 @@ function configurarCredencialesOdoo() {
   const response = ui.prompt(
     "🔐 CONFIGURAR CREDENCIALES ODOO\n\n" +
     "Formato: usuario|password|database|url\n\n" +
-    "Ejemplo:\neymclaude@gmail.com|Camilo1973*|eym1|https://eym-oficinas.ovh",
+    "Ejemplo:\nusuario@dominio.com|su_clave|eym1|https://eym-oficinas.ovh",
     ui.ButtonSet.OK_CANCEL
   );
 
@@ -586,85 +593,61 @@ function buscarCodigoOdooDelCatalogo(nombreProducto) {
   }
 }
 
-function llamarOdooXMLRPC(modelo, metodo, args, creds) {
+let ODOO_UID_CACHE = null;
+let ODOO_ULTIMO_ERROR = "";
+
+function odooUid(creds) {
+  const clave = creds.url + "|" + creds.database + "|" + creds.username;
+  if (ODOO_UID_CACHE && ODOO_UID_CACHE.clave === clave) return ODOO_UID_CACHE.uid;
+
+  const authPayload = {
+    jsonrpc: "2.0",
+    method: "call",
+    params: { service: "common", method: "authenticate", args: [creds.database, creds.username, creds.password, {}] }
+  };
+  const authResponse = UrlFetchApp.fetch(creds.url + "/jsonrpc", {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(authPayload),
+    muteHttpExceptions: true
+  });
+  const authResult = JSON.parse(authResponse.getContentText());
+  if (authResult.error || !authResult.result) {
+    ODOO_ULTIMO_ERROR = "Autenticación en Odoo fallida (revisa usuario, clave y base de datos)";
+    Logger.log("❌ " + ODOO_ULTIMO_ERROR);
+    return null;
+  }
+  ODOO_UID_CACHE = { clave: clave, uid: authResult.result };
+  Logger.log("✅ Odoo autenticado (UID " + authResult.result + ")");
+  return authResult.result;
+}
+
+function llamarOdooXMLRPC(modelo, metodo, args, creds, kwargs) {
   try {
-    const url = creds.url + "/jsonrpc";
+    const uid = odooUid(creds);
+    if (!uid) return null;
 
-    // Paso 1: Obtener UID mediante autenticación
-    Logger.log("🔐 Obteniendo UID...");
-    const authPayload = {
-      jsonrpc: "2.0",
-      method: "call",
-      params: {
-        service: "common",
-        method: "authenticate",
-        args: [creds.database, creds.username, creds.password, {}]
-      }
-    };
+    const executeKwArgs = [creds.database, uid, creds.password, modelo, metodo, Array.isArray(args) ? args : []];
+    if (kwargs) executeKwArgs.push(kwargs);
 
-    const authResponse = UrlFetchApp.fetch(url, {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify(authPayload),
-      muteHttpExceptions: true
-    });
-
-    const authResult = JSON.parse(authResponse.getContentText());
-    if (authResult.error || !authResult.result) {
-      Logger.log("❌ Error en autenticación: " + JSON.stringify(authResult.error || "Sin UID"));
-      return null;
-    }
-
-    const uid = authResult.result;
-    Logger.log("✅ UID obtenido: " + uid);
-
-    // Paso 2: Construir argumentos - Odoo espera: [db, uid, pwd, model, method, args_array]
-    let executeKwArgs = [creds.database, uid, creds.password, modelo, metodo];
-
-    // El sexto argumento debe ser un ARRAY con todos los parámetros del método
-    // Para search(): [domain, offset, limit, order, count]
-    // Para otros métodos: depende del método específico
-    if (Array.isArray(args)) {
-      executeKwArgs.push(args);
-    } else {
-      executeKwArgs.push([]);
-    }
-
-    Logger.log("📊 Estructura final de args: " + JSON.stringify(executeKwArgs));
-    Logger.log("📊 Total argumentos enviados: " + executeKwArgs.length);
-
-    // Paso 3: Llamar al método usando el UID
     const payload = {
       jsonrpc: "2.0",
       method: "call",
-      params: {
-        service: "object",
-        method: "execute_kw",
-        args: executeKwArgs
-      }
+      params: { service: "object", method: "execute_kw", args: executeKwArgs }
     };
 
-    const options = {
+    const response = UrlFetchApp.fetch(creds.url + "/jsonrpc", {
       method: "post",
       contentType: "application/json",
       payload: JSON.stringify(payload),
       muteHttpExceptions: true,
-      headers: {
-        "Accept": "application/json"
-      }
-    };
+      headers: { "Accept": "application/json" }
+    });
 
-    Logger.log("📤 Enviando a: " + url);
-    Logger.log("📋 Payload completo: " + JSON.stringify(payload));
-
-    const response = UrlFetchApp.fetch(url, options);
-
-    Logger.log("📥 Status: " + response.getResponseCode());
     const responseText = response.getContentText();
-    Logger.log("📥 Response (primeros 500 chars): " + responseText.substring(0, 500));
-
     if (!responseText) {
-      Logger.log("❌ CRÍTICO: Respuesta vacía del servidor");
+      ODOO_ULTIMO_ERROR = "Respuesta vacía de Odoo (HTTP " + response.getResponseCode() + ")";
+      Logger.log("❌ " + ODOO_ULTIMO_ERROR);
       return null;
     }
 
@@ -672,26 +655,23 @@ function llamarOdooXMLRPC(modelo, metodo, args, creds) {
     try {
       resultado = JSON.parse(responseText);
     } catch (parseError) {
-      Logger.log("❌ CRÍTICO: No se pudo parsear JSON: " + parseError.toString());
-      Logger.log("📥 Contenido recibido: " + responseText);
+      ODOO_ULTIMO_ERROR = "Odoo no devolvió JSON (HTTP " + response.getResponseCode() + ")";
+      Logger.log("❌ " + ODOO_ULTIMO_ERROR + ": " + responseText.substring(0, 300));
       return null;
     }
 
     if (resultado.error) {
-      Logger.log("❌ Error Odoo JSON-RPC: " + JSON.stringify(resultado.error));
+      const detalle = (resultado.error.data && resultado.error.data.message) || resultado.error.message || JSON.stringify(resultado.error);
+      ODOO_ULTIMO_ERROR = modelo + "." + metodo + ": " + detalle;
+      Logger.log("❌ Error Odoo en " + ODOO_ULTIMO_ERROR);
       return null;
-    }
-
-    if (!resultado.result && resultado.result !== 0 && resultado.result !== false) {
-      Logger.log("⚠️ ADVERTENCIA: Resultado vacío pero sin error en respuesta");
-      Logger.log("📥 Respuesta completa: " + JSON.stringify(resultado));
     }
 
     return resultado.result;
 
   } catch (e) {
-    Logger.log("❌ CRÍTICO en llamada XML-RPC: " + e.toString());
-    Logger.log("Stack trace: " + e.stack);
+    ODOO_ULTIMO_ERROR = "Excepción llamando a Odoo: " + e.toString();
+    Logger.log("❌ " + ODOO_ULTIMO_ERROR);
     return null;
   }
 }
@@ -1023,7 +1003,7 @@ function generarPresupuestoDescargable() {
     }
 
     // Pedir nombre de la oportunidad
-    const response = ui.prompt("📋 Ingresa el NOMBRE DE LA OPORTUNIDAD:\n(Ej: Mensula Rubby 03/10/2026)");
+    const response = ui.prompt("📋 Ingresa el NOMBRE EXACTO de la OPORTUNIDAD:\n(Debe ser idéntico al de la columna B. Ej: Mensula Rubby 03/10/2026)");
 
     if (response.getSelectedButton() === ui.Button.CANCEL) return;
 
@@ -1044,7 +1024,7 @@ function generarPresupuestoDescargable() {
 
     if (diagnosticos.length === 0) {
       Logger.log("❌ NO se encontraron diagnósticos");
-      ui.alert("❌ No se encontraron diagnósticos para:\n" + nombreOportunidad + "\n\nVerifica que el nombre sea exacto.");
+      ui.alert("❌ " + mensajeOportunidadNoEncontrada(hojaDiag, nombreOportunidad));
       return;
     }
 
@@ -1055,6 +1035,15 @@ function generarPresupuestoDescargable() {
     const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
     const totalGeneral = calcularTotalGeneral(silasDatos);
     const cliente = diagnosticos[0].cliente;
+    let advertencia = "";
+    const borradorPrevio = consolidarBorradorRMA(silasDatos);
+    if (Math.abs(totalGeneral - borradorPrevio.total) > 1) {
+      const dif = Math.round(totalGeneral - borradorPrevio.total);
+      advertencia = "\n\n🚨 ALARMA: el total silla x silla ($" + formatearNumero(totalGeneral) + ") NO es igual al consolidado por ítem ($" +
+        formatearNumero(borradorPrevio.total) + "). Diferencia: $" + formatearNumero(dif) + ". Revisa los precios (se marcó en la columna AD).";
+      escribirAlarmaEnFilas(hojaDiag, diagnosticos.map(d => d.fila),
+        "Total silla x silla " + formatearNumero(totalGeneral) + " ≠ consolidado por ítem " + formatearNumero(borradorPrevio.total) + " (dif. " + formatearNumero(dif) + "). Revisar precios.");
+    }
 
     Logger.log("✅ Sillas encontradas: " + silasDatos.length);
     Logger.log("✅ Cliente: " + cliente);
@@ -1082,7 +1071,7 @@ function generarPresupuestoDescargable() {
       "Total: $" + formatearNumero(totalGeneral) + "\n\n" +
       "📄 El PDF se creó en Google Drive.\n" +
       "Puedes descargarlo y guardarlo donde prefieras.\n\n" +
-      "Link del documento:\n" + urlPDF
+      "Link del documento:\n" + urlPDF + advertencia
     );
 
     Logger.log("🖨️ ════════════════════════════════════════════════════════");
@@ -1116,7 +1105,7 @@ function finalizarOportunidad() {
     }
 
     const ui = SpreadsheetApp.getUi();
-    const response = ui.prompt("Ingresa el NOMBRE DE LA OPORTUNIDAD:");
+    const response = ui.prompt("Ingresa el NOMBRE EXACTO de la OPORTUNIDAD (idéntico a la columna B):");
 
     if (response.getSelectedButton() == ui.Button.CANCEL) return;
 
@@ -1232,199 +1221,11 @@ function procesarRMAsPendientes() {
 // Consolida todo el flujo: RMA + PDF + Adjuntar
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
-function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta = true) {
-  try {
-    Logger.log("🚀 Iniciando procesamiento completo de oportunidad: " + nombreOportunidad);
-
-    // PASO 1: OBTENER DIAGNÓSTICOS
-    const diagnosticos = obtenerDiagnosticosDeOportunidad(hojaDiag, nombreOportunidad);
-    if (diagnosticos.length === 0) {
-      return { exito: false, error: "No se encontraron diagnósticos para: " + nombreOportunidad };
-    }
-
-    Logger.log("✅ Diagnósticos encontrados: " + diagnosticos.length);
-
-    const cliente = diagnosticos[0].cliente;
-    const numeroEYM = diagnosticos[0].numeroEYM;
-    const productosConsolidados = consolidarProductosTotal(diagnosticos, hojaDiag);
-    const serviciosConsolidados = consolidarServiciosTotal(diagnosticos, hojaDiag);
-
-    // PASO 2: CREAR RMA EN ODOO
-    Logger.log("📝 Creando RMA en Odoo...");
-    const resultadoRMA = crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, serviciosConsolidados, nombreOportunidad);
-
-    if (!resultadoRMA.exito) {
-      return { exito: false, error: resultadoRMA.error };
-    }
-
-    Logger.log("✅ RMA creada: " + resultadoRMA.referenciaRMA);
-
-    // PASO 3: ESCRIBIR RMA CON HYPERLINK EN COLUMNA AC (REFERENCIA_RMA)
-    Logger.log("🔗 Escribiendo RMA link en DIAGNOSTICOS_2026 (columna AC)...");
-    for (let diag of diagnosticos) {
-      hojaDiag.getRange(diag.fila, 29).setValue(resultadoRMA.referenciaRMA);
-      hojaDiag.getRange(diag.fila, 29).setFormula('=HYPERLINK("' + resultadoRMA.linkRMA + '","' + resultadoRMA.referenciaRMA + '")');
-      hojaDiag.getRange(diag.fila, 29).setFontColor("#0000FF");
-      hojaDiag.getRange(diag.fila, 29).setFontLine("underline");
-    }
-
-    // PASO 4: GENERAR PDF CONSOLIDADO
-    Logger.log("📄 Generando PDF consolidado por silla...");
-    const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
-    const totalGeneral = calcularTotalGeneral(silasDatos);
-
-    const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
-
-    if (!urlPDF) {
-      Logger.log("⚠️ No se pudo generar PDF, pero RMA fue creada");
-      return {
-        exito: true,
-        rmaCreada: true,
-        pdfError: true,
-        referenciaRMA: resultadoRMA.referenciaRMA,
-        linkRMA: resultadoRMA.linkRMA,
-        mensaje: "✅ RMA CREADA: " + resultadoRMA.referenciaRMA + "\n\n⚠️ Error generando PDF (pero la RMA está lista en Odoo)\n\nLink RMA: " + resultadoRMA.linkRMA
-      };
-    }
-
-    Logger.log("✅ PDF generado: " + urlPDF);
-
-    // PASO 5: ADJUNTAR PDF A RMA EN ODOO
-    Logger.log("📎 Adjuntando PDF a RMA en Odoo...");
-    const resultadoAdjunto = adjuntarPDFaRMA(resultadoRMA.numeroRMA, urlPDF, nombreOportunidad);
-
-    if (!resultadoAdjunto.exito) {
-      Logger.log("⚠️ Error adjuntando PDF: " + resultadoAdjunto.error);
-      return {
-        exito: true,
-        rmaCreada: true,
-        pdfGenerado: true,
-        adjuntoError: true,
-        referenciaRMA: resultadoRMA.referenciaRMA,
-        linkRMA: resultadoRMA.linkRMA,
-        mensaje: "✅ RMA CREADA: " + resultadoRMA.referenciaRMA + "\n✅ PDF generado\n\n⚠️ Error al adjuntar PDF a RMA (pero el PDF está en Drive)\n\nLink RMA: " + resultadoRMA.linkRMA
-      };
-    }
-
-    Logger.log("✅ PDF adjunto a RMA en Odoo");
-
-    return {
-      exito: true,
-      rmaCreada: true,
-      pdfGenerado: true,
-      adjunto: true,
-      referenciaRMA: resultadoRMA.referenciaRMA,
-      linkRMA: resultadoRMA.linkRMA,
-      urlPDF: urlPDF,
-      mensaje: "✅ COMPLETADO\n\nRMA: " + resultadoRMA.referenciaRMA + "\n✅ Productos y servicios agregados\n✅ PDF generado y adjunto\n\nLink RMA: " + resultadoRMA.linkRMA
-    };
-
-  } catch (e) {
-    Logger.log("❌ Error en procesarOportunidadCompleta: " + e.toString());
-    return { exito: false, error: e.toString() };
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // TRIGGER AUTOMÁTICO: GENERAR EYM + OP AL MARCAR "APROBADO"
 // Captura los 5 métodos de entrada en columna AA (27):
 // 1. Dropdown selection, 2. Copy/paste, 3. Drag operation, 4. Manual text entry, 5. Odoo sync
 // ═══════════════════════════════════════════════════════════════════════════════════════
-
-function onEdit(e) {
-  try {
-    // ⚠️ IMPORTANTE: Este logging es CRÍTICO para diagnóstico
-    // Si no ves estos mensajes en los logs, onEdit() NO se está disparando
-    const ahora = new Date().toLocaleTimeString();
-    Logger.log("\n🟣 ════════════════════════════════════════════════════════");
-    Logger.log("🟣 onEdit ACTIVADO a las " + ahora);
-    Logger.log("🟣 ════════════════════════════════════════════════════════");
-
-    const range = e.range;
-    const hoja = range.getSheet();
-    const hojaName = hoja.getName();
-    const columna = range.getColumn();
-    const fila = range.getRow();
-
-    Logger.log("🟣 Hoja: " + hojaName);
-    Logger.log("🟣 Columna: " + columna + " (AA=27)");
-    Logger.log("🟣 Fila: " + fila);
-
-    // Solo procesar si es DIAGNOSTICOS_2026
-    if (hojaName !== "DIAGNOSTICOS_2026") {
-      Logger.log("🟣 ⊘ No es DIAGNOSTICOS_2026, ignorando");
-      return;
-    }
-
-    // VALIDACIÓN 1: Si se editó columna O o P, validar y resaltar U
-    if (columna === 15 || columna === 16) {
-      Logger.log("🟣 Se editó columna " + (columna === 15 ? "O" : "P") + " - Validando columna U");
-      validarYResaltarColumnaU(hoja, fila);
-      return;
-    }
-
-    // VALIDACIÓN 2: Solo procesar si se cambió columna AA (ESTADO_APROBACION - columna 27)
-    if (columna !== 27) {
-      Logger.log("🟣 ⊘ Columna " + columna + " no es AA (27), ignorando");
-      return;
-    }
-
-    // Validar que sea encabezado o datos
-    if (fila === 1) {
-      Logger.log("🟣 ⊘ Es encabezado (fila 1), ignorando");
-      return;
-    }
-
-    const nuevoValor = range.getValue();
-    Logger.log("🟣 Valor: '" + nuevoValor + "' (tipo: " + typeof nuevoValor + ")");
-
-    if (!nuevoValor) {
-      Logger.log("🟣 ⊘ Celda vacía, ignorando");
-      return;
-    }
-
-    const nuevoValorStr = nuevoValor.toString().trim();
-    const nuevoValorLower = nuevoValorStr.toLowerCase();
-
-    Logger.log("🟣 Valor normalizado: '" + nuevoValorStr + "'");
-    Logger.log("🟣 Valor lowercase: '" + nuevoValorLower + "'");
-    Logger.log("🟣 Tipo de dato: " + typeof nuevoValor);
-    Logger.log("🟣 Largo: " + nuevoValorStr.length + " caracteres");
-
-    // ✅ MÉTODO 1: Lista desplegable (dropdown selection) - "Aprobado"
-    // ✅ MÉTODO 2: Copiado y pegado (copy/paste) - Captura el valor exacto pegado
-    // ✅ MÉTODO 3: Arrastrado (drag operation) - Copia valores de celdas adyacentes
-    // ✅ MÉTODO 4: Escrito manualmente (manual text entry) - El usuario digita
-    // ✅ MÉTODO 5: Sincronizado desde Odoo (Odoo sync) - Escrito por función sincronizarRMAsDesdeOdoo()
-
-    // Detectar estado con máxima tolerancia (cualquier variación)
-    if (nuevoValorLower.includes("cotización")) {
-      Logger.log("📋 [MÉTODO DETECTADO] Cotización marcada en fila " + fila);
-    }
-    else if (nuevoValorLower.includes("aprobado")) {
-      Logger.log("✅ [MÉTODO DETECTADO] 'APROBADO' encontrado en fila " + fila);
-      Logger.log("✅ [MÉTODO] Podría ser: 1=Dropdown, 2=Copy/Paste, 3=Drag, 4=Manual, o 5=Odoo");
-      Logger.log("✅ Disparando procesarAprobacionEnFila()...");
-      procesarAprobacionEnFila(hoja, fila);
-      Logger.log("✅ procesarAprobacionEnFila() completado exitosamente");
-    }
-    else if (nuevoValorLower.includes("rechazado")) {
-      Logger.log("❌ [MÉTODO DETECTADO] Rechazado marcado en fila " + fila);
-    }
-    else {
-      Logger.log("🟣 ⊘ Valor '" + nuevoValorStr + "' no coincide con opciones (cotización/aprobado/rechazado)");
-    }
-
-    Logger.log("🟣 ════════════════════════════════════════════════════════\n");
-
-  } catch (e) {
-    Logger.log("\n❌ ════════════════════════════════════════════════════════");
-    Logger.log("❌ ERROR CRÍTICO en onEdit:");
-    Logger.log("❌ Mensaje: " + e.toString());
-    Logger.log("❌ Stack: " + e.stack);
-    Logger.log("❌ ════════════════════════════════════════════════════════\n");
-  }
-}
 
 function procesarAprobacionEnFila(hoja, fila) {
   try {
@@ -1468,22 +1269,6 @@ function procesarAprobacionEnFila(hoja, fila) {
     Logger.log("\n📍 PASO 3: Creando Orden de Producción...");
     crearOP(hoja, hojaOP, fila);
     Logger.log("✅ OP creada correctamente");
-    SpreadsheetApp.flush();
-
-    // PASO 4: PROGRAMAR RMA en Odoo para ejecución SEPARADA (evita timeout en onEdit)
-    // Esto se ejecutará de forma separada para no bloquear onEdit
-    const nombreOportunidad = hoja.getRange(fila, 2).getValue();
-    if (!nombreOportunidad) {
-      Logger.log("⚠️ ADVERTENCIA: No hay nombre de oportunidad en fila " + fila);
-      return;
-    }
-
-    Logger.log("\n📍 PASO 4: Programando creación de RMA en Odoo (ejecución separada)...");
-    Logger.log("📝 Oportunidad: " + nombreOportunidad);
-    Logger.log("✅ RMA será creada en próxima ejecución automática");
-
-    // Marcar para procesamiento de RMA
-    hoja.getRange(fila, 29).setValue("⏳ Pendiente RMA");
     SpreadsheetApp.flush();
 
     Logger.log("\n🟢 ════════════════════════════════════════════════════════");
@@ -1566,13 +1351,14 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
 
     const datos = hoja.getRange(2, 1, ultFila - 1, 24).getValues();
     const temporalesVisibles = hoja.getRange(2, 6, ultFila - 1, 1).getDisplayValues();
-    const busqueda = nombreOportunidad.toLowerCase();
+    const busqueda = normalizarNombreOportunidad(nombreOportunidad);
+    if (!busqueda) return diagnosticos;
     const num = v => (v === "" || v === null || isNaN(Number(v))) ? 0 : Number(v);
 
     for (let i = 0; i < datos.length; i++) {
       const r = datos[i];
       const oportunidad = r[1];
-      if (oportunidad && oportunidad.toString().toLowerCase().includes(busqueda)) {
+      if (oportunidad && normalizarNombreOportunidad(oportunidad) === busqueda) {
         diagnosticos.push({
           fila: i + 2,
           fecha: r[0],
@@ -1795,10 +1581,10 @@ function consolidarBorradorRMA(silasDatos) {
   const orden = [];
   const textoGeneral = "abollonado y tapizado general";
 
-  function agregar(grupo, nombre, cant, total) {
+  function agregar(grupo, nombre, cant, total, claveCatalogo) {
     const key = grupo + "|" + normalizarTexto(nombre);
     if (!mapa[key]) {
-      mapa[key] = { grupo: grupo, nombre: nombre, cant: 0, total: 0 };
+      mapa[key] = { grupo: grupo, nombre: nombre, catalogo: claveCatalogo || nombre, cant: 0, total: 0 };
       orden.push(key);
     }
     mapa[key].cant += cant;
@@ -1826,10 +1612,10 @@ function consolidarBorradorRMA(silasDatos) {
     const espaldar = (d.tapiceriaEspaldar || "").toString().trim();
     if (asiento && espaldar &&
         normalizarTexto(asiento) === textoGeneral && normalizarTexto(espaldar) === textoGeneral) {
-      agregar(3, asiento, 1, obtenerPrecioDelCatalogo(asiento));
+      agregar(3, asiento, 1, obtenerPrecioDelCatalogo(asiento), asiento);
     } else {
-      if (asiento) agregar(3, "Asiento: " + asiento, 1, obtenerPrecioDelCatalogo(asiento));
-      if (espaldar) agregar(3, "Espaldar: " + espaldar, 1, obtenerPrecioDelCatalogo(espaldar));
+      if (asiento) agregar(3, "Asiento: " + asiento, 1, obtenerPrecioDelCatalogo(asiento), asiento);
+      if (espaldar) agregar(3, "Espaldar: " + espaldar, 1, obtenerPrecioDelCatalogo(espaldar), espaldar);
     }
 
     // 4) M.O Y MANTENIMIENTO GENERAL (col W): una por silla
@@ -2125,384 +1911,632 @@ function formatearNumero(numero) {
   return Math.round(numero).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-function crearRMAenOdooConProductos(cliente, numeroEYM, productosConsolidados, serviciosConsolidados, nombreOportunidad) {
-  try {
-    const creds = obtenerCredencialesOdoo();
-
-    Logger.log("📝 Buscando Oportunidad en Odoo: " + nombreOportunidad);
-
-    // PASO 1: Buscar oportunidad en Odoo
-    const oportunidadOdooId = buscarOportunidadOdoo(nombreOportunidad, creds);
-    if (!oportunidadOdooId) {
-      Logger.log("❌ Oportunidad no encontrada en Odoo: " + nombreOportunidad);
-      return { exito: false, error: "❌ Oportunidad '" + nombreOportunidad + "' NO encontrada en Odoo.\n\nPor favor:\n1. Crea la oportunidad en Odoo\n2. Asegúrate que el nombre coincida exactamente\n3. Intenta de nuevo" };
-    }
-
-    Logger.log("✅ Oportunidad encontrada en Odoo: " + oportunidadOdooId);
-
-    // PASO 2: Obtener cliente desde la oportunidad
-    const clienteOdooId = obtenerClienteDeOportunidad(oportunidadOdooId, creds);
-    if (!clienteOdooId) {
-      Logger.log("⚠️ No se pudo obtener cliente de la oportunidad");
-      return { exito: false, error: "Error obteniendo cliente de la oportunidad" };
-    }
-
-    Logger.log("✅ Cliente obtenido de la oportunidad: " + clienteOdooId);
-
-    // PASO 3: Crear Repair Order (módulo Repair nativo de Odoo v14)
-    const rmaData = {
-      partner_id: clienteOdooId,
-      name: "RMA-" + numeroEYM,
-      state: "draft",
-      location_id: 1  // Stock location (por defecto)
-    };
-
-    const numeroRMA = llamarOdooXMLRPC("repair.order", "create", [rmaData], creds);
-
-    if (!numeroRMA) {
-      Logger.log("❌ Error creando Repair Order en Odoo");
-      return { exito: false, error: "Error creando RMA en Odoo" };
-    }
-
-    Logger.log("✅ Repair Order creada: " + numeroRMA);
-
-    // PASO 2: AGREGAR LÍNEAS DE PRODUCTOS (PIEZAS)
-    Logger.log("📦 Agregando líneas de productos...");
-    const resultadoLineas = agregarLineasProductosRMA(numeroRMA, productosConsolidados, creds);
-    if (!resultadoLineas.exito) {
-      Logger.log("⚠️ Error agregando productos: " + resultadoLineas.error);
-    } else {
-      Logger.log("✅ Productos agregados: " + resultadoLineas.cantidad);
-    }
-
-    // PASO 3: AGREGAR LÍNEAS DE SERVICIOS (OPERACIONES)
-    Logger.log("🔧 Agregando líneas de servicios...");
-    const resultadoServicios = agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds);
-    if (!resultadoServicios.exito) {
-      Logger.log("⚠️ Error agregando servicios: " + resultadoServicios.error);
-    } else {
-      Logger.log("✅ Servicios agregados: " + resultadoServicios.cantidad);
-    }
-
-    const linkRMA = creds.urlWeb + "#id=" + numeroRMA + "&model=repair.order&view_type=form";
-
-    Logger.log("✅ Repair Order completada: " + numeroRMA);
-
-    return {
-      exito: true,
-      numeroRMA: numeroRMA,
-      referenciaRMA: "RMA-" + numeroRMA,
-      linkRMA: linkRMA
-    };
-
-  } catch (e) {
-    Logger.log("❌ Error creando RMA: " + e.toString());
-    return { exito: false, error: e.toString() };
-  }
-}
-
-function agregarLineasProductosRMA(numeroRMA, productosConsolidados, creds) {
-  try {
-    let cantidadAgregada = 0;
-
-    for (let producto of productosConsolidados) {
-      // Buscar código de producto en catálogo
-      const codigoProducto = obtenerCodigoProductoDelCatalogo(producto.nombre);
-      if (!codigoProducto) {
-        Logger.log("⚠️ Código no encontrado para: " + producto.nombre);
-        continue;
-      }
-
-      // Buscar producto en Odoo
-      const productoOdooId = buscarProductoOdooPorCodigo(codigoProducto, creds);
-      if (!productoOdooId) {
-        Logger.log("⚠️ Producto no encontrado en Odoo: " + codigoProducto);
-        continue;
-      }
-
-      // Calcular impuestos
-      const subtotal = producto.cantidad * producto.precio;
-      const impuestos = calcularImpuestos(subtotal, creds);
-
-      // Crear línea de reparación (Piezas)
-      const lineaData = {
-        repair_id: numeroRMA,
-        product_id: productoOdooId,
-        name: producto.nombre,
-        product_qty: producto.cantidad,
-        product_uom_id: 1, // Unidades
-        price_unit: producto.precio,
-        tax_ids: impuestos.taxIds // [19% IVA, 4% RFTFE]
-      };
-
-      const lineaRmaId = llamarOdooXMLRPC("repair.line", "create", [lineaData], creds);
-      if (lineaRmaId) {
-        Logger.log("✅ Línea agregada: " + codigoProducto + " x" + producto.cantidad);
-        cantidadAgregada++;
-      } else {
-        Logger.log("⚠️ Error agregando línea: " + codigoProducto);
-      }
-    }
-
-    return { exito: true, cantidad: cantidadAgregada };
-
-  } catch (e) {
-    Logger.log("❌ Error en agregarLineasProductosRMA: " + e);
-    return { exito: false, error: e.toString() };
-  }
-}
-
-function agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds) {
-  try {
-    let cantidadAgregada = 0;
-
-    for (let servicio of serviciosConsolidados) {
-      // Buscar código de servicio en catálogo
-      const codigoServicio = obtenerCodigoProductoDelCatalogo(servicio.nombre);
-      if (!codigoServicio) {
-        Logger.log("⚠️ Código no encontrado para servicio: " + servicio.nombre);
-        continue;
-      }
-
-      // Buscar servicio en Odoo
-      const servicioOdooId = buscarProductoOdooPorCodigo(codigoServicio, creds);
-      if (!servicioOdooId) {
-        Logger.log("⚠️ Servicio no encontrado en Odoo: " + codigoServicio);
-        continue;
-      }
-
-      // Calcular impuestos
-      const subtotal = servicio.cantidad * servicio.precio;
-      const impuestos = calcularImpuestos(subtotal, creds);
-
-      // Crear línea de honorarios/servicios en repair.order
-      const lineaData = {
-        repair_id: numeroRMA,
-        name: servicio.nombre,
-        product_id: servicioOdooId,
-        product_qty: servicio.cantidad,
-        product_uom_id: 1, // Unidades
-        price_unit: servicio.precio,
-        tax_ids: impuestos.taxIds
-      };
-
-      const lineaRmaId = llamarOdooXMLRPC("repair.fee", "create", [lineaData], creds);
-      if (lineaRmaId) {
-        Logger.log("✅ Servicio agregado: " + codigoServicio + " x" + servicio.cantidad);
-        cantidadAgregada++;
-      } else {
-        Logger.log("⚠️ Error agregando servicio: " + codigoServicio);
-      }
-    }
-
-    return { exito: true, cantidad: cantidadAgregada };
-
-  } catch (e) {
-    Logger.log("❌ Error en agregarLineasServiciosRMA: " + e);
-    return { exito: false, error: e.toString() };
-  }
-}
-
-function obtenerCodigoProductoDelCatalogo(nombreProducto) {
-  try {
-    const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaCatalogo = buscarHojaCatalogo(ssDiag);
-    if (!hojaCatalogo) return null;
-
-    const datos = hojaCatalogo.getDataRange().getValues();
-
-    for (let i = 1; i < datos.length; i++) {
-      const nombre = datos[i][0] ? datos[i][0].toString().toLowerCase().trim() : "";
-      const codigo = datos[i][2] ? datos[i][2].toString() : "";
-
-      if (nombre && nombre.includes(normalizarTexto(nombreProducto))) {
-        return codigo;
-      }
-    }
-
-    return null;
-  } catch (e) {
-    Logger.log("Error obtener código: " + e);
-    return null;
-  }
-}
-
-function buscarProductoOdooPorCodigo(codigo, creds) {
-  try {
-    const resultado = llamarOdooXMLRPC("product.product", "search", [[["default_code", "=", codigo]]], creds);
-    if (resultado && resultado.length > 0) {
-      return resultado[0];
-    }
-    return null;
-  } catch (e) {
-    Logger.log("Error buscando producto: " + e);
-    return null;
-  }
-}
-
-function buscarOportunidadOdoo(nombreOportunidad, creds) {
-  try {
-    // PASO 1: Búsqueda EXACTA en crm.lead (ignorar filtros de usuario/pipeline)
-    Logger.log("🔍 PASO 1: Búsqueda EXACTA en crm.lead: " + nombreOportunidad);
-
-    // Búsqueda exacta: type='opportunity' AND name=nombreOportunidad (sin ilike)
-    let dominio = [
-      ["type", "=", "opportunity"],
-      ["name", "=", nombreOportunidad]
-    ];
-
-    let resultado = llamarOdooXMLRPC("crm.lead", "search", [dominio], creds);
-    if (resultado && resultado.length > 0) {
-      Logger.log("✅ Oportunidad encontrada (EXACTA): ID " + resultado[0]);
-      return resultado[0];
-    }
-
-    // PASO 2: Búsqueda PARCIAL (ilike) en crm.lead
-    Logger.log("⚠️ PASO 2: Búsqueda PARCIAL en crm.lead: " + nombreOportunidad);
-    dominio = [
-      ["type", "=", "opportunity"],
-      ["name", "ilike", nombreOportunidad]
-    ];
-
-    resultado = llamarOdooXMLRPC("crm.lead", "search", [dominio], creds);
-    if (resultado && resultado.length > 0) {
-      Logger.log("✅ Oportunidad encontrada (PARCIAL): ID " + resultado[0]);
-      if (resultado.length > 1) {
-        Logger.log("⚠️ ADVERTENCIA: Se encontraron " + resultado.length + " oportunidades. Usando la primera.");
-      }
-      return resultado[0];
-    }
-
-    // PASO 3: Si no encuentra en crm.lead, intentar en sale.order
-    Logger.log("⚠️ PASO 3: No encontrado en crm.lead, buscando en sale.order...");
-    resultado = llamarOdooXMLRPC("sale.order", "search", [[["name", "ilike", nombreOportunidad]]], creds);
-    if (resultado && resultado.length > 0) {
-      Logger.log("✅ Sale.Order encontrada: ID " + resultado[0]);
-      return resultado[0];
-    }
-
-    Logger.log("❌ Oportunidad NO encontrada en CRM ni en Sale.Order");
-    Logger.log("💡 SUGERENCIA: Verifica que escribiste el nombre exacto de la columna 'Oportunidad' en Odoo");
-    return null;
-  } catch (e) {
-    Logger.log("Error buscando oportunidad: " + e);
-    return null;
-  }
-}
-
-function obtenerClienteDeOportunidad(oportunidadId, creds) {
-  try {
-    // PASO 1: Intentar leer de crm.lead (Oportunidades)
-    Logger.log("🔍 Intentando obtener cliente de crm.lead ID: " + oportunidadId);
-    let oportunidad = llamarOdooXMLRPC("crm.lead", "read", [[oportunidadId], ["partner_id"]], creds);
-
-    if (oportunidad && oportunidad.length > 0 && oportunidad[0].partner_id) {
-      const clienteId = oportunidad[0].partner_id[0]; // partner_id es array [id, nombre]
-      Logger.log("✅ Cliente obtenido de crm.lead: " + clienteId);
-      return clienteId;
-    }
-
-    // PASO 2: Si no está en crm.lead, intentar en sale.order
-    Logger.log("⚠️ No encontrado en crm.lead, intentando sale.order...");
-    oportunidad = llamarOdooXMLRPC("sale.order", "read", [[oportunidadId], ["partner_id"]], creds);
-    if (oportunidad && oportunidad.length > 0 && oportunidad[0].partner_id) {
-      const clienteId = oportunidad[0].partner_id[0];
-      Logger.log("✅ Cliente obtenido de sale.order: " + clienteId);
-      return clienteId;
-    }
-
-    Logger.log("❌ Cliente no encontrado en crm.lead ni sale.order");
-    return null;
-  } catch (e) {
-    Logger.log("Error obteniendo cliente: " + e);
-    return null;
-  }
-}
-
-function calcularImpuestos(subtotal, creds) {
-  // IVA 19% + RFTFE 4% (si >= $550.000)
-  const impuestos = {
-    iva: 19,
-    rftfe: 0,
-    taxIds: []
-  };
-
-  if (subtotal >= 550000) {
-    impuestos.rftfe = 4;
-  }
-
-  // Buscar IDs de impuestos en Odoo por nombre
-  const ivaId = buscarImpuestoPorNombre("IVA Ventas 19%", creds);
-  const rftfeId = buscarImpuestoPorNombre("RTFTE 4%", creds);
-
-  if (ivaId) {
-    impuestos.taxIds.push(ivaId);
-  }
-
-  if (impuestos.rftfe > 0 && rftfeId) {
-    impuestos.taxIds.push(rftfeId);
-  }
-
-  return impuestos;
-}
-
-function buscarImpuestoPorNombre(nombreImpuesto, creds) {
-  try {
-    const resultado = llamarOdooXMLRPC("account.tax", "search", [[["name", "=", nombreImpuesto]]], creds);
-    if (resultado && resultado.length > 0) {
-      return resultado[0];
-    }
-    Logger.log("⚠️ Impuesto no encontrado: " + nombreImpuesto);
-    return null;
-  } catch (e) {
-    Logger.log("Error buscando impuesto: " + e);
-    return null;
-  }
-}
-
 // ═════════════════════════════════════════════════════════════════════════════════════════
 // FUNCIONES AUXILIARES: PDF Y ATTACHMENT
 // ═════════════════════════════════════════════════════════════════════════════════════════
 
-function adjuntarPDFaRMA(numeroRMA, urlPDF, nombreOportunidad) {
-  try {
-    const creds = obtenerCredencialesOdoo();
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V12: OPORTUNIDAD EXACTA, ALARMAS (COLUMNA AD) Y CÓDIGOS DE CATÁLOGO
+// ═══════════════════════════════════════════════════════════════════════════════════════
 
-    // Descargar PDF desde Google Drive
-    const fileId = extraerFileIdDeURL(urlPDF);
-    if (!fileId) {
-      return { exito: false, error: "No se pudo extraer ID del PDF" };
+function normalizarNombreOportunidad(texto) {
+  return (texto || "").toString().toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function mensajeOportunidadNoEncontrada(hoja, nombre) {
+  const buscado = normalizarNombreOportunidad(nombre);
+  const similares = [];
+  const ult = hoja.getLastRow();
+  if (ult >= 2 && buscado) {
+    hoja.getRange(2, 2, ult - 1, 1).getValues().forEach(r => {
+      const n = (r[0] || "").toString().trim();
+      if (n && normalizarNombreOportunidad(n).includes(buscado) && similares.indexOf(n) === -1) similares.push(n);
+    });
+  }
+  let msg = "No existe ninguna oportunidad con el nombre EXACTO:\n'" + nombre + "'\n\n" +
+    "El nombre debe ser idéntico al de la columna B (OPORTUNIDAD).";
+  if (similares.length > 0) {
+    msg += "\n\nOportunidades parecidas:\n- " + similares.slice(0, 8).join("\n- ");
+  }
+  return msg;
+}
+
+function escribirAlarmaEnFilas(hoja, filas, texto) {
+  const col = CONFIG.COL_ALARMA;
+  if (!hoja.getRange(1, col).getValue()) hoja.getRange(1, col).setValue("ALARMA");
+  const msg = "⚠️ " + texto.toString().substring(0, 800);
+  filas.forEach(f => {
+    const c = hoja.getRange(f, col);
+    c.setValue(msg);
+    c.setBackground("#F4CCCC");
+    c.setFontColor("#990000");
+  });
+  Logger.log("🚨 ALARMA en columna AD (" + filas.length + " filas): " + texto);
+}
+
+function limpiarAlarmaEnFilas(hoja, filas) {
+  const col = CONFIG.COL_ALARMA;
+  filas.forEach(f => {
+    const c = hoja.getRange(f, col);
+    if (c.getValue()) {
+      c.clearContent();
+      c.setBackground(null);
+      c.setFontColor(null);
+    }
+  });
+}
+
+let CATALOGO_CODIGOS_CACHE = null;
+
+function obtenerCatalogoCodigos() {
+  if (CATALOGO_CODIGOS_CACHE !== null) return CATALOGO_CODIGOS_CACHE;
+  const codigos = {};
+  try {
+    const hoja = buscarHojaCatalogo(SpreadsheetApp.openById(ID_DIAGNOSTICOS));
+    if (hoja) {
+      const datos = hoja.getDataRange().getValues();
+      for (let i = 1; i < datos.length; i++) {
+        const nombre = datos[i][0] ? datos[i][0].toString().toLowerCase().trim() : "";
+        const precio = datos[i][1] ? parseInt(datos[i][1]) : 0;
+        if (nombre && precio > 0) {
+          codigos[nombre] = datos[i][2] ? datos[i][2].toString().trim() : "";
+        }
+      }
+    }
+  } catch (e) {
+    Logger.log("❌ Error leyendo códigos del catálogo: " + e);
+  }
+  CATALOGO_CODIGOS_CACHE = codigos;
+  return codigos;
+}
+
+// Misma lógica de coincidencia que obtenerPrecioDelCatalogo, para que precio y código salgan de la misma fila
+function buscarCodigoCatalogo(nombre, soloExacto) {
+  const precios = obtenerCatalogoPreciosDesdeSheet();
+  const codigos = obtenerCatalogoCodigos();
+  const n = normalizarTexto(nombre);
+  if (!n) return null;
+
+  if (precios[n] !== undefined) return codigos[n] || null;
+
+  const claves = Object.keys(precios);
+  for (const k of claves) {
+    if (normalizarTexto(k) === n) return codigos[k] || null;
+  }
+  if (soloExacto) return null;
+
+  const palabras = n.split(" ");
+  for (const k of claves) {
+    let coincidencias = 0;
+    for (const p of palabras) {
+      if (p.length > 2 && k.includes(p)) coincidencias++;
+    }
+    if (coincidencias > 0) return codigos[k] || null;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V12: ODOO - BÚSQUEDA DE OPORTUNIDAD, IMPUESTOS Y CREACIÓN DE LA RMA (repair.order)
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+const ODOO_CAMPOS_CACHE = {};
+
+function odooCampos(modelo, creds) {
+  if (ODOO_CAMPOS_CACHE[modelo]) return ODOO_CAMPOS_CACHE[modelo];
+  const r = llamarOdooXMLRPC(modelo, "fields_get", [[], ["type", "required", "relation", "string"]], creds) || {};
+  ODOO_CAMPOS_CACHE[modelo] = r;
+  return r;
+}
+
+// Coincidencia EXACTA (sin importar mayúsculas), nunca parcial
+function buscarOportunidadOdoo(nombreOportunidad, creds) {
+  const patron = nombreOportunidad.toString().trim().replace(/([%_\\])/g, "\\$1");
+  Logger.log("🔍 Buscando oportunidad EXACTA en CRM: '" + nombreOportunidad + "'");
+  const ids = llamarOdooXMLRPC("crm.lead", "search", [[["type", "=", "opportunity"], ["name", "=ilike", patron]]], creds);
+  if (ids === null) return { id: null, count: 0, error: ODOO_ULTIMO_ERROR };
+  return { id: ids.length > 0 ? ids[0] : null, count: ids.length };
+}
+
+function sugerirOportunidadesOdoo(nombreOportunidad, creds) {
+  const r = llamarOdooXMLRPC("crm.lead", "search_read",
+    [[["type", "=", "opportunity"], ["name", "ilike", nombreOportunidad.toString().trim()]], ["name"]], creds, { limit: 8 });
+  return (r || []).map(x => x.name);
+}
+
+function obtenerClienteDeOportunidad(oportunidadId, creds) {
+  const r = llamarOdooXMLRPC("crm.lead", "read", [[oportunidadId], ["partner_id"]], creds);
+  if (r && r.length > 0 && r[0].partner_id) return r[0].partner_id[0];
+  return null;
+}
+
+function buscarImpuestoPorNombre(nombre, creds) {
+  const r = llamarOdooXMLRPC("account.tax", "search_read",
+    [[["name", "=", nombre], ["type_tax_use", "=", "sale"]], ["name"]], creds, { limit: 1 });
+  return (r && r.length > 0) ? r[0].id : null;
+}
+
+function buscarImpuestoPorMonto(monto, creds) {
+  const r = llamarOdooXMLRPC("account.tax", "search_read",
+    [[["amount", "=", monto], ["amount_type", "=", "percent"], ["type_tax_use", "=", "sale"]], ["name"]], creds, { limit: 1 });
+  return (r && r.length > 0) ? r[0].id : null;
+}
+
+// IVA 19% siempre; Retefuente 4% solo si el total del PDF es >= $550.000. Se asigna por línea.
+function obtenerImpuestosRMA(totalPDF, creds) {
+  const ivaId = buscarImpuestoPorNombre(CONFIG.NOMBRE_IVA, creds) || buscarImpuestoPorMonto(19, creds);
+  const aplicaRete = totalPDF >= CONFIG.LIMITE_RETEFUENTE;
+  const retId = aplicaRete ? (buscarImpuestoPorNombre(CONFIG.NOMBRE_RETEFUENTE, creds) || buscarImpuestoPorMonto(-4, creds)) : null;
+  const ids = [];
+  if (ivaId) ids.push(ivaId);
+  if (retId) ids.push(retId);
+  return { ids: ids, ivaId: ivaId, retId: retId, aplicaRete: aplicaRete };
+}
+
+function buscarProductoMobiliario(creds) {
+  const r = llamarOdooXMLRPC("product.product", "search_read",
+    [["|", ["default_code", "=", CONFIG.PRODUCTO_REPARAR_CODIGO], ["name", "=ilike", "Mobiliario"]], ["name", "default_code", "uom_id"]],
+    creds, { limit: 1 });
+  return (r && r.length > 0) ? r[0] : null;
+}
+
+// Cruza cada ítem del borrador con el código de la columna C del catálogo y con el producto de Odoo
+function resolverItemsBorradorEnOdoo(items, creds) {
+  const faltantes = [];
+  const filas = items.map(it => {
+    const base = it.catalogo || it.nombre;
+    let codigo = null;
+    if (it.grupo === 4) {
+      ["m.o y mantenimiento general", "mantenimiento general", "m.o y mantenimiento"].some(c => (codigo = buscarCodigoCatalogo(c, true)));
+    } else if (it.grupo === 2) {
+      codigo = buscarCodigoCatalogo(base, true);
+    } else {
+      codigo = buscarCodigoCatalogo(base, false);
+    }
+    if (!codigo) faltantes.push("'" + it.nombre + "' no tiene código en la columna C del catálogo");
+    return { item: it, codigo: codigo, prod: null };
+  });
+
+  const codigos = filas.map(x => x.codigo).filter(c => c);
+  const prods = codigos.length > 0
+    ? (llamarOdooXMLRPC("product.product", "search_read", [[["default_code", "in", codigos]], ["default_code", "list_price", "uom_id", "name"]], creds) || [])
+    : [];
+  const porCodigo = {};
+  prods.forEach(p => { porCodigo[p.default_code] = p; });
+
+  filas.forEach(x => {
+    if (!x.codigo) return;
+    x.prod = porCodigo[x.codigo] || null;
+    if (!x.prod) faltantes.push("el código '" + x.codigo + "' (" + x.item.nombre + ") no existe en Odoo");
+  });
+  return { filas: filas, faltantes: faltantes };
+}
+
+// Crea la RMA (New Repair) con cliente de la oportunidad, líneas e impuestos.
+// Devuelve { exito, id, nombre, link, error, alarma, avisos }
+function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, creds) {
+  const res = { exito: false, error: "", alarma: "", avisos: [] };
+  try {
+    // 1) Oportunidad EXACTA en CRM
+    const op = buscarOportunidadOdoo(nombreOportunidad, creds);
+    if (!op.id) {
+      const sug = sugerirOportunidadesOdoo(nombreOportunidad, creds);
+      res.error = "La oportunidad '" + nombreOportunidad + "' NO se encontró en Odoo (CRM, coincidencia exacta)." +
+        (op.error ? "\nDetalle: " + op.error : "") +
+        (sug.length ? "\n\nParecidas en Odoo:\n- " + sug.join("\n- ") : "");
+      return res;
+    }
+    if (op.count > 1) {
+      res.error = "Hay " + op.count + " oportunidades con ese nombre exacto en Odoo. Renombra una para evitar confundirlas.";
+      return res;
+    }
+    Logger.log("✅ Oportunidad encontrada en Odoo: ID " + op.id);
+
+    const partnerId = obtenerClienteDeOportunidad(op.id, creds);
+    if (!partnerId) {
+      res.error = "La oportunidad en Odoo no tiene cliente asignado.";
+      return res;
     }
 
-    const file = DriveApp.getFileById(fileId);
-    const blob = file.getBlob();
-    const base64 = Utilities.base64Encode(blob.getBytes());
+    // 2) Códigos del catálogo (col. C) y productos de Odoo
+    const r = resolverItemsBorradorEnOdoo(borrador.items, creds);
+    if (r.faltantes.length > 0) {
+      res.alarma = "No se creó la RMA. " + r.faltantes.join("; ");
+      return res;
+    }
 
-    // Crear attachment en Odoo (repair.order)
-    const attachmentData = {
-      name: "COTIZACION_" + nombreOportunidad + ".pdf",
-      datas: base64,
-      datas_fname: "COTIZACION_" + nombreOportunidad + ".pdf",
+    // 3) El monto sin impuestos debe ser igual al subtotal del PDF ANTES de crear
+    let esperado = 0;
+    r.filas.forEach(x => { esperado += x.item.cant * (x.prod.list_price || 0); });
+    if (Math.abs(esperado - totalPDF) > 1) {
+      res.alarma = "No se creó la RMA: con los precios de Odoo el monto sin impuestos sería $" + formatearNumero(esperado) +
+        " y el PDF suma $" + formatearNumero(totalPDF) + " (dif. $" + formatearNumero(esperado - totalPDF) + "). Revisar precios.";
+      return res;
+    }
+
+    // 4) Impuestos
+    const imp = obtenerImpuestosRMA(totalPDF, creds);
+    if (!imp.ivaId) {
+      res.alarma = "No se creó la RMA: no se encontró el impuesto '" + CONFIG.NOMBRE_IVA + "' en Odoo.";
+      return res;
+    }
+    if (imp.aplicaRete && !imp.retId) {
+      res.alarma = "No se creó la RMA: el total supera $" + formatearNumero(CONFIG.LIMITE_RETEFUENTE) + " pero no se encontró el impuesto '" + CONFIG.NOMBRE_RETEFUENTE + "' en Odoo.";
+      return res;
+    }
+
+    // 5) Datos de la orden (producto a reparar, método de facturación, cliente)
+    const camposOrden = odooCampos("repair.order", creds);
+    const prodReparar = buscarProductoMobiliario(creds);
+    if (!prodReparar) {
+      res.alarma = "No se creó la RMA: no se encontró el producto '[" + CONFIG.PRODUCTO_REPARAR_CODIGO + "] Mobiliario' en Odoo.";
+      return res;
+    }
+    const requeridos = Object.keys(camposOrden).filter(k => camposOrden[k].required);
+    const defaults = (requeridos.length > 0 ? llamarOdooXMLRPC("repair.order", "default_get", [requeridos], creds) : null) || {};
+    const valsOrden = Object.assign({}, defaults, {
+      partner_id: partnerId,
+      product_id: prodReparar.id,
+      product_uom: prodReparar.uom_id ? prodReparar.uom_id[0] : defaults.product_uom
+    });
+    if (camposOrden.product_qty && !valsOrden.product_qty) valsOrden.product_qty = 1;
+    if (camposOrden.invoice_method) valsOrden.invoice_method = "after_repair";
+    const campoLead = Object.keys(camposOrden).find(k => camposOrden[k].type === "many2one" && camposOrden[k].relation === "crm.lead");
+    if (campoLead) valsOrden[campoLead] = op.id;
+
+    const rmaId = llamarOdooXMLRPC("repair.order", "create", [valsOrden], creds);
+    if (!rmaId) {
+      res.error = "Odoo no creó la RMA. " + ODOO_ULTIMO_ERROR;
+      return res;
+    }
+    Logger.log("✅ RMA creada en Odoo: ID " + rmaId);
+
+    // 6) Líneas: partes -> Piezas (repair.line); mantenimiento, tapicería y otros servicios -> Operaciones (repair.fee)
+    const camposLinea = odooCampos("repair.line", creds);
+    const camposFee = odooCampos("repair.fee", creds);
+    const destinoProduccion = llamarOdooXMLRPC("stock.location", "search", [[["usage", "=", "production"]]], creds, { limit: 1 });
+    const errores = [];
+
+    r.filas.forEach(x => {
+      const campos = x.item.grupo === 1 ? camposLinea : camposFee;
+      const modelo = x.item.grupo === 1 ? "repair.line" : "repair.fee";
+      const vals = {
+        repair_id: rmaId,
+        name: x.prod.name,
+        product_id: x.prod.id,
+        price_unit: x.prod.list_price || 0
+      };
+      vals[campos.product_uom_qty ? "product_uom_qty" : "product_qty"] = x.item.cant;
+      vals[campos.product_uom ? "product_uom" : "product_uom_id"] = x.prod.uom_id ? x.prod.uom_id[0] : false;
+      const campoImp = campos.tax_id ? "tax_id" : (campos.tax_ids ? "tax_ids" : null);
+      if (campoImp) vals[campoImp] = [[6, 0, imp.ids]];
+      if (campos.to_invoice) vals.to_invoice = true;
+      if (x.item.grupo === 1) {
+        vals.type = "add";
+        vals.location_id = valsOrden.location_id;
+        if (destinoProduccion && destinoProduccion.length > 0) vals.location_dest_id = destinoProduccion[0];
+      }
+      const idLinea = llamarOdooXMLRPC(modelo, "create", [vals], creds);
+      if (!idLinea) errores.push(x.item.nombre + ": " + ODOO_ULTIMO_ERROR);
+    });
+
+    // 7) Datos finales y verificación del monto
+    const info = llamarOdooXMLRPC("repair.order", "read", [[rmaId], ["name", "amount_untaxed"]], creds);
+    const nombreRMA = (info && info[0] && info[0].name) ? info[0].name : ("RMA-" + rmaId);
+    const sinImpuestos = (info && info[0]) ? info[0].amount_untaxed : null;
+
+    res.exito = true;
+    res.id = rmaId;
+    res.nombre = nombreRMA;
+    res.link = creds.urlWeb + "#id=" + rmaId + "&action=" + CONFIG.ODOO_ACCION_RMA +
+      "&model=repair.order&view_type=form&cids=1&menu_id=" + CONFIG.ODOO_MENU_RMA;
+    res.aplicaRete = imp.aplicaRete;
+
+    if (errores.length > 0) {
+      res.alarma = "RMA " + nombreRMA + " creada pero fallaron líneas: " + errores.join("; ");
+    } else if (sinImpuestos === null || Math.abs(sinImpuestos - totalPDF) > 1) {
+      res.alarma = "RMA " + nombreRMA + " creada, pero el monto sin impuestos en Odoo es $" + formatearNumero(sinImpuestos || 0) +
+        " y el PDF suma $" + formatearNumero(totalPDF) + ". Revisar antes de enviar.";
+    }
+    return res;
+
+  } catch (e) {
+    Logger.log("❌ Error creando RMA: " + e + "\n" + e.stack);
+    res.error = e.toString();
+    return res;
+  }
+}
+
+function adjuntarPDFaRMAOdoo(rmaId, urlPDF, creds) {
+  try {
+    if (!urlPDF || urlPDF.indexOf("drive.google.com/file") === -1) {
+      return { exito: false, error: "El PDF no quedó guardado en Drive (solo existe el enlace de exportación)" };
+    }
+    const fileId = extraerFileIdDeURL(urlPDF);
+    if (!fileId) return { exito: false, error: "No se pudo leer el ID del PDF en Drive" };
+
+    const archivo = DriveApp.getFileById(fileId);
+    const adjunto = {
+      name: archivo.getName(),
+      datas: Utilities.base64Encode(archivo.getBlob().getBytes()),
       res_model: "repair.order",
-      res_id: numeroRMA,
+      res_id: rmaId,
       type: "binary",
       mimetype: "application/pdf"
     };
-
-    const resultadoAttach = llamarOdooXMLRPC("ir.attachment", "create", [attachmentData], creds);
-
-    if (resultadoAttach) {
-      Logger.log("✅ PDF adjunto a RMA en Odoo: " + numeroRMA);
-      return { exito: true, attachmentId: resultadoAttach };
-    } else {
-      return { exito: false, error: "Error en XML-RPC" };
-    }
-
+    const id = llamarOdooXMLRPC("ir.attachment", "create", [adjunto], creds);
+    if (!id) return { exito: false, error: ODOO_ULTIMO_ERROR };
+    return { exito: true, attachmentId: id };
   } catch (e) {
-    Logger.log("❌ Error adjuntando a RMA: " + e);
     return { exito: false, error: e.toString() };
   }
 }
+
+function escribirRMAEnFilas(hoja, filas, nombreRMA, link) {
+  filas.forEach(f => {
+    const c = hoja.getRange(f, 29);
+    c.setFormula('=HYPERLINK("' + link + '","' + nombreRMA.toString().replace(/"/g, "") + '")');
+    c.setFontColor("#0000FF");
+    c.setFontLine("underline");
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V12: FINALIZAR OPORTUNIDAD = PDF + RMA en Odoo + adjuntar PDF + RMA en columna AC
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta = true) {
+  try {
+    const nombre = (nombreOportunidad || "").toString().trim();
+    Logger.log("🚀 Procesando oportunidad: '" + nombre + "'");
+
+    const diagnosticos = obtenerDiagnosticosDeOportunidad(hojaDiag, nombre);
+    if (diagnosticos.length === 0) {
+      return { exito: false, error: mensajeOportunidadNoEncontrada(hojaDiag, nombre) };
+    }
+    const filas = diagnosticos.map(d => d.fila);
+
+    // Evitar RMA duplicada
+    for (const d of diagnosticos) {
+      const ac = (hojaDiag.getRange(d.fila, 29).getValue() || "").toString().trim();
+      if (ac && ac.indexOf("⏳") === -1 && ac.toUpperCase().indexOf("ERROR") !== 0) {
+        return { exito: false, error: "Esta oportunidad ya tiene la RMA '" + ac + "' en la columna AC (fila " + d.fila + ").\nNo se crea otra. Si necesitas rehacerla, borra primero esa columna." };
+      }
+    }
+
+    const cliente = diagnosticos[0].cliente;
+    const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
+    const totalGeneral = calcularTotalGeneral(silasDatos);
+    const borrador = consolidarBorradorRMA(silasDatos);
+    Logger.log("📊 Sillas: " + silasDatos.length + " | Total silla x silla: " + totalGeneral + " | Consolidado por ítem: " + borrador.total);
+
+    // PDF (siempre, para poder revisarlo)
+    const urlPDF = generarPDFDiagnosticos(nombre, cliente, silasDatos, totalGeneral);
+    if (!urlPDF) {
+      return { exito: false, error: "No se pudo generar el PDF. Revisa el registro de ejecuciones." };
+    }
+
+    // ALARMA: silla x silla vs consolidado por ítem
+    if (Math.abs(totalGeneral - borrador.total) > 1) {
+      const dif = Math.round(totalGeneral - borrador.total);
+      escribirAlarmaEnFilas(hojaDiag, filas,
+        "Total silla x silla " + formatearNumero(totalGeneral) + " ≠ consolidado por ítem " + formatearNumero(borrador.total) + " (dif. " + formatearNumero(dif) + "). Revisar precios y corregir.");
+      return {
+        exito: false, urlPDF: urlPDF,
+        error: "🚨 ALARMA: el total silla x silla ($" + formatearNumero(totalGeneral) + ") NO es igual al consolidado por ítem ($" +
+          formatearNumero(borrador.total) + "). Diferencia: $" + formatearNumero(dif) +
+          ".\n\nNo se creó la RMA. Revisa los precios del catálogo / columnas T-X (queda marcado en la columna AD).\n\nPDF para revisar:\n" + urlPDF
+      };
+    }
+
+    // Odoo
+    const creds = obtenerCredencialesOdoo();
+    if (!creds) {
+      return { exito: false, urlPDF: urlPDF, error: "Faltan las credenciales de Odoo. Usa el menú: ⚙️ Configurar Credenciales Odoo.\n\nPDF generado:\n" + urlPDF };
+    }
+
+    const rma = crearRMAenOdooDesdeBorrador(nombre, borrador, totalGeneral, creds);
+
+    if (!rma.exito) {
+      if (rma.alarma) escribirAlarmaEnFilas(hojaDiag, filas, rma.alarma);
+      return { exito: false, urlPDF: urlPDF, error: (rma.error || rma.alarma) + "\n\nEl PDF sí se generó:\n" + urlPDF };
+    }
+
+    // RMA en columna AC (número de Odoo + enlace) en todas las sillas de la oportunidad
+    escribirRMAEnFilas(hojaDiag, filas, rma.nombre, rma.link);
+
+    // Adjuntar PDF
+    const adj = adjuntarPDFaRMAOdoo(rma.id, urlPDF, creds);
+
+    const alarmas = [];
+    if (rma.alarma) alarmas.push(rma.alarma);
+    if (!adj.exito) alarmas.push("No se pudo adjuntar el PDF a la RMA: " + adj.error);
+
+    if (alarmas.length > 0) {
+      escribirAlarmaEnFilas(hojaDiag, filas, alarmas.join(" | "));
+    } else {
+      limpiarAlarmaEnFilas(hojaDiag, filas);
+    }
+
+    let mensaje = (alarmas.length > 0 ? "⚠️ RMA CREADA CON ALERTAS\n\n" : "✅ COMPLETADO\n\n") +
+      "RMA: " + rma.nombre + "\nLink: " + rma.link + "\n" +
+      "Impuestos: IVA 19%" + (rma.aplicaRete ? " + Retefuente 4%" : "") + "\n" +
+      "PDF " + (adj.exito ? "adjunto a la RMA ✅" : "NO adjunto ❌") + "\n" + urlPDF;
+    if (alarmas.length > 0) mensaje += "\n\n🚨 " + alarmas.join("\n🚨 ") + "\n(Marcado en la columna AD)";
+
+    return { exito: true, referenciaRMA: rma.nombre, linkRMA: rma.link, urlPDF: urlPDF, mensaje: mensaje };
+
+  } catch (e) {
+    Logger.log("❌ Error en procesarOportunidadCompleta: " + e.toString() + "\n" + e.stack);
+    return { exito: false, error: e.toString() };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V12: APROBADO (todas las formas) -> EYM + fecha + OP
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function aprobarFilaSiCorresponde(hoja, fila) {
+  const fechaAprobacion = hoja.getRange(fila, 28).getValue();
+  if (fechaAprobacion) {
+    Logger.log("🟣 Fila " + fila + " ya fue aprobada antes (" + fechaAprobacion + "), no se repite");
+    return false;
+  }
+  procesarAprobacionEnFila(hoja, fila);
+  return true;
+}
+
+// Cubre: lista desplegable, escrito, pegado, arrastrado (varias filas a la vez)
+function onEdit(e) {
+  try {
+    const range = e.range;
+    const hoja = range.getSheet();
+    if (hoja.getName() !== "DIAGNOSTICOS_2026") return;
+
+    const c1 = range.getColumn(), c2 = range.getLastColumn();
+    const filaIni = Math.max(range.getRow(), 2);
+    const filaFin = range.getLastRow();
+    if (filaFin < 2) return;
+
+    // Columnas O (15) o P (16): resaltar U para llenar el valor a mano
+    if (c1 <= 16 && c2 >= 15) {
+      for (let f = filaIni; f <= filaFin; f++) validarYResaltarColumnaU(hoja, f);
+    }
+
+    // Columna AA (27): estados
+    if (c1 <= 27 && c2 >= 27) {
+      const valores = hoja.getRange(filaIni, 27, filaFin - filaIni + 1, 1).getValues();
+      Logger.log("🟣 onEdit AA: filas " + filaIni + " a " + filaFin);
+      for (let i = 0; i < valores.length; i++) {
+        const f = filaIni + i;
+        const v = (valores[i][0] || "").toString().trim().toLowerCase();
+        if (v.includes("aprobado")) {
+          aprobarFilaSiCorresponde(hoja, f);
+        }
+      }
+    }
+  } catch (err) {
+    Logger.log("❌ ERROR en onEdit: " + err.toString() + "\n" + err.stack);
+  }
+}
+
+// Botón del menú: RMAs que ya no están en borrador/canceladas en Odoo -> "Aprobado" en sus sillas
+function sincronizarRMAsDesdeOdoo() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const creds = obtenerCredencialesOdoo();
+    if (!creds) {
+      ui.alert("Faltan las credenciales de Odoo. Usa: ⚙️ Configurar Credenciales Odoo");
+      return;
+    }
+    const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DIAGNOSTICOS_2026");
+    if (!hoja) {
+      ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada");
+      return;
+    }
+
+    const ult = hoja.getLastRow();
+    if (ult < 2) {
+      ui.alert("No hay diagnósticos.");
+      return;
+    }
+    const datos = hoja.getRange(2, 1, ult - 1, 29).getValues();
+
+    // RMAs (col. AC) de sillas que aún no están aprobadas
+    const porRMA = {};
+    datos.forEach((r, i) => {
+      const rma = (r[28] || "").toString().trim();
+      const estado = (r[26] || "").toString().toLowerCase();
+      const aprobada = estado.includes("aprobado") || r[27];
+      if (rma && rma.indexOf("⏳") === -1 && rma.toUpperCase().indexOf("ERROR") !== 0 && !aprobada) {
+        (porRMA[rma] = porRMA[rma] || []).push(i + 2);
+      }
+    });
+    const nombres = Object.keys(porRMA);
+    if (nombres.length === 0) {
+      ui.alert("No hay RMAs pendientes de aprobar en la columna AC.");
+      return;
+    }
+
+    const confirmadas = llamarOdooXMLRPC("repair.order", "search_read",
+      [[["name", "in", nombres], ["state", "not in", ["draft", "cancel"]]], ["name", "state"]], creds);
+    if (confirmadas === null) {
+      ui.alert("❌ No se pudo consultar Odoo.\n" + ODOO_ULTIMO_ERROR);
+      return;
+    }
+
+    let aprobadas = 0;
+    const detalle = [];
+    confirmadas.forEach(rma => {
+      (porRMA[rma.name] || []).forEach(f => {
+        hoja.getRange(f, 27).setValue("Aprobado");
+        // Los cambios hechos por script NO disparan onEdit: se ejecuta el proceso directamente
+        if (aprobarFilaSiCorresponde(hoja, f)) aprobadas++;
+      });
+      detalle.push(rma.name);
+    });
+
+    const pendientes = nombres.filter(n => detalle.indexOf(n) === -1);
+    ui.alert("✅ Sincronización lista\n\nSillas aprobadas: " + aprobadas +
+      "\nRMAs confirmadas: " + (detalle.join(", ") || "ninguna") +
+      "\nRMAs aún sin confirmar en Odoo: " + (pendientes.join(", ") || "ninguna"));
+
+  } catch (e) {
+    Logger.log("❌ Error en sincronización: " + e + "\n" + e.stack);
+    ui.alert("❌ ERROR: " + e.toString());
+  }
+}
+
+// Una sola ejecución que deja en el registro todo lo necesario del esquema de RMA en Odoo
+function diagnosticoOdooRMA() {
+  const ui = SpreadsheetApp.getUi();
+  const creds = obtenerCredencialesOdoo();
+  if (!creds) {
+    ui.alert("Faltan las credenciales de Odoo. Usa: ⚙️ Configurar Credenciales Odoo");
+    return;
+  }
+  Logger.log("═══ DIAGNÓSTICO ODOO RMA ═══");
+  const uid = odooUid(creds);
+  Logger.log("Conexión: " + (uid ? "OK (UID " + uid + ")" : "FALLÓ"));
+  if (!uid) {
+    ui.alert("❌ No se pudo autenticar en Odoo. Revisa credenciales.");
+    return;
+  }
+
+  ["repair.order", "repair.line", "repair.fee"].forEach(m => {
+    const c = odooCampos(m, creds);
+    const claves = Object.keys(c);
+    Logger.log("\n▶ " + m + " (" + claves.length + " campos)");
+    Logger.log("  Requeridos: " + claves.filter(k => c[k].required).join(", "));
+    Logger.log("  Relacionados con crm.lead: " + (claves.filter(k => c[k].relation === "crm.lead").join(", ") || "ninguno"));
+    Logger.log("  Cantidad: " + ["product_uom_qty", "product_qty"].filter(k => c[k]).join(", ") +
+      " | Unidad: " + ["product_uom", "product_uom_id"].filter(k => c[k]).join(", ") +
+      " | Impuestos: " + ["tax_id", "tax_ids"].filter(k => c[k]).join(", ") +
+      " | to_invoice: " + (c.to_invoice ? "sí" : "no") + " | invoice_method: " + (c.invoice_method ? "sí" : "no"));
+  });
+
+  const mob = buscarProductoMobiliario(creds);
+  Logger.log("\nProducto a reparar: " + (mob ? "[" + mob.default_code + "] " + mob.name + " (id " + mob.id + ")" : "NO ENCONTRADO"));
+
+  const imp = llamarOdooXMLRPC("account.tax", "search_read",
+    [[["type_tax_use", "=", "sale"], "|", ["amount", "=", 19], ["amount", "=", -4]], ["name", "amount"]], creds) || [];
+  Logger.log("Impuestos de venta 19% / -4%: " + (imp.map(t => "'" + t.name + "' (" + t.amount + ")").join(" | ") || "ninguno"));
+  Logger.log("IVA por nombre '" + CONFIG.NOMBRE_IVA + "': " + (buscarImpuestoPorNombre(CONFIG.NOMBRE_IVA, creds) || "NO ENCONTRADO"));
+  Logger.log("Retefuente por nombre '" + CONFIG.NOMBRE_RETEFUENTE + "': " + (buscarImpuestoPorNombre(CONFIG.NOMBRE_RETEFUENTE, creds) || "NO ENCONTRADO"));
+
+  const estados = llamarOdooXMLRPC("repair.order", "fields_get", [["state"], ["selection"]], creds);
+  Logger.log("Estados de repair.order: " + JSON.stringify(estados && estados.state && estados.state.selection));
+
+  const resp = ui.prompt("Nombre EXACTO de una oportunidad para probar la búsqueda (opcional):");
+  if (resp.getSelectedButton() === ui.Button.OK && resp.getResponseText().trim()) {
+    const nombre = resp.getResponseText().trim();
+    const op = buscarOportunidadOdoo(nombre, creds);
+    Logger.log("Oportunidad '" + nombre + "': " + (op.id ? "ENCONTRADA (id " + op.id + ", " + op.count + " coincidencia/s), cliente id " + obtenerClienteDeOportunidad(op.id, creds) : "NO encontrada. Parecidas: " + sugerirOportunidadesOdoo(nombre, creds).join(" | ")));
+  }
+  Logger.log("═══ FIN DIAGNÓSTICO ═══");
+  ui.alert("Diagnóstico listo. Revisa Ejecuciones → registro.");
+}
+
 
 function extraerFileIdDeURL(url) {
   try {
@@ -2566,106 +2600,10 @@ function doPost(e) {
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // SINCRONIZACIÓN CON ODOO: Detectar RMAs confirmadas y actualizar columna AA
 // ═══════════════════════════════════════════════════════════════════════════════════════
-function sincronizarRMAsDesdeOdoo() {
-  try {
-    SpreadsheetApp.getUi().alert("🔄 Sincronizando RMAs desde Odoo...\n\nRevisa los Logs para detalles...");
-
-    const creds = obtenerCredencialesOdoo();
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const hojaDiag = ss.getSheetByName("DIAGNOSTICOS_2026");
-
-    if (!hojaDiag) {
-      SpreadsheetApp.getUi().alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada");
-      return;
-    }
-
-    Logger.log("═══════════════════════════════════════════════════════════════");
-    Logger.log("🔄 SINCRONIZANDO RMAs DESDE ODOO");
-    Logger.log("═══════════════════════════════════════════════════════════════");
-
-    // PASO 1: Obtener todas las RMAs de Odoo con estado "Confirmada"
-    const rmasConfirmadas = buscarRMAsConfirmadasEnOdoo(creds);
-    Logger.log("✅ RMAs confirmadas encontradas: " + rmasConfirmadas.length);
-
-    let actualizadas = 0;
-
-    // PASO 2: Para cada RMA confirmada, buscar en columna AC (REFERENCIA_RMA) y actualizar
-    for (const rmaOdoo of rmasConfirmadas) {
-      Logger.log("📌 Procesando RMA Odoo: " + rmaOdoo.name);
-
-      // PASO 3: Buscar todas las filas donde AC (columna 29) = REFERENCIA_RMA
-      const ultFila = hojaDiag.getLastRow();
-      for (let f = 2; f <= ultFila; f++) {
-        const referenciaRMAEnHoja = hojaDiag.getRange(f, 29).getValue(); // Columna AC
-        const estadoActual = hojaDiag.getRange(f, 27).getValue(); // Columna AA
-
-        // Si la REFERENCIA_RMA coincide con la RMA de Odoo
-        if (referenciaRMAEnHoja && referenciaRMAEnHoja.toString().trim() === rmaOdoo.name.toString().trim()) {
-          // Si no está ya "Aprobado", actualizar a "Aprobado"
-          if (!estadoActual || !estadoActual.toString().toLowerCase().includes("aprobado")) {
-            Logger.log("  ⏳ Fila " + f + ": Escribiendo 'Aprobado' en columna AA...");
-            hojaDiag.getRange(f, 27).setValue("Aprobado");
-            Logger.log("  ✅ Fila " + f + " actualizada a 'Aprobado' - Esto disparará EYM + OP automáticamente");
-            actualizadas++;
-
-            // Pequeña pausa para que onEdit se ejecute
-            Utilities.sleep(500);
-          }
-        }
-      }
-    }
-
-    Logger.log("═══════════════════════════════════════════════════════════════");
-    Logger.log("✅ Sincronización completada: " + actualizadas + " filas actualizadas a 'Aprobado'");
-
-    SpreadsheetApp.getUi().alert("✅ Sincronización completada\n\n" + actualizadas + " diagnósticos actualizados a 'Aprobado'\n(EYM y OP se generan automáticamente)");
-
-  } catch (e) {
-    Logger.log("❌ Error en sincronización: " + e.toString());
-    SpreadsheetApp.getUi().alert("❌ ERROR: " + e.toString());
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN AUXILIAR: Buscar Repair Orders confirmadas en Odoo (repair.order state=confirmed)
 // Retorna nombre de RMA para buscar en columna AC (REFERENCIA_RMA) de DIAGNOSTICOS_2026
 // ═══════════════════════════════════════════════════════════════════════════════════════
-function buscarRMAsConfirmadasEnOdoo(creds) {
-  try {
-    Logger.log("🔍 Buscando Repair Orders confirmadas en Odoo (repair.order state='confirmed')...");
-
-    // Buscar en repair.order con state = "confirmed"
-    // Campos: name (referencia RMA), partner_id (cliente), state (estado)
-    const resultados = llamarOdooXMLRPC("repair.order", "search_read", [
-      [["state", "=", "confirmed"]],
-      ["id", "name", "partner_id", "state"]
-    ], creds);
-
-    if (!resultados || !Array.isArray(resultados)) {
-      Logger.log("⚠️ No se encontraron RMAs confirmadas o error en búsqueda");
-      return [];
-    }
-
-    const rmas = [];
-    for (const rma of resultados) {
-      rmas.push({
-        id: rma.id,
-        name: rma.name,  // Este es el nombre de la RMA que se buscará en columna AC
-        estado: rma.state,
-        cliente: rma.partner_id ? rma.partner_id[1] : ""
-      });
-      Logger.log("  📋 RMA encontrada: " + rma.name + " (Cliente: " + (rma.partner_id ? rma.partner_id[1] : "N/A") + ")");
-    }
-
-    Logger.log("✅ RMAs encontradas: " + rmas.length);
-    return rmas;
-
-  } catch (e) {
-    Logger.log("❌ Error buscando RMAs: " + e.toString());
-    return [];
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // FUNCIÓN: Probar los 5 métodos de entrada en columna AA
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -2740,13 +2678,12 @@ function probarTodosLosMetodos() {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("EYM v9.0")
+  SpreadsheetApp.getUi().createMenu("EYM v12.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
     .addItem("🖨️ Presupuesto silla x silla", "generarPresupuestoDescargable")
     .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")
-    .addItem("📝 Procesar RMAs Pendientes", "procesarRMAsPendientes")
     .addItem("🔄 Sincronizar RMAs desde Odoo", "sincronizarRMAsDesdeOdoo")
     .addSeparator()
     .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
@@ -2755,6 +2692,7 @@ function onOpen() {
     .addSeparator()
     .addItem("⚙️ Configurar Credenciales Odoo", "configurarCredencialesOdoo")
     .addItem("🔧 PRUEBA: Conectar Odoo", "pruebaConexionOdoo")
+    .addItem("🔬 DIAGNÓSTICO: Esquema RMA en Odoo", "diagnosticoOdooRMA")
     .addItem("🧪 PRUEBA: onEdit() funciona?", "pruebaOnEdit")
     .addItem("🧪 PRUEBA: 5 Métodos de Entrada", "probarTodosLosMetodos")
     .addItem("DEBUG: Ver Hojas", "diagnosticarHojas")
