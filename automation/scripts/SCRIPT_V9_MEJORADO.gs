@@ -1610,7 +1610,8 @@ function agruparPorSilla(diagnosticos, hoja) {
       valorPartesYMO: (diag.valorPartes || 0) + (diag.valorMO || 0),
       valorOtrosServicios: diag.valorOtrosServicios || 0,
       valorTapiceria: diag.valorTapiceria || 0,
-      valorTotal: diag.valorTotal || 0
+      valorTotal: diag.valorTotal || 0,
+      diag: diag
     };
   });
 }
@@ -1771,6 +1772,126 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
   return Object.values(serviciosMap);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// BORRADOR DE RMA: consolida por ítem (partes, otros servicios, tapicería, M.O)
+// ═══════════════════════════════════════════════════════════════════════════════════════
+function consolidarBorradorRMA(silasDatos) {
+  const mapa = {};
+  const orden = [];
+  const textoGeneral = "abollonado y tapizado general";
+
+  function agregar(grupo, nombre, cant, total) {
+    const key = grupo + "|" + normalizarTexto(nombre);
+    if (!mapa[key]) {
+      mapa[key] = { grupo: grupo, nombre: nombre, cant: 0, total: 0 };
+      orden.push(key);
+    }
+    mapa[key].cant += cant;
+    mapa[key].total += total;
+  }
+
+  silasDatos.forEach(x => {
+    const d = x.diag;
+    if (!d) return;
+
+    // 1) PARTES (col N): una unidad por cada aparición, precio del catálogo
+    (d.repuestos || "").toString().split(";").map(p => p.trim()).filter(p => p).forEach(p => {
+      agregar(1, p, 1, obtenerPrecioDelCatalogo(p));
+    });
+
+    // 2) OTROS SERVICIOS Y ESPECIALES (col O + P): el valor viene de la col U
+    const otros = [d.otrosServicios, d.observacionesEspeciales]
+      .map(t => (t || "").toString().trim()).filter(t => t).join("; ");
+    if (otros) {
+      agregar(2, otros, 1, d.valorOtrosServicios || 0);
+    }
+
+    // 3) TAPICERÍA (col Q + R): mismo criterio que el cálculo de la col V
+    const asiento = (d.tapiceriaAsiento || "").toString().trim();
+    const espaldar = (d.tapiceriaEspaldar || "").toString().trim();
+    if (asiento && espaldar &&
+        normalizarTexto(asiento) === textoGeneral && normalizarTexto(espaldar) === textoGeneral) {
+      agregar(3, asiento, 1, obtenerPrecioDelCatalogo(asiento));
+    } else {
+      if (asiento) agregar(3, "Asiento: " + asiento, 1, obtenerPrecioDelCatalogo(asiento));
+      if (espaldar) agregar(3, "Espaldar: " + espaldar, 1, obtenerPrecioDelCatalogo(espaldar));
+    }
+
+    // 4) M.O Y MANTENIMIENTO GENERAL (col W): una por silla
+    agregar(4, "M.O y mantenimiento general", 1, d.valorMO || CONFIG.MANTENIMIENTO_GENERAL);
+  });
+
+  const items = orden.map(k => {
+    const it = mapa[k];
+    it.unitario = it.cant > 0 ? Math.round(it.total / it.cant) : 0;
+    return it;
+  }).sort((a, b) => a.grupo - b.grupo);
+
+  const total = items.reduce((acc, it) => acc + it.total, 0);
+  return { items: items, total: total };
+}
+
+function agregarHojaBorradorRMA(ssTemp, silasDatos, cliente, nombreOportunidad, totalPresupuesto) {
+  const borrador = consolidarBorradorRMA(silasDatos);
+  if (borrador.items.length === 0) {
+    Logger.log("⚠️ Borrador RMA: sin detalle de diagnósticos, no se agrega la hoja");
+    return;
+  }
+
+  const hoja = ssTemp.insertSheet("BORRADOR_RMA");
+  let fila = 1;
+
+  hoja.getRange(fila, 1, 1, 4).merge();
+  hoja.getRange(fila, 1).setValue("BORRADOR RMA - CONSOLIDADO POR ÍTEM").setFontSize(11).setFontWeight("normal");
+  fila++;
+  hoja.getRange(fila, 1).setValue("CLIENTE: " + cliente).setFontSize(8);
+  fila++;
+  hoja.getRange(fila, 1).setValue("Referencia: " + nombreOportunidad).setFontSize(8).setFontWeight("normal");
+  fila += 2;
+
+  const encabezado = hoja.getRange(fila, 1, 1, 4);
+  encabezado.setValues([["Ítem", "Cantidad", "Precio unitario", "Total Antes de IVA"]]);
+  encabezado.setBackgroundColor("#1a73e8").setFontColor("#FFFFFF").setFontSize(8).setFontWeight("normal").setHorizontalAlignment("center");
+  fila++;
+
+  const sinPrecio = [];
+  const filas = borrador.items.map(it => {
+    if (!it.total) sinPrecio.push(it.nombre);
+    return [it.nombre + (it.total ? "" : " *"), it.cant, it.unitario, it.total];
+  });
+  const rango = hoja.getRange(fila, 1, filas.length, 4);
+  rango.setValues(filas);
+  rango.setFontSize(8).setFontWeight("normal").setVerticalAlignment("top");
+  rango.setBorder(null, null, true, null, null, true, "#999999", SpreadsheetApp.BorderStyle.SOLID);
+  hoja.getRange(fila, 1, filas.length, 1).setWrap(true);
+  hoja.getRange(fila, 2, filas.length, 1).setHorizontalAlignment("center");
+  hoja.getRange(fila, 3, filas.length, 2).setNumberFormat("#,##0").setHorizontalAlignment("right");
+  fila += filas.length;
+
+  const filaTotal = hoja.getRange(fila, 1, 1, 4);
+  filaTotal.setValues([["TOTAL ANTES DE IVA", "", "", borrador.total]]);
+  filaTotal.setBackgroundColor("#FFF2CC").setFontSize(8).setFontWeight("normal");
+  hoja.getRange(fila, 4).setNumberFormat("#,##0").setHorizontalAlignment("right");
+  fila += 2;
+
+  const diferencia = Math.round(totalPresupuesto - borrador.total);
+  if (sinPrecio.length > 0) {
+    hoja.getRange(fila, 1).setValue("* Sin precio en el catálogo / valor en 0: " + sinPrecio.join("; ")).setFontSize(7);
+    fila++;
+  }
+  if (diferencia !== 0) {
+    hoja.getRange(fila, 1).setValue("Nota: el total del presupuesto por silla es $" + formatearNumero(totalPresupuesto) +
+      " (diferencia de $" + formatearNumero(diferencia) + " frente a este consolidado; revisar precios editados a mano).").setFontSize(7);
+    Logger.log("⚠️ Borrador RMA difiere del presupuesto en $" + diferencia);
+  }
+
+  hoja.setColumnWidth(1, 380);
+  hoja.setColumnWidth(2, 70);
+  hoja.setColumnWidth(3, 110);
+  hoja.setColumnWidth(4, 120);
+  Logger.log("✅ Borrador RMA: " + borrador.items.length + " ítems, total $" + formatearNumero(borrador.total));
+}
+
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
     Logger.log("\n🖨️ ═══════════════════════════════════════════════════════");
@@ -1911,12 +2032,17 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       if (c.wrap) hojaData.getRange(filaEncabezado + 1, i + 1, filasDatos.length, 1).setWrap(true);
     });
 
+    try {
+      agregarHojaBorradorRMA(ssTemp, silasDatos, cliente, nombreOportunidad, totalGeneral2);
+    } catch (errRMA) {
+      Logger.log("⚠️ No se pudo agregar el borrador de RMA: " + errRMA);
+    }
+
     SpreadsheetApp.flush();
 
     Logger.log("🖨️ PASO 2: Exportando PDF y guardándolo en Drive...");
     const ssId = ssTemp.getId();
     const exportUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=pdf" +
-      "&gid=" + hojaData.getSheetId() +
       "&portrait=false&size=letter&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false" +
       "&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3";
 
