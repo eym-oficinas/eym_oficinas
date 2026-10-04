@@ -1937,11 +1937,35 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     hojaData.getRange(6, 6, filasDatos.length + 2, 1).setWrap(true);
     hojaData.getRange(6, 10, filasDatos.length + 2, 1).setWrap(true);
 
-    Logger.log("🖨️ PASO 2: Obteniendo URL del Sheet...");
-    const ssId = ssTemp.getId();
-    const pdfUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=pdf&portrait=false&fitw=true";
+    SpreadsheetApp.flush();
 
-    Logger.log("✅ PASO 3: Google Sheet y PDF creados exitosamente");
+    Logger.log("🖨️ PASO 2: Exportando PDF y guardándolo en Drive...");
+    const ssId = ssTemp.getId();
+    const exportUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=pdf" +
+      "&gid=" + hojaData.getSheetId() +
+      "&portrait=false&size=letter&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false" +
+      "&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3";
+
+    let pdfUrl = exportUrl;
+    try {
+      const respuesta = UrlFetchApp.fetch(exportUrl, {
+        headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true
+      });
+      if (respuesta.getResponseCode() === 200) {
+        const nombrePDF = "COTIZACION_" + nombreOportunidad.replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp + ".pdf";
+        const archivoPDF = DriveApp.createFile(respuesta.getBlob().setName(nombrePDF));
+        pdfUrl = archivoPDF.getUrl();
+        DriveApp.getFileById(ssId).setTrashed(true);
+        Logger.log("✅ PDF guardado en Drive: " + nombrePDF);
+      } else {
+        Logger.log("⚠️ Export devolvió HTTP " + respuesta.getResponseCode() + ", se entrega enlace de exportación");
+      }
+    } catch (errPdf) {
+      Logger.log("⚠️ No se pudo guardar PDF en Drive: " + errPdf + " (se entrega enlace de exportación)");
+    }
+
+    Logger.log("✅ PASO 3: PDF generado");
     Logger.log("✅ Sheet ID: " + ssId);
     Logger.log("✅ URL PDF: " + pdfUrl);
     Logger.log("✅ CARACTERÍSTICAS IMPLEMENTADAS:");
