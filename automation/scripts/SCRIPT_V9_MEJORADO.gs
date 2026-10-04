@@ -1805,17 +1805,17 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     const hayTapiceria = silasDatos.some(x => (x.tapiceria || "").toString().trim() !== "" || (x.valorTapiceria || 0) > 0);
     const hayOtrosServ = silasDatos.some(x => (x.valorOtrosServicios || 0) > 0);
     const columnas = [
-      { enc: "#", ancho: 35, valor: (x, n) => n.toString() },
-      { enc: "# Silla", ancho: 60, valor: x => x.numeroTemporal || "-" },
-      { enc: "Tipo", ancho: 80, valor: x => x.tipoSilla || "-" },
-      { enc: "Color", ancho: 70, valor: x => x.color || "-" },
-      { enc: "Ubicación", ancho: 85, valor: x => x.ubicacion || "-" },
-      { enc: "Partes y Servicios", ancho: 260, wrap: true, valor: x => x.partesYServicios || "-" },
-      { enc: "Tapicería", ancho: 170, wrap: true, valor: x => x.tapiceria || "-", incluir: hayTapiceria },
-      { enc: "Valor Partes, M.O y Mmto General", ancho: 105, num: true, total: "valorPartesYMO", valor: x => x.valorPartesYMO || 0 },
-      { enc: "Valor Otros Servicios", ancho: 90, num: true, total: "valorOtrosServicios", valor: x => x.valorOtrosServicios || 0, incluir: hayOtrosServ },
-      { enc: "Valor Tapicería", ancho: 90, num: true, total: "valorTapiceria", valor: x => x.valorTapiceria || 0, incluir: hayTapiceria },
-      { enc: "Valor Total Antes de IVA", ancho: 105, num: true, total: "valorTotal", valor: x => x.valorTotal || 0 }
+      { enc: "#", ancho: 28, valor: (x, n) => n.toString() },
+      { enc: "# Silla", ancho: 48, valor: x => x.numeroTemporal || "-" },
+      { enc: "Tipo", ancho: 62, valor: x => x.tipoSilla || "-" },
+      { enc: "Color", ancho: 50, valor: x => x.color || "-" },
+      { enc: "Ubicación", ancho: 68, valor: x => x.ubicacion || "-" },
+      { enc: "Partes y Servicios", ancho: 190, wrap: true, valor: x => x.partesYServicios || "-" },
+      { enc: "Tapicería", ancho: 105, wrap: true, valor: x => x.tapiceria || "-", incluir: hayTapiceria },
+      { enc: "Valor Partes, M.O y Mmto General", ancho: 82, num: true, total: "valorPartesYMO", valor: x => x.valorPartesYMO || 0 },
+      { enc: "Valor Otros Servicios", ancho: 72, num: true, total: "valorOtrosServicios", valor: x => x.valorOtrosServicios || 0, incluir: hayOtrosServ },
+      { enc: "Valor Tapicería", ancho: 72, num: true, total: "valorTapiceria", valor: x => x.valorTapiceria || 0, incluir: hayTapiceria },
+      { enc: "Valor Total Antes de IVA", ancho: 82, num: true, total: "valorTotal", valor: x => x.valorTotal || 0 }
     ].filter(c => c.incluir !== false);
     const numCols = columnas.length;
     const primeraNum = columnas.findIndex(c => c.num) + 1;
@@ -1884,6 +1884,8 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       hojaData.getRange(fila, primeraNum, filasDatos.length, cantNum).setHorizontalAlignment("right");
       hojaData.getRange(fila, 1, filasDatos.length, numCols).setVerticalAlignment("top");
       hojaData.getRange(fila, 1, filasDatos.length, numCols).setFontSize(8).setFontWeight("normal");
+      // Línea separadora entre sillas
+      hojaData.getRange(fila, 1, filasDatos.length, numCols).setBorder(null, null, true, null, null, true, "#999999", SpreadsheetApp.BorderStyle.SOLID);
       fila += filasDatos.length;
     }
 
