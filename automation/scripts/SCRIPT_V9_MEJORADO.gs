@@ -1550,6 +1550,7 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
     if (ultFila < 2) return diagnosticos;
 
     const datos = hoja.getRange(2, 1, ultFila - 1, 24).getValues();
+    const temporalesVisibles = hoja.getRange(2, 6, ultFila - 1, 1).getDisplayValues();
     const busqueda = nombreOportunidad.toLowerCase();
     const num = v => (v === "" || v === null || isNaN(Number(v))) ? 0 : Number(v);
 
@@ -1564,7 +1565,7 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
           cliente: r[2],
           tipoSilla: r[3],
           numeroEYM: r[4],
-          numeroTemporal: r[5],
+          numeroTemporal: String(temporalesVisibles[i][0]).trim(),
           color: r[10],                    // K
           ubicacion: r[11],                // L
           repuestos: r[13],                // N
@@ -1590,35 +1591,28 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
 }
 
 function agruparPorSilla(diagnosticos, hoja) {
-  const silas = {};
-
-  for (let diag of diagnosticos) {
+  // Una fila de PDF por cada fila del diagnóstico (no se fusionan #Temporal repetidos)
+  const vistos = {};
+  return diagnosticos.map(diag => {
     const numTemp = diag.numeroTemporal || "Sin numero";
-
-    if (!silas[numTemp]) {
-      silas[numTemp] = {
-        numeroTemporal: numTemp,
-        tipoSilla: diag.tipoSilla,
-        color: diag.color,
-        ubicacion: diag.ubicacion,
-        partesYServicios: consolidarPartesYServicios(diag),
-        tapiceria: consolidarTapiceria(diag),
-        valorPartesYMO: (diag.valorPartes || 0) + (diag.valorMO || 0),
-        valorOtrosServicios: diag.valorOtrosServicios || 0,
-        valorTapiceria: diag.valorTapiceria || 0,
-        valorTotal: diag.valorTotal || 0
-      };
-    } else {
-      Logger.log("⚠️ #Temporal repetido: '" + numTemp + "' (fila " + diag.fila + ") - se usan los valores de la última fila");
-      // Si hay múltiples filas para la misma silla, actualizar valores
-      silas[numTemp].valorPartesYMO = (diag.valorPartes || 0) + (diag.valorMO || 0);
-      silas[numTemp].valorOtrosServicios = diag.valorOtrosServicios || 0;
-      silas[numTemp].valorTapiceria = diag.valorTapiceria || 0;
-      silas[numTemp].valorTotal = diag.valorTotal || 0;
+    if (vistos[numTemp]) {
+      Logger.log("⚠️ #Temporal repetido: '" + numTemp + "' (fila " + diag.fila + " de la hoja) - se incluye igual como silla aparte");
     }
-  }
+    vistos[numTemp] = true;
 
-  return Object.values(silas);
+    return {
+      numeroTemporal: numTemp,
+      tipoSilla: diag.tipoSilla,
+      color: diag.color,
+      ubicacion: diag.ubicacion,
+      partesYServicios: consolidarPartesYServicios(diag),
+      tapiceria: consolidarTapiceria(diag),
+      valorPartesYMO: (diag.valorPartes || 0) + (diag.valorMO || 0),
+      valorOtrosServicios: diag.valorOtrosServicios || 0,
+      valorTapiceria: diag.valorTapiceria || 0,
+      valorTotal: diag.valorTotal || 0
+    };
+  });
 }
 
 // Consolidar Partes y Servicios: N + O + P + "M.O y mantenimiento General"
@@ -1842,7 +1836,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     fila++;
 
     // ENCABEZADOS DE TABLA
-    const encabezados = ["#", "Nº Temp", "Tipo", "Color", "Ubicación", "Partes y Servicios", "Valor Partes y M.O", "Valor Otros Servicios", "Valor Tapicería", "Tapicería", "Valor Total"];
+    const encabezados = ["#", "# Silla", "Tipo", "Color", "Ubicación", "Partes y Servicios", "Tapicería", "Valor Partes, M.O y Mmto General", "Valor Otros Servicios", "Valor Tapicería", "Valor Total Antes de IVA"];
     hojaData.getRange(fila, 1, 1, 11).setValues([encabezados]);
 
     // Formatear encabezados
@@ -1878,10 +1872,10 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
         sila.color || "-",
         sila.ubicacion || "-",
         sila.partesYServicios || "-",
+        sila.tapiceria || "-",
         valPartesYMO,
         valOtrosServ,
         valTapic,
-        sila.tapiceria || "-",
         valTotal
       ]);
       numSilla++;
@@ -1889,20 +1883,14 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
 
     // Insertar datos
     if (filasDatos.length > 0) {
+      // Columnas 1-2 como texto para que "1-10" no se convierta en fecha
+      hojaData.getRange(fila, 1, filasDatos.length, 2).setNumberFormat("@");
       hojaData.getRange(fila, 1, filasDatos.length, 11).setValues(filasDatos);
 
-      // Formatear celdas numéricas
-      for (let r = 0; r < filasDatos.length; r++) {
-        const filaActual = fila + r;
-        // Columnas de valores (7, 8, 9, 11)
-        hojaData.getRange(filaActual, 7).setNumberFormat("#,##0");
-        hojaData.getRange(filaActual, 8).setNumberFormat("#,##0");
-        hojaData.getRange(filaActual, 9).setNumberFormat("#,##0");
-        hojaData.getRange(filaActual, 11).setNumberFormat("#,##0");
-
-        // Alineación a la derecha para números
-        hojaData.getRange(filaActual, 7, 1, 5).setHorizontalAlignment("right");
-      }
+      // Columnas de valores (8 a 11): formato de miles y alineación a la derecha
+      hojaData.getRange(fila, 8, filasDatos.length, 4).setNumberFormat("#,##0");
+      hojaData.getRange(fila, 8, filasDatos.length, 4).setHorizontalAlignment("right");
+      hojaData.getRange(fila, 1, filasDatos.length, 11).setVerticalAlignment("top");
 
       fila += filasDatos.length;
     }
@@ -1915,10 +1903,10 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       "",
       "",
       "",
+      "",
       totalPartesYMO,
       totalOtrosServ,
       totalTapicTecho,
-      "",
       totalGeneral2
     ]]);
 
@@ -1927,8 +1915,8 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     rangoTotales.setBackgroundColor("#FFF2CC");
     rangoTotales.setFontWeight("normal");
     rangoTotales.setFontSize(8);
-    hojaData.getRange(fila, 7, 1, 5).setNumberFormat("#,##0");
-    hojaData.getRange(fila, 7, 1, 5).setHorizontalAlignment("right");
+    hojaData.getRange(fila, 8, 1, 4).setNumberFormat("#,##0");
+    hojaData.getRange(fila, 8, 1, 4).setHorizontalAlignment("right");
 
     fila++;
 
@@ -1944,20 +1932,21 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
 
     // Ajustar ancho de columnas
     hojaData.setColumnWidth(1, 40);  // #
-    hojaData.setColumnWidth(2, 60);  // Nº Temp
+    hojaData.setColumnWidth(2, 60);  // # Silla
     hojaData.setColumnWidth(3, 80);  // Tipo
     hojaData.setColumnWidth(4, 70);  // Color
     hojaData.setColumnWidth(5, 80);  // Ubicación
     hojaData.setColumnWidth(6, 200); // Partes y Servicios (más ancho para wrapping)
-    hojaData.setColumnWidth(7, 100); // Valor Partes y M.O
-    hojaData.setColumnWidth(8, 100); // Valor Otros Servicios
-    hojaData.setColumnWidth(9, 100); // Valor Tapicería
-    hojaData.setColumnWidth(10, 150); // Tapicería
-    hojaData.setColumnWidth(11, 100); // Valor Total
+    hojaData.setColumnWidth(7, 150); // Tapicería
+    hojaData.setColumnWidth(8, 105); // Valor Partes, M.O y Mmto General
+    hojaData.setColumnWidth(9, 90);  // Valor Otros Servicios
+    hojaData.setColumnWidth(10, 90); // Valor Tapicería
+    hojaData.setColumnWidth(11, 105); // Valor Total Antes de IVA
 
     // Establecer wrap text para la columna de Partes y Servicios y Tapicería
     hojaData.getRange(6, 6, filasDatos.length + 2, 1).setWrap(true);
-    hojaData.getRange(6, 10, filasDatos.length + 2, 1).setWrap(true);
+    hojaData.getRange(6, 7, filasDatos.length + 2, 1).setWrap(true);
+    hojaData.getRange(6, 8, 1, 4).setWrap(true);
 
     SpreadsheetApp.flush();
 
