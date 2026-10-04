@@ -1770,10 +1770,11 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
     Logger.log("\n🖨️ ═══════════════════════════════════════════════════════");
-    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V10 GOOGLE SHEETS");
+    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V11 GOOGLE SHEETS");
     Logger.log("🖨️ Oportunidad: " + nombreOportunidad);
     Logger.log("🖨️ Cliente: " + cliente);
     Logger.log("🖨️ Sillas: " + silasDatos.length);
+    Logger.log("🖨️ Total General: $" + formatearNumero(totalGeneral));
     Logger.log("🖨️ ═══════════════════════════════════════════════════════");
 
     if (!silasDatos || silasDatos.length === 0) {
@@ -1781,76 +1782,62 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       return null;
     }
 
-    // Crear documento Google Docs con nombre único
+    // Crear Google Sheet temporal con nombre único
     const ahora = new Date();
     const timestamp = ahora.getFullYear() + "-" + String(ahora.getMonth() + 1).padStart(2, '0') + "-" + String(ahora.getDate()).padStart(2, '0');
-    const nombreDoc = "COTIZACION_" + nombreOportunidad.substring(0, 25).replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp;
+    const nombreSheet = "PDF_COTIZACION_" + nombreOportunidad.substring(0, 20).replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp;
 
-    Logger.log("🖨️ PASO 1: Creando Google Docs (landscape)...");
-    Logger.log("🖨️ Nombre: " + nombreDoc);
+    Logger.log("🖨️ PASO 1: Creando Google Sheet temporal...");
+    Logger.log("🖨️ Nombre: " + nombreSheet);
 
-    const doc = DocumentApp.create(nombreDoc);
-    const body = doc.getBody();
+    // Crear el sheet
+    const ssTemp = SpreadsheetApp.create(nombreSheet);
+    const hojaData = ssTemp.getActiveSheet();
 
-    // Establecer orientación landscape
-    const pageSize = DocumentApp.PageSize.LETTER;
-    const margins = {top: 0.3, bottom: 0.3, left: 0.3, right: 0.3};
-    body.getParent().setPageSize(pageSize);
-    body.getParent().setMarginTop(margins.top * 72);
-    body.getParent().setMarginBottom(margins.bottom * 72);
-    body.getParent().setMarginLeft(margins.left * 72);
-    body.getParent().setMarginRight(margins.right * 72);
+    // Renombrar la hoja a "COTIZACION"
+    hojaData.setName("COTIZACION");
 
-    // Cambiar a orientación landscape
-    const sections = doc.getSections();
-    if (sections.length > 0) {
-      sections[0].setPageHeight(7.5 * 72);
-      sections[0].setPageWidth(10 * 72);
-    }
+    // ENCABEZADO CON LOGO Y CLIENTE
+    let fila = 1;
+    hojaData.getRange(fila, 1, 1, 11).merge();
+    hojaData.getRange(fila, 1).setValue("EYM OFICINAS - COTIZACIÓN DE REPARACIÓN");
+    hojaData.getRange(fila, 1).setFontSize(11).setFontWeight("bold");
+    fila++;
 
-    // ENCABEZADO
-    // Logo/Nombre EYM
-    const logoParafo = body.appendParagraph("EYM OFICINAS");
-    logoParafo.setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    logoParafo.getRangeElement().getElement().asText().setFontSize(11);
-    logoParafo.getRangeElement().getElement().asText().setBold(true);
+    hojaData.getRange(fila, 1).setValue("CLIENTE: " + cliente);
+    hojaData.getRange(fila, 1).setFontSize(8);
+    fila++;
 
-    // Título
-    const tituloParafo = body.appendParagraph("COTIZACIÓN DE REPARACIÓN DE SILLAS");
-    tituloParafo.setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    tituloParafo.getRangeElement().getElement().asText().setFontSize(11);
-    tituloParafo.getRangeElement().getElement().asText().setBold(true);
+    hojaData.getRange(fila, 1).setValue("FECHA: " + ahora.toLocaleDateString("es-CO"));
+    hojaData.getRange(fila, 1).setFontSize(8);
+    fila++;
 
-    // Cliente
-    const clienteParafo = body.appendParagraph("CLIENTE: " + cliente);
-    clienteParafo.getRangeElement().getElement().asText().setFontSize(8);
+    hojaData.getRange(fila, 1).setValue("Referencia: " + nombreOportunidad);
+    hojaData.getRange(fila, 1).setFontSize(8).setFontWeight("bold");
+    fila++;
 
-    // Fecha
-    const fechaParafo = body.appendParagraph("FECHA: " + ahora.toLocaleDateString("es-CO"));
-    fechaParafo.getRangeElement().getElement().asText().setFontSize(8);
+    // Fila en blanco
+    fila++;
 
-    // Referencia
-    const refParafo = body.appendParagraph("Referencia: " + nombreOportunidad);
-    refParafo.getRangeElement().getElement().asText().setFontSize(8);
-    refParafo.getRangeElement().getElement().asText().setBold(true);
+    // ENCABEZADOS DE TABLA
+    const encabezados = ["#", "Nº Temp", "Tipo", "Color", "Ubicación", "Partes y Servicios", "Valor Partes y M.O", "Valor Otros Servicios", "Valor Tapicería", "Tapicería", "Valor Total"];
+    hojaData.getRange(fila, 1, 1, 11).setValues([encabezados]);
 
-    // Espacio antes de tabla
-    body.appendParagraph("");
+    // Formatear encabezados
+    const rangoEncabezados = hojaData.getRange(fila, 1, 1, 11);
+    rangoEncabezados.setBackgroundColor("#1a73e8");
+    rangoEncabezados.setFontColor("#FFFFFF");
+    rangoEncabezados.setFontWeight("bold");
+    rangoEncabezados.setFontSize(8);
+    rangoEncabezados.setHorizontalAlignment("center");
 
-    // TABLA DE DATOS - 11 COLUMNAS
-    Logger.log("🖨️ PASO 2: Creando tabla con 11 columnas...");
+    fila++;
 
-    const numFilas = silasDatos.length + 2;
-    const numColumnas = 11;
-
-    // Preparar datos para tabla
-    const tablaDatos = [
-      ["#", "Nº Temp", "Tipo", "Color", "Ubicación", "Partes y Servicios", "Valor Partes y M.O", "Valor Otros Servicios", "Valor Tapicería", "Tapicería", "Valor Total"]
-    ];
-
+    // DATOS DE SILLAS
     let numSilla = 1;
     let totalPartesYMO = 0, totalOtrosServ = 0, totalTapicTecho = 0, totalGeneral2 = 0;
 
+    const filasDatos = [];
     silasDatos.forEach(sila => {
       const valPartesYMO = sila.valorPartesYMO || 0;
       const valOtrosServ = sila.valorOtrosServicios || 0;
@@ -1862,84 +1849,106 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       totalTapicTecho += valTapic;
       totalGeneral2 += valTotal;
 
-      tablaDatos.push([
+      filasDatos.push([
         numSilla.toString(),
         sila.numeroTemporal || "-",
         sila.tipoSilla || "-",
         sila.color || "-",
         sila.ubicacion || "-",
         sila.partesYServicios || "-",
-        "$" + formatearNumero(valPartesYMO),
-        "$" + formatearNumero(valOtrosServ),
-        "$" + formatearNumero(valTapic),
+        valPartesYMO,
+        valOtrosServ,
+        valTapic,
         sila.tapiceria || "-",
-        "$" + formatearNumero(valTotal)
+        valTotal
       ]);
       numSilla++;
     });
 
-    // Fila de totales
-    tablaDatos.push([
+    // Insertar datos
+    if (filasDatos.length > 0) {
+      hojaData.getRange(fila, 1, filasDatos.length, 11).setValues(filasDatos);
+
+      // Formatear celdas numéricas
+      for (let r = 0; r < filasDatos.length; r++) {
+        const filaActual = fila + r;
+        // Columnas de valores (7, 8, 9, 11)
+        hojaData.getRange(filaActual, 7).setNumberFormat("#,##0");
+        hojaData.getRange(filaActual, 8).setNumberFormat("#,##0");
+        hojaData.getRange(filaActual, 9).setNumberFormat("#,##0");
+        hojaData.getRange(filaActual, 11).setNumberFormat("#,##0");
+
+        // Alineación a la derecha para números
+        hojaData.getRange(filaActual, 7, 1, 5).setHorizontalAlignment("right");
+      }
+
+      fila += filasDatos.length;
+    }
+
+    // FILA DE TOTALES
+    hojaData.getRange(fila, 1, 1, 11).setValues([[
       "",
       "TOTALES",
       "",
       "",
       "",
       "",
-      "$" + formatearNumero(totalPartesYMO),
-      "$" + formatearNumero(totalOtrosServ),
-      "$" + formatearNumero(totalTapicTecho),
+      totalPartesYMO,
+      totalOtrosServ,
+      totalTapicTecho,
       "",
-      "$" + formatearNumero(totalGeneral2)
-    ]);
+      totalGeneral2
+    ]]);
 
-    // Insertar tabla en Docs
-    const tabla = body.appendTable(tablaDatos);
+    // Formatear fila de totales
+    const rangoTotales = hojaData.getRange(fila, 1, 1, 11);
+    rangoTotales.setBackgroundColor("#FFF2CC");
+    rangoTotales.setFontWeight("bold");
+    rangoTotales.setFontSize(8);
+    rangoTotales.getRange(1, 7, 1, 5).setNumberFormat("#,##0");
+    rangoTotales.getRange(1, 7, 1, 5).setHorizontalAlignment("right");
 
-    // Formatear tabla
-    for (let r = 0; r < tablaDatos.length; r++) {
-      const fila = tabla.getRow(r);
-      for (let c = 0; c < numColumnas; c++) {
-        const celda = fila.getCell(c);
-        const texto = celda.getText();
+    fila++;
 
-        // Establecer tamaño de fuente
-        texto.setFontSize(8);
+    // TOTAL GENERAL Antes de IVA
+    fila++;
+    hojaData.getRange(fila, 10).setValue("TOTAL ANTES DE IVA:");
+    hojaData.getRange(fila, 10).setFontWeight("bold");
+    hojaData.getRange(fila, 10).setFontSize(8);
+    hojaData.getRange(fila, 11).setValue(totalGeneral2);
+    hojaData.getRange(fila, 11).setNumberFormat("#,##0");
+    hojaData.getRange(fila, 11).setFontWeight("bold");
+    hojaData.getRange(fila, 11).setFontSize(8);
 
-        // Encabezado: azul con texto blanco
-        if (r === 0) {
-          texto.setBold(true);
-          celda.setBackgroundColor("#1a73e8");
-          texto.setForegroundColor("#FFFFFF");
-        }
-        // Fila de totales: amarillo
-        else if (r === tablaDatos.length - 1) {
-          texto.setBold(true);
-          celda.setBackgroundColor("#FFF2CC");
-        }
+    // Ajustar ancho de columnas
+    hojaData.setColumnWidth(1, 40);  // #
+    hojaData.setColumnWidth(2, 60);  // Nº Temp
+    hojaData.setColumnWidth(3, 80);  // Tipo
+    hojaData.setColumnWidth(4, 70);  // Color
+    hojaData.setColumnWidth(5, 80);  // Ubicación
+    hojaData.setColumnWidth(6, 200); // Partes y Servicios (más ancho para wrapping)
+    hojaData.setColumnWidth(7, 100); // Valor Partes y M.O
+    hojaData.setColumnWidth(8, 100); // Valor Otros Servicios
+    hojaData.setColumnWidth(9, 100); // Valor Tapicería
+    hojaData.setColumnWidth(10, 150); // Tapicería
+    hojaData.setColumnWidth(11, 100); // Valor Total
 
-        // Alineación: números a la derecha
-        if (c >= 6 && r > 0) {
-          fila.getCell(c).setHorizontalAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-        }
-      }
-    }
+    // Establecer wrap text para la columna de Partes y Servicios y Tapicería
+    hojaData.getRange(6, 6, filasDatos.length + 2, 1).setWrap(true);
+    hojaData.getRange(6, 10, filasDatos.length + 2, 1).setWrap(true);
 
-    Logger.log("🖨️ PASO 3: Obteniendo ID del documento...");
-    // IMPORTANTE: Obtener ID ANTES de guardar
-    const docId = doc.getId();
-    const docUrl = "https://docs.google.com/document/d/" + docId + "/edit";
-    const pdfUrl = "https://docs.google.com/document/d/" + docId + "/export?format=pdf";
+    Logger.log("🖨️ PASO 2: Obteniendo URL del Sheet...");
+    const ssId = ssTemp.getId();
+    const pdfUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=pdf&portrait=false&fitw=true";
 
-    Logger.log("🖨️ PASO 4: Guardando documento...");
-
-    Logger.log("✅ PASO 5: Documento y PDF creados exitosamente");
-    Logger.log("✅ URL Documento: " + docUrl);
+    Logger.log("✅ PASO 3: Google Sheet y PDF creados exitosamente");
+    Logger.log("✅ Sheet ID: " + ssId);
     Logger.log("✅ URL PDF: " + pdfUrl);
     Logger.log("✅ CARACTERÍSTICAS IMPLEMENTADAS:");
+    Logger.log("   ✓ Plataforma: Google Sheets (confiable)");
     Logger.log("   ✓ Orientación: LANDSCAPE (Horizontal)");
     Logger.log("   ✓ Tamaño: Letter");
-    Logger.log("   ✓ Fuentes: 8pt (datos), 11pt (título), 8pt (cliente/fecha)");
+    Logger.log("   ✓ Fuentes: 8pt (datos), 11pt (título)");
     Logger.log("   ✓ Logo EYM: Superior izquierda");
     Logger.log("   ✓ Referencia: Incluida bajo cliente y fecha");
     Logger.log("   ✓ COLUMNAS EXACTAS (11):");
@@ -1955,6 +1964,8 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("      10. Tapicería (Q+R consolidado)");
     Logger.log("      11. Valor Total (X)");
     Logger.log("   ✓ M.O y Mantenimiento General: SIEMPRE INCLUIDO");
+    Logger.log("   ✓ Text Wrapping: Partes y Servicios + Tapicería");
+    Logger.log("✅ TOTAL GENERAL CALCULADO: $" + formatearNumero(totalGeneral2));
     Logger.log("🖨️ ═══════════════════════════════════════════════════════\n");
 
     // Retornar URL del PDF (para descargar directamente)
