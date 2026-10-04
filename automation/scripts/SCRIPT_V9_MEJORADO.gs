@@ -2073,6 +2073,13 @@ function obtenerImpuestosRMA(totalPDF, creds) {
   return { ids: ids, ivaId: ivaId, retId: retId, aplicaRete: aplicaRete };
 }
 
+function obtenerUbicacionStock(creds) {
+  const w = llamarOdooXMLRPC("stock.warehouse", "search_read", [[], ["lot_stock_id"]], creds, { limit: 1 });
+  if (w && w.length > 0 && w[0].lot_stock_id) return w[0].lot_stock_id[0];
+  const l = llamarOdooXMLRPC("stock.location", "search", [[["usage", "=", "internal"]]], creds, { limit: 1 });
+  return (l && l.length > 0) ? l[0] : null;
+}
+
 function buscarProductoMobiliario(creds) {
   const r = llamarOdooXMLRPC("product.product", "search_read",
     [["|", ["default_code", "=", CONFIG.PRODUCTO_REPARAR_CODIGO], ["name", "=ilike", "Mobiliario"]], ["name", "default_code", "uom_id"]],
@@ -2183,6 +2190,23 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
     if (camposOrden.invoice_method) valsOrden.invoice_method = "after_repair";
     const campoLead = Object.keys(camposOrden).find(k => camposOrden[k].type === "many2one" && camposOrden[k].relation === "crm.lead");
     if (campoLead) valsOrden[campoLead] = op.id;
+
+    // Odoo no siempre entrega estos valores por defecto vía API: se buscan explícitamente
+    if (!valsOrden.location_id) {
+      const ubic = obtenerUbicacionStock(creds);
+      if (ubic) valsOrden.location_id = ubic;
+    }
+    if (camposOrden.company_id && !valsOrden.company_id) {
+      const u = llamarOdooXMLRPC("res.users", "read", [[odooUid(creds)], ["company_id"]], creds);
+      if (u && u[0] && u[0].company_id) valsOrden.company_id = u[0].company_id[0];
+    }
+    const faltanObligatorios = requeridos.filter(k => k !== "name" &&
+      (valsOrden[k] === undefined || valsOrden[k] === null || valsOrden[k] === false));
+    if (faltanObligatorios.length > 0) {
+      res.error = "No se pudieron completar los campos obligatorios de la RMA: " + faltanObligatorios.join(", ");
+      return res;
+    }
+    Logger.log("📝 Datos de la RMA: " + JSON.stringify(valsOrden));
 
     const rmaId = llamarOdooXMLRPC("repair.order", "create", [valsOrden], creds);
     if (!rmaId) {
