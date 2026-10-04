@@ -519,6 +519,8 @@ Odoo: account.invoice (Factura)
    cantidad = total consolidado, precio = el que trae Odoo.
    **Otros servicios**: el precio unitario es el valor escrito a mano en la columna U (total ÷ cantidad), no el de Odoo; si el texto no está
    en el catálogo se usa el producto genérico `[SVARIOS] Otros servicios` (la descripción de la línea es el texto del servicio).
+   **Mantenimiento general**: siempre en *Operaciones*, producto `[SVCMO] SERVICIO TECNICO DE AJUSTE Y MANTENIMIENTO GENERAL`, cantidad = número de sillas.
+   La columna X (total) = T + U + V + W y se recalcula sola al editar T-W (menú "🧮 Recalcular totales (columna X)"). NO usar "Recalcular Todo": borra la columna AA y la U.
 4. Impuestos por línea: "IVA Ventas 19%" siempre; "RTFTE 4%" si el total del PDF es **igual o mayor a $550.000**.
 5. Adjunta el PDF a la RMA y escribe el número de RMA (con enlace a Odoo) en la columna AC de todas las sillas de la oportunidad.
 6. Si los totales no cuadran (silla x silla vs ítems, o monto de Odoo vs PDF) la RMA se crea igual y se deja la alarma en la columna AD

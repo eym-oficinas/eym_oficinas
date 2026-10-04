@@ -19,6 +19,7 @@ const CONFIG = {
   NOMBRE_RETEFUENTE: "RTFTE 4%",
   PRODUCTO_REPARAR_CODIGO: "MOBILIARIO",
   CODIGO_OTROS_SERVICIOS: "SVARIOS",
+  CODIGO_MANTENIMIENTO: "SVCMO",
   ODOO_ACCION_RMA: 529,
   ODOO_MENU_RMA: 384,
   COL_ALARMA: 30
@@ -2101,7 +2102,7 @@ function resolverItemsBorradorEnOdoo(items, creds) {
     const base = it.catalogo || it.nombre;
     let codigo = null;
     if (it.grupo === 4) {
-      ["m.o y mantenimiento general", "mantenimiento general", "m.o y mantenimiento"].some(c => (codigo = buscarCodigoCatalogo(c, true)));
+      codigo = CONFIG.CODIGO_MANTENIMIENTO;
     } else if (it.grupo === 2) {
       codigo = buscarCodigoCatalogo(base, true);
     } else {
@@ -2434,6 +2435,34 @@ function aprobarFilaSiCorresponde(hoja, fila) {
   return true;
 }
 
+// X (TOTAL PPTTO antes de IVA) = T + U + V + W. Solo toca filas con oportunidad (col. B).
+function recalcularTotalXFilas(hoja, filaIni, filaFin) {
+  const n = filaFin - filaIni + 1;
+  if (n < 1) return 0;
+  const num = x => (x === "" || x === null || isNaN(Number(x))) ? 0 : Number(x);
+  const v = hoja.getRange(filaIni, 2, n, 23).getValues(); // B..X (T=idx 18, U=19, V=20, W=21, X=22)
+  let cambios = 0;
+  const salida = v.map(r => {
+    if (!r[0]) return [r[22]];
+    const total = num(r[18]) + num(r[19]) + num(r[20]) + num(r[21]);
+    if (total !== num(r[22])) cambios++;
+    return [total];
+  });
+  hoja.getRange(filaIni, 24, n, 1).setValues(salida);
+  return cambios;
+}
+
+// Botón de menú: recalcula SOLO la columna X de todas las filas (no toca U, estados ni nada más)
+function recalcularTotalesX() {
+  const ui = SpreadsheetApp.getUi();
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DIAGNOSTICOS_2026");
+  if (!hoja) { ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada"); return; }
+  const ult = hoja.getLastRow();
+  if (ult < 2) { ui.alert("No hay diagnósticos."); return; }
+  const cambios = recalcularTotalXFilas(hoja, 2, ult);
+  ui.alert("✅ Totales recalculados (columna X = T + U + V + W).\n\nFilas corregidas: " + cambios);
+}
+
 // Cubre: lista desplegable, escrito, pegado, arrastrado (varias filas a la vez)
 function onEdit(e) {
   try {
@@ -2449,6 +2478,11 @@ function onEdit(e) {
     // Columnas O (15) o P (16): resaltar U para llenar el valor a mano
     if (c1 <= 16 && c2 >= 15) {
       for (let f = filaIni; f <= filaFin; f++) validarYResaltarColumnaU(hoja, f);
+    }
+
+    // Columnas T a W (20-23): X = T + U + V + W se recalcula para que el total no quede desactualizado
+    if (c1 <= 23 && c2 >= 20) {
+      recalcularTotalXFilas(hoja, filaIni, filaFin);
     }
 
     // Columna AA (27): estados
@@ -2735,6 +2769,7 @@ function onOpen() {
     .addItem("🔄 Sincronizar RMAs desde Odoo", "sincronizarRMAsDesdeOdoo")
     .addSeparator()
     .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
+    .addItem("🧮 Recalcular totales (columna X)", "recalcularTotalesX")
     .addItem("🔁 Recalcular Todo", "recalcularTodo")
     .addItem("📋 Configurar Listas Desplegables", "configurarValidacionAprobacion")
     .addSeparator()
