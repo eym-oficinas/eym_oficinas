@@ -486,3 +486,42 @@ Odoo: account.invoice (Factura)
 **RESULTADO**: Proceso 6x más rápido, 0 errores, 82% menos consumo de IA
 
 ✨ **Listo para usar en tu empresa EYM Oficinas** ✨
+
+---
+
+## 🔐 MEMORIA DEL PROYECTO: Acceso a Odoo y flujo RMA (V12)
+
+> **Nunca escribir claves en el repositorio ni en el chat.** La clave vive en las *Propiedades del script* de Apps Script
+> (menú "⚙️ Configurar Credenciales Odoo", formato `usuario|clave|eym1|https://eym-oficinas.ovh`) y, para sesiones de
+> Claude Code, en variables de entorno del entorno cloud: `ODOO_URL`, `ODOO_DB`, `ODOO_USER`, `ODOO_PASSWORD`.
+
+**Acceso**
+- Odoo 14 Community: `https://eym-oficinas.ovh/web`, base de datos `eym1`, API JSON-RPC en `/jsonrpc`.
+- Usuario de la automatización (Odoo y Gmail): `eymclaude@gmail.com` (indicado por el usuario el 2026-10-04;
+  antes se había mencionado `eymclaude@eym-oficinas.com`: si falla la autenticación, probar el otro).
+- Apps Script conecta a Odoo sin problema. El entorno cloud de Claude Code NO llega a Odoo salvo que se agregue
+  `eym-oficinas.ovh` en *Network access → Custom → Allowed domains*.
+- Script vigente: `automation/scripts/SCRIPT_V9_MEJORADO.gs` (v12). Menú "EYM v12.0" → "🔬 DIAGNÓSTICO: Esquema RMA en Odoo".
+
+**Archivos y rutas**
+- Worksheet "Diagnosticos y OP 2026": `1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y` (hojas DIAGNOSTICOS_2026, OP_2026 y el catálogo).
+- Catálogo (hoja cuyo nombre contiene "catalogo"): A = nombre, B = precio, C = código del producto en Odoo.
+- Oportunidades (CRM, `crm.lead`, tipo oportunidad, sin filtro "Mi pipeline"): `.../web#action=478&model=crm.lead&view_type=list&menu_id=320`.
+- RMAs (`repair.order`): `.../web#action=529&model=repair.order&view_type=list&menu_id=384`.
+
+**Estados de la columna AA**: Cotización, Aprobado, Rechazado (no hay otros).
+
+**Fase 1: Cotización** (manual: el usuario escribe "Cotización" y ejecuta "Finalizar oportunidad" con el nombre EXACTO de la oportunidad)
+1. PDF silla x silla (+ hoja "BORRADOR_RMA" consolidada por ítem) guardado en Drive.
+2. Busca la oportunidad en Odoo (coincidencia exacta), toma el cliente y crea la RMA (New Repair):
+   Producto a reparar `[MOBILIARIO] Mobiliario`, vencimiento de garantía vacío, método de facturación "Después de la reparación".
+3. Líneas: partes en *Piezas*; mantenimiento, tapicería y otros servicios en *Operaciones*; producto por código (col. C del catálogo),
+   cantidad = total consolidado, precio = el que trae Odoo.
+4. Impuestos por línea: "IVA Ventas 19%" siempre; "RTFTE 4%" si el total del PDF es **igual o mayor a $550.000**.
+5. Adjunta el PDF a la RMA y escribe el número de RMA (con enlace a Odoo) en la columna AC de todas las sillas de la oportunidad.
+6. Si los totales no cuadran (silla x silla vs ítems, o monto de Odoo vs PDF) la RMA se crea igual y se deja la alarma en la columna AD
+   para corregir a mano. No se crea una segunda RMA si AC ya tiene una.
+
+**Fase 2: Aprobado** (5 formas equivalentes: lista desplegable, escrito, pegado, arrastrado, o botón "Sincronizar RMAs desde Odoo"
+cuando la RMA ya no está en borrador/cancelada). Cada silla aprobada ejecuta automáticamente: número EyM (el mayor + 1; solo al aprobar),
+fecha de aprobación (AB) y creación de la OP en OP_2026 (consecutivo = el mayor de la columna A + 1). La OP no la crea el paso de la RMA.
