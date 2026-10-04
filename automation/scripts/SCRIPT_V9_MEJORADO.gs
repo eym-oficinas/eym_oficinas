@@ -25,6 +25,21 @@ let CATALOGO_CACHE = null;
 // SECCIÓN 1: CATÁLOGO DE PRECIOS
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+function buscarHojaCatalogo(ss) {
+  const exacta = ss.getSheetByName("CATÁLOGO_PRECIOS_2026");
+  if (exacta) return exacta;
+  const limpiar = t => t.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const hojas = ss.getSheets();
+  for (let i = 0; i < hojas.length; i++) {
+    if (limpiar(hojas[i].getName()).includes("catalogo")) {
+      Logger.log("ℹ️ Catálogo tomado de la hoja: '" + hojas[i].getName() + "'");
+      return hojas[i];
+    }
+  }
+  Logger.log("⚠️ Hojas disponibles: " + hojas.map(h => h.getName()).join(" | "));
+  return null;
+}
+
 function obtenerCatalogoPreciosDesdeSheet() {
   if (CATALOGO_CACHE !== null) {
     return CATALOGO_CACHE;
@@ -32,10 +47,10 @@ function obtenerCatalogoPreciosDesdeSheet() {
 
   try {
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaCatalogo = ssDiag.getSheetByName("CATÁLOGO_PRECIOS_2026");
+    const hojaCatalogo = buscarHojaCatalogo(ssDiag);
 
     if (!hojaCatalogo) {
-      Logger.log("⚠️ ADVERTENCIA: Hoja CATÁLOGO_PRECIOS_2026 no encontrada");
+      Logger.log("⚠️ ADVERTENCIA: No se encontró ninguna hoja de catálogo (el nombre debe contener 'catalogo')");
       return {};
     }
 
@@ -545,7 +560,7 @@ function consolidarProductos(componentesTexto) {
 function buscarCodigoOdooDelCatalogo(nombreProducto) {
   try {
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaCatalogo = ssDiag.getSheetByName("CATÁLOGO_PRECIOS_2026");
+    const hojaCatalogo = buscarHojaCatalogo(ssDiag);
 
     if (!hojaCatalogo) {
       return null;
@@ -2291,7 +2306,7 @@ function agregarLineasServiciosRMA(numeroRMA, serviciosConsolidados, creds) {
 function obtenerCodigoProductoDelCatalogo(nombreProducto) {
   try {
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaCatalogo = ssDiag.getSheetByName("CATÁLOGO_PRECIOS_2026");
+    const hojaCatalogo = buscarHojaCatalogo(ssDiag);
     if (!hojaCatalogo) return null;
 
     const datos = hojaCatalogo.getDataRange().getValues();
