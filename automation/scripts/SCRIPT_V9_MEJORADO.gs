@@ -2210,6 +2210,8 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
       product_uom: prodReparar.uom_id ? prodReparar.uom_id[0] : defaults.product_uom
     });
     if (camposOrden.product_qty && !valsOrden.product_qty) valsOrden.product_qty = 1;
+    // Dirección de facturación = el mismo cliente de la oportunidad
+    if (camposOrden.partner_invoice_id) valsOrden.partner_invoice_id = partnerId;
     if (camposOrden.invoice_method) valsOrden.invoice_method = "after_repair";
     const campoLead = Object.keys(camposOrden).find(k => camposOrden[k].type === "many2one" && camposOrden[k].relation === "crm.lead");
     if (campoLead) valsOrden[campoLead] = op.id;

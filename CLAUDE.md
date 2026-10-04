@@ -515,6 +515,7 @@ Odoo: account.invoice (Factura)
 1. PDF silla x silla (+ hoja "BORRADOR_RMA" consolidada por ítem) guardado en Drive.
 2. Busca la oportunidad en Odoo (coincidencia exacta), toma el cliente y crea la RMA (New Repair):
    Producto a reparar `[MOBILIARIO] Mobiliario`, vencimiento de garantía vacío, método de facturación "Después de la reparación".
+   Dirección de facturación = el mismo cliente (campo `partner_invoice_id`).
 3. Líneas: partes en *Piezas*; mantenimiento, tapicería y otros servicios en *Operaciones*; producto por código (col. C del catálogo),
    cantidad = total consolidado, precio = el que trae Odoo.
    **Otros servicios**: el precio unitario es el valor escrito a mano en la columna U (total ÷ cantidad), no el de Odoo; si el texto no está
