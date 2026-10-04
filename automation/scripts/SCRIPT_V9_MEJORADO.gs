@@ -2080,6 +2080,13 @@ function obtenerUbicacionStock(creds) {
   return (l && l.length > 0) ? l[0] : null;
 }
 
+// Otros servicios: el precio unitario es el valor escrito a mano en la columna U (total / cantidad).
+// Los demás ítems usan el precio que trae Odoo.
+function precioLineaRMA(x) {
+  if (x.item.grupo === 2) return x.item.cant > 0 ? x.item.total / x.item.cant : 0;
+  return x.prod.list_price || 0;
+}
+
 function buscarProductoMobiliario(creds) {
   const r = llamarOdooXMLRPC("product.product", "search_read",
     [["|", ["default_code", "=", CONFIG.PRODUCTO_REPARAR_CODIGO], ["name", "=ilike", "Mobiliario"]], ["name", "default_code", "uom_id"]],
@@ -2089,7 +2096,6 @@ function buscarProductoMobiliario(creds) {
 
 // Cruza cada ítem del borrador con el código de la columna C del catálogo y con el producto de Odoo
 function resolverItemsBorradorEnOdoo(items, creds) {
-  const faltantes = [];
   const filas = items.map(it => {
     const base = it.catalogo || it.nombre;
     let codigo = null;
@@ -2100,8 +2106,7 @@ function resolverItemsBorradorEnOdoo(items, creds) {
     } else {
       codigo = buscarCodigoCatalogo(base, false);
     }
-    if (!codigo) faltantes.push("'" + it.nombre + "' no tiene código en la columna C del catálogo");
-    return { item: it, codigo: codigo, prod: null };
+    return { item: it, codigo: codigo, prod: null, generico: false };
   });
 
   const codigos = filas.map(x => x.codigo).filter(c => c);
@@ -2110,15 +2115,30 @@ function resolverItemsBorradorEnOdoo(items, creds) {
     : [];
   const porCodigo = {};
   prods.forEach(p => { porCodigo[p.default_code] = p; });
+  filas.forEach(x => { if (x.codigo) x.prod = porCodigo[x.codigo] || null; });
 
+  // Otros servicios sin código propio: se usa el producto genérico "Otros servicios" de Odoo
+  // (la descripción de la línea es el texto del servicio y el precio es el de la columna U)
+  const sinCodigo = filas.filter(x => x.item.grupo === 2 && !x.codigo);
+  if (sinCodigo.length > 0) {
+    const g = llamarOdooXMLRPC("product.product", "search_read",
+      [[["name", "=ilike", "%otros servicios%"]], ["default_code", "list_price", "uom_id", "name"]], creds, { limit: 1 });
+    if (g && g.length > 0) {
+      sinCodigo.forEach(x => { x.prod = g[0]; x.codigo = g[0].default_code || "(Otros servicios)"; x.generico = true; });
+    }
+  }
+
+  const faltantes = [];
   filas.forEach(x => {
-    if (!x.codigo) return;
-    x.prod = porCodigo[x.codigo] || null;
-    if (!x.prod) faltantes.push("el código '" + x.codigo + "' (" + x.item.nombre + ") no existe en Odoo");
+    if (!x.codigo) {
+      faltantes.push("'" + x.item.nombre + "' no tiene código en la columna C del catálogo" +
+        (x.item.grupo === 2 ? " ni existe un producto 'Otros servicios' en Odoo" : ""));
+    } else if (!x.prod) {
+      faltantes.push("el código '" + x.codigo + "' (" + x.item.nombre + ") no existe en Odoo");
+    }
   });
   return { filas: filas, faltantes: faltantes };
 }
-
 // Crea la RMA (New Repair) con cliente de la oportunidad, líneas e impuestos.
 // Devuelve { exito, id, nombre, link, error, alarma, avisos }
 function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, creds) {
@@ -2155,7 +2175,7 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
 
     // 3) Monto sin impuestos vs subtotal del PDF: si difiere se crea igual y se avisa
     let esperado = 0;
-    filasOk.forEach(x => { esperado += x.item.cant * (x.prod.list_price || 0); });
+    filasOk.forEach(x => { esperado += x.item.cant * precioLineaRMA(x); });
     let avisoPrecio = false;
     if (r.faltantes.length === 0 && Math.abs(esperado - totalPDF) > 1) {
       avisoPrecio = true;
@@ -2226,9 +2246,9 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
       const modelo = x.item.grupo === 1 ? "repair.line" : "repair.fee";
       const vals = {
         repair_id: rmaId,
-        name: x.prod.name,
+        name: x.item.grupo === 2 ? x.item.nombre : x.prod.name,
         product_id: x.prod.id,
-        price_unit: x.prod.list_price || 0
+        price_unit: precioLineaRMA(x)
       };
       vals[campos.product_uom_qty ? "product_uom_qty" : "product_qty"] = x.item.cant;
       vals[campos.product_uom ? "product_uom" : "product_uom_id"] = x.prod.uom_id ? x.prod.uom_id[0] : false;
@@ -2242,6 +2262,7 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
       }
       const idLinea = llamarOdooXMLRPC(modelo, "create", [vals], creds);
       if (!idLinea) errores.push(x.item.nombre + ": " + ODOO_ULTIMO_ERROR);
+      if (x.item.grupo === 2 && !x.item.total) avisos.push("Otros servicios sin valor en la columna U: '" + x.item.nombre + "'");
     });
 
     // 7) Datos finales y verificación del monto
