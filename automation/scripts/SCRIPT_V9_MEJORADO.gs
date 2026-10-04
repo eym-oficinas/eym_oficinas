@@ -1801,6 +1801,27 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     // Renombrar la hoja a "COTIZACION"
     hojaData.setName("COTIZACION");
 
+    // COLUMNAS DINÁMICAS: se omiten Tapicería y Otros Servicios cuando ninguna silla los tiene
+    const hayTapiceria = silasDatos.some(x => (x.tapiceria || "").toString().trim() !== "" || (x.valorTapiceria || 0) > 0);
+    const hayOtrosServ = silasDatos.some(x => (x.valorOtrosServicios || 0) > 0);
+    const columnas = [
+      { enc: "#", ancho: 35, valor: (x, n) => n.toString() },
+      { enc: "# Silla", ancho: 60, valor: x => x.numeroTemporal || "-" },
+      { enc: "Tipo", ancho: 80, valor: x => x.tipoSilla || "-" },
+      { enc: "Color", ancho: 70, valor: x => x.color || "-" },
+      { enc: "Ubicación", ancho: 85, valor: x => x.ubicacion || "-" },
+      { enc: "Partes y Servicios", ancho: 260, wrap: true, valor: x => x.partesYServicios || "-" },
+      { enc: "Tapicería", ancho: 170, wrap: true, valor: x => x.tapiceria || "-", incluir: hayTapiceria },
+      { enc: "Valor Partes, M.O y Mmto General", ancho: 105, num: true, total: "valorPartesYMO", valor: x => x.valorPartesYMO || 0 },
+      { enc: "Valor Otros Servicios", ancho: 90, num: true, total: "valorOtrosServicios", valor: x => x.valorOtrosServicios || 0, incluir: hayOtrosServ },
+      { enc: "Valor Tapicería", ancho: 90, num: true, total: "valorTapiceria", valor: x => x.valorTapiceria || 0, incluir: hayTapiceria },
+      { enc: "Valor Total Antes de IVA", ancho: 105, num: true, total: "valorTotal", valor: x => x.valorTotal || 0 }
+    ].filter(c => c.incluir !== false);
+    const numCols = columnas.length;
+    const primeraNum = columnas.findIndex(c => c.num) + 1;
+    const cantNum = numCols - primeraNum + 1;
+    Logger.log("🖨️ Columnas del PDF (" + numCols + "): " + columnas.map(c => c.enc).join(" | "));
+
     // ENCABEZADO CON LOGO Y CLIENTE
     let fila = 1;
     let logoInsertado = false;
@@ -1814,7 +1835,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
         Logger.log("⚠️ No se pudo insertar el logo: " + errLogo);
       }
     }
-    hojaData.getRange(fila, 1, 1, 11).merge();
+    hojaData.getRange(fila, 1, 1, numCols).merge();
     hojaData.getRange(fila, 1).setValue(logoInsertado ? "                                   COTIZACIÓN DE REPARACIÓN" : "EYM OFICINAS - COTIZACIÓN DE REPARACIÓN");
     hojaData.getRange(fila, 1).setHorizontalAlignment("left").setVerticalAlignment("middle");
     hojaData.getRange(fila, 1).setFontSize(11).setFontWeight("normal");
@@ -1836,117 +1857,57 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     fila++;
 
     // ENCABEZADOS DE TABLA
-    const encabezados = ["#", "# Silla", "Tipo", "Color", "Ubicación", "Partes y Servicios", "Tapicería", "Valor Partes, M.O y Mmto General", "Valor Otros Servicios", "Valor Tapicería", "Valor Total Antes de IVA"];
-    hojaData.getRange(fila, 1, 1, 11).setValues([encabezados]);
-
-    // Formatear encabezados
-    const rangoEncabezados = hojaData.getRange(fila, 1, 1, 11);
+    hojaData.getRange(fila, 1, 1, numCols).setValues([columnas.map(c => c.enc)]);
+    const rangoEncabezados = hojaData.getRange(fila, 1, 1, numCols);
     rangoEncabezados.setBackgroundColor("#1a73e8");
     rangoEncabezados.setFontColor("#FFFFFF");
     rangoEncabezados.setFontWeight("normal");
     rangoEncabezados.setFontSize(8);
     rangoEncabezados.setHorizontalAlignment("center");
-
+    rangoEncabezados.setWrap(true);
+    const filaEncabezado = fila;
     fila++;
 
     // DATOS DE SILLAS
-    let numSilla = 1;
-    let totalPartesYMO = 0, totalOtrosServ = 0, totalTapicTecho = 0, totalGeneral2 = 0;
-
-    const filasDatos = [];
-    silasDatos.forEach(sila => {
-      const valPartesYMO = sila.valorPartesYMO || 0;
-      const valOtrosServ = sila.valorOtrosServicios || 0;
-      const valTapic = sila.valorTapiceria || 0;
-      const valTotal = sila.valorTotal || 0;
-
-      totalPartesYMO += valPartesYMO;
-      totalOtrosServ += valOtrosServ;
-      totalTapicTecho += valTapic;
-      totalGeneral2 += valTotal;
-
-      filasDatos.push([
-        numSilla.toString(),
-        sila.numeroTemporal || "-",
-        sila.tipoSilla || "-",
-        sila.color || "-",
-        sila.ubicacion || "-",
-        sila.partesYServicios || "-",
-        sila.tapiceria || "-",
-        valPartesYMO,
-        valOtrosServ,
-        valTapic,
-        valTotal
-      ]);
-      numSilla++;
+    const totales = { valorPartesYMO: 0, valorOtrosServicios: 0, valorTapiceria: 0, valorTotal: 0 };
+    const filasDatos = silasDatos.map((x, i) => {
+      Object.keys(totales).forEach(k => { totales[k] += x[k] || 0; });
+      return columnas.map(c => c.valor(x, i + 1));
     });
+    const totalGeneral2 = totales.valorTotal;
 
-    // Insertar datos
     if (filasDatos.length > 0) {
       // Columnas 1-2 como texto para que "1-10" no se convierta en fecha
       hojaData.getRange(fila, 1, filasDatos.length, 2).setNumberFormat("@");
-      hojaData.getRange(fila, 1, filasDatos.length, 11).setValues(filasDatos);
-
-      // Columnas de valores (8 a 11): formato de miles y alineación a la derecha
-      hojaData.getRange(fila, 8, filasDatos.length, 4).setNumberFormat("#,##0");
-      hojaData.getRange(fila, 8, filasDatos.length, 4).setHorizontalAlignment("right");
-      hojaData.getRange(fila, 1, filasDatos.length, 11).setVerticalAlignment("top");
-
+      hojaData.getRange(fila, 1, filasDatos.length, numCols).setValues(filasDatos);
+      hojaData.getRange(fila, primeraNum, filasDatos.length, cantNum).setNumberFormat("#,##0");
+      hojaData.getRange(fila, primeraNum, filasDatos.length, cantNum).setHorizontalAlignment("right");
+      hojaData.getRange(fila, 1, filasDatos.length, numCols).setVerticalAlignment("top");
+      hojaData.getRange(fila, 1, filasDatos.length, numCols).setFontSize(8).setFontWeight("normal");
       fila += filasDatos.length;
     }
 
     // FILA DE TOTALES
-    hojaData.getRange(fila, 1, 1, 11).setValues([[
-      "",
-      "TOTALES",
-      "",
-      "",
-      "",
-      "",
-      "",
-      totalPartesYMO,
-      totalOtrosServ,
-      totalTapicTecho,
-      totalGeneral2
-    ]]);
-
-    // Formatear fila de totales
-    const rangoTotales = hojaData.getRange(fila, 1, 1, 11);
+    const filaTotales = columnas.map((c, i) => i === 1 ? "TOTALES" : (c.num ? totales[c.total] : ""));
+    hojaData.getRange(fila, 1, 1, numCols).setValues([filaTotales]);
+    const rangoTotales = hojaData.getRange(fila, 1, 1, numCols);
     rangoTotales.setBackgroundColor("#FFF2CC");
     rangoTotales.setFontWeight("normal");
     rangoTotales.setFontSize(8);
-    hojaData.getRange(fila, 8, 1, 4).setNumberFormat("#,##0");
-    hojaData.getRange(fila, 8, 1, 4).setHorizontalAlignment("right");
-
+    hojaData.getRange(fila, primeraNum, 1, cantNum).setNumberFormat("#,##0");
+    hojaData.getRange(fila, primeraNum, 1, cantNum).setHorizontalAlignment("right");
     fila++;
 
-    // TOTAL GENERAL Antes de IVA
+    // TOTAL GENERAL ANTES DE IVA
     fila++;
-    hojaData.getRange(fila, 10).setValue("TOTAL ANTES DE IVA:");
-    hojaData.getRange(fila, 10).setFontWeight("normal");
-    hojaData.getRange(fila, 10).setFontSize(8);
-    hojaData.getRange(fila, 11).setValue(totalGeneral2);
-    hojaData.getRange(fila, 11).setNumberFormat("#,##0");
-    hojaData.getRange(fila, 11).setFontWeight("normal");
-    hojaData.getRange(fila, 11).setFontSize(8);
+    hojaData.getRange(fila, numCols - 1).setValue("TOTAL ANTES DE IVA:").setFontWeight("normal").setFontSize(8).setHorizontalAlignment("right");
+    hojaData.getRange(fila, numCols).setValue(totalGeneral2).setNumberFormat("#,##0").setFontWeight("normal").setFontSize(8).setHorizontalAlignment("right");
 
-    // Ajustar ancho de columnas
-    hojaData.setColumnWidth(1, 40);  // #
-    hojaData.setColumnWidth(2, 60);  // # Silla
-    hojaData.setColumnWidth(3, 80);  // Tipo
-    hojaData.setColumnWidth(4, 70);  // Color
-    hojaData.setColumnWidth(5, 80);  // Ubicación
-    hojaData.setColumnWidth(6, 200); // Partes y Servicios (más ancho para wrapping)
-    hojaData.setColumnWidth(7, 150); // Tapicería
-    hojaData.setColumnWidth(8, 105); // Valor Partes, M.O y Mmto General
-    hojaData.setColumnWidth(9, 90);  // Valor Otros Servicios
-    hojaData.setColumnWidth(10, 90); // Valor Tapicería
-    hojaData.setColumnWidth(11, 105); // Valor Total Antes de IVA
-
-    // Establecer wrap text para la columna de Partes y Servicios y Tapicería
-    hojaData.getRange(6, 6, filasDatos.length + 2, 1).setWrap(true);
-    hojaData.getRange(6, 7, filasDatos.length + 2, 1).setWrap(true);
-    hojaData.getRange(6, 8, 1, 4).setWrap(true);
+    // Anchos de columna y ajuste de texto
+    columnas.forEach((c, i) => {
+      hojaData.setColumnWidth(i + 1, c.ancho);
+      if (c.wrap) hojaData.getRange(filaEncabezado + 1, i + 1, filasDatos.length, 1).setWrap(true);
+    });
 
     SpreadsheetApp.flush();
 
