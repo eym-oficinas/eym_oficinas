@@ -18,6 +18,7 @@ const CONFIG = {
   NOMBRE_IVA: "IVA Ventas 19%",
   NOMBRE_RETEFUENTE: "RTFTE 4%",
   PRODUCTO_REPARAR_CODIGO: "MOBILIARIO",
+  CODIGO_OTROS_SERVICIOS: "SVARIOS",
   ODOO_ACCION_RMA: 529,
   ODOO_MENU_RMA: 384,
   COL_ALARMA: 30
@@ -2122,7 +2123,8 @@ function resolverItemsBorradorEnOdoo(items, creds) {
   const sinCodigo = filas.filter(x => x.item.grupo === 2 && !x.codigo);
   if (sinCodigo.length > 0) {
     const g = llamarOdooXMLRPC("product.product", "search_read",
-      [[["name", "=ilike", "%otros servicios%"]], ["default_code", "list_price", "uom_id", "name"]], creds, { limit: 1 });
+      [["|", ["default_code", "=", CONFIG.CODIGO_OTROS_SERVICIOS], ["name", "=ilike", "%otros servicios%"]],
+        ["default_code", "list_price", "uom_id", "name"]], creds, { limit: 1 });
     if (g && g.length > 0) {
       sinCodigo.forEach(x => { x.prod = g[0]; x.codigo = g[0].default_code || "(Otros servicios)"; x.generico = true; });
     }
