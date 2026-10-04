@@ -16,6 +16,9 @@ const CONFIG = {
   CELDA_CONTROL: "AE1"
 };
 
+// ID del archivo del logo EYM en Google Drive (dejar vacío para usar texto "EYM OFICINAS")
+const ID_LOGO_EYM = "";
+
 let CATALOGO_CACHE = null;
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -1544,30 +1547,36 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
   try {
     const diagnosticos = [];
     const ultFila = hoja.getLastRow();
+    if (ultFila < 2) return diagnosticos;
 
-    for (let f = 2; f <= ultFila; f++) {
-      const oportunidad = hoja.getRange(f, 2).getValue();
-      if (oportunidad && oportunidad.toString().toLowerCase().includes(nombreOportunidad.toLowerCase())) {
+    const datos = hoja.getRange(2, 1, ultFila - 1, 24).getValues();
+    const busqueda = nombreOportunidad.toLowerCase();
+    const num = v => (v === "" || v === null || isNaN(Number(v))) ? 0 : Number(v);
+
+    for (let i = 0; i < datos.length; i++) {
+      const r = datos[i];
+      const oportunidad = r[1];
+      if (oportunidad && oportunidad.toString().toLowerCase().includes(busqueda)) {
         diagnosticos.push({
-          fila: f,
-          fecha: hoja.getRange(f, 1).getValue(),
+          fila: i + 2,
+          fecha: r[0],
           oportunidad: oportunidad,
-          cliente: hoja.getRange(f, 3).getValue(),
-          tipoSilla: hoja.getRange(f, 4).getValue(),
-          numeroEYM: hoja.getRange(f, 5).getValue(),
-          numeroTemporal: hoja.getRange(f, 6).getValue(),
-          color: hoja.getRange(f, 11).getValue(),          // CORREGIDO: Columna K (11)
-          ubicacion: hoja.getRange(f, 12).getValue(),      // CORREGIDO: Columna L (12)
-          repuestos: hoja.getRange(f, 14).getValue(),      // Columna N (14)
-          otrosServicios: hoja.getRange(f, 15).getValue(), // Columna O (15)
-          observacionesEspeciales: hoja.getRange(f, 16).getValue(), // NUEVO: Columna P (16)
-          tapiceriaAsiento: hoja.getRange(f, 17).getValue(),      // Columna Q (17)
-          tapiceriaEspaldar: hoja.getRange(f, 18).getValue(),     // Columna R (18)
-          valorPartes: hoja.getRange(f, 20).getValue(),    // Columna T (20)
-          valorOtrosServicios: hoja.getRange(f, 21).getValue(),  // Columna U (21)
-          valorTapiceria: hoja.getRange(f, 22).getValue(), // Columna V (22)
-          valorMO: hoja.getRange(f, 23).getValue(),        // Columna W (23)
-          valorTotal: hoja.getRange(f, 24).getValue()      // Columna X (24)
+          cliente: r[2],
+          tipoSilla: r[3],
+          numeroEYM: r[4],
+          numeroTemporal: r[5],
+          color: r[10],                    // K
+          ubicacion: r[11],                // L
+          repuestos: r[13],                // N
+          otrosServicios: r[14],           // O
+          observacionesEspeciales: r[15],  // P
+          tapiceriaAsiento: r[16],         // Q
+          tapiceriaEspaldar: r[17],        // R
+          valorPartes: num(r[19]),         // T
+          valorOtrosServicios: num(r[20]), // U
+          valorTapiceria: num(r[21]),      // V
+          valorMO: num(r[22]),             // W
+          valorTotal: num(r[23])           // X
         });
       }
     }
@@ -1600,6 +1609,7 @@ function agruparPorSilla(diagnosticos, hoja) {
         valorTotal: diag.valorTotal || 0
       };
     } else {
+      Logger.log("⚠️ #Temporal repetido: '" + numTemp + "' (fila " + diag.fila + ") - se usan los valores de la última fila");
       // Si hay múltiples filas para la misma silla, actualizar valores
       silas[numTemp].valorPartesYMO = (diag.valorPartes || 0) + (diag.valorMO || 0);
       silas[numTemp].valorOtrosServicios = diag.valorOtrosServicios || 0;
@@ -1799,9 +1809,21 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
 
     // ENCABEZADO CON LOGO Y CLIENTE
     let fila = 1;
+    let logoInsertado = false;
+    if (ID_LOGO_EYM) {
+      try {
+        const logoBlob = DriveApp.getFileById(ID_LOGO_EYM).getBlob();
+        hojaData.insertImage(logoBlob, 1, 1).setWidth(110).setHeight(40);
+        hojaData.setRowHeight(1, 45);
+        logoInsertado = true;
+      } catch (errLogo) {
+        Logger.log("⚠️ No se pudo insertar el logo: " + errLogo);
+      }
+    }
     hojaData.getRange(fila, 1, 1, 11).merge();
-    hojaData.getRange(fila, 1).setValue("EYM OFICINAS - COTIZACIÓN DE REPARACIÓN");
-    hojaData.getRange(fila, 1).setFontSize(11).setFontWeight("bold");
+    hojaData.getRange(fila, 1).setValue(logoInsertado ? "                                   COTIZACIÓN DE REPARACIÓN" : "EYM OFICINAS - COTIZACIÓN DE REPARACIÓN");
+    hojaData.getRange(fila, 1).setHorizontalAlignment("left").setVerticalAlignment("middle");
+    hojaData.getRange(fila, 1).setFontSize(11).setFontWeight("normal");
     fila++;
 
     hojaData.getRange(fila, 1).setValue("CLIENTE: " + cliente);
@@ -1813,7 +1835,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     fila++;
 
     hojaData.getRange(fila, 1).setValue("Referencia: " + nombreOportunidad);
-    hojaData.getRange(fila, 1).setFontSize(8).setFontWeight("bold");
+    hojaData.getRange(fila, 1).setFontSize(8).setFontWeight("normal");
     fila++;
 
     // Fila en blanco
@@ -1827,7 +1849,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     const rangoEncabezados = hojaData.getRange(fila, 1, 1, 11);
     rangoEncabezados.setBackgroundColor("#1a73e8");
     rangoEncabezados.setFontColor("#FFFFFF");
-    rangoEncabezados.setFontWeight("bold");
+    rangoEncabezados.setFontWeight("normal");
     rangoEncabezados.setFontSize(8);
     rangoEncabezados.setHorizontalAlignment("center");
 
@@ -1903,7 +1925,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     // Formatear fila de totales
     const rangoTotales = hojaData.getRange(fila, 1, 1, 11);
     rangoTotales.setBackgroundColor("#FFF2CC");
-    rangoTotales.setFontWeight("bold");
+    rangoTotales.setFontWeight("normal");
     rangoTotales.setFontSize(8);
     hojaData.getRange(fila, 7, 1, 5).setNumberFormat("#,##0");
     hojaData.getRange(fila, 7, 1, 5).setHorizontalAlignment("right");
@@ -1913,11 +1935,11 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     // TOTAL GENERAL Antes de IVA
     fila++;
     hojaData.getRange(fila, 10).setValue("TOTAL ANTES DE IVA:");
-    hojaData.getRange(fila, 10).setFontWeight("bold");
+    hojaData.getRange(fila, 10).setFontWeight("normal");
     hojaData.getRange(fila, 10).setFontSize(8);
     hojaData.getRange(fila, 11).setValue(totalGeneral2);
     hojaData.getRange(fila, 11).setNumberFormat("#,##0");
-    hojaData.getRange(fila, 11).setFontWeight("bold");
+    hojaData.getRange(fila, 11).setFontWeight("normal");
     hojaData.getRange(fila, 11).setFontSize(8);
 
     // Ajustar ancho de columnas
