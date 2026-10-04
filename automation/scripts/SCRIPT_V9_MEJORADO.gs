@@ -2221,7 +2221,9 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
     });
 
     // 7) Datos finales y verificación del monto
-    const info = llamarOdooXMLRPC("repair.order", "read", [[rmaId], ["name", "amount_untaxed"]], creds);
+    const camposLeer = camposOrden.amount_untaxed ? ["name", "amount_untaxed"] : ["name"];
+    let info = llamarOdooXMLRPC("repair.order", "read", [[rmaId], camposLeer], creds);
+    if (!info) info = llamarOdooXMLRPC("repair.order", "read", [[rmaId], ["name"]], creds);
     const nombreRMA = (info && info[0] && info[0].name) ? info[0].name : ("RMA-" + rmaId);
     const sinImpuestos = (info && info[0]) ? info[0].amount_untaxed : null;
 
