@@ -1770,7 +1770,7 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
   try {
     Logger.log("\n🖨️ ═══════════════════════════════════════════════════════");
-    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V9 CON GOOGLE DOCS");
+    Logger.log("🖨️ GENERANDO PRESUPUESTO SILLA X SILLA - V10 GOOGLE SHEETS");
     Logger.log("🖨️ Oportunidad: " + nombreOportunidad);
     Logger.log("🖨️ Cliente: " + cliente);
     Logger.log("🖨️ Sillas: " + silasDatos.length);
