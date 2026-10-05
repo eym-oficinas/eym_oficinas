@@ -571,3 +571,7 @@ Tornillería y Cabecero van a Otros servicios (U amarilla). Al "Finalizar oportu
 DIAGNOSTICOS_2026 (si borras las filas de una oportunidad, vuelven a traerse del formulario, sin duplicar). Menú "♻️ Volver a pasar una oportunidad" hace lo mismo por nombre cuando el modo está en false.
 
 **Cierre (fix)**: las OP se cruzan con las sillas por oportunidad (OP col. E) + número EyM (OP col. P), no solo por EyM: un EyM repetido en una OP de pruebas viejas ya no bloquea "Finalizar reparación" / "Crear factura".
+
+**Cierre completo (v13.1)**: al cerrar una RMA (Finalizar reparación + Crear factura) el script pone "Terminado" en la columna AA de sus sillas (y la sincronización ya no las devuelve a "Aprobado"),
+y escribe en OP_2026 columna R ("# FACTURA") el número de la factura de Odoo (`repair.order.invoice_id` → `account.move.name`) con enlace `.../web#id=<id>&model=account.move&view_type=form`,
+en las OP de esas sillas (oportunidad + EyM). Estados de AA: Cotización, Aprobado, Rechazado, Terminado (menú "📋 Configurar Listas Desplegables" actualiza la lista de AA).

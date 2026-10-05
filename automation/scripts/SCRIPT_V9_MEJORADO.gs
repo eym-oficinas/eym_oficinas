@@ -1320,17 +1320,17 @@ function configurarValidacionAprobacion() {
     }
 
     const ultFila = hoja.getLastRow();
-    const columnaAE = hoja.getRange("AE2:AE" + ultFila);
+    const columnaAE = hoja.getRange("AA2:AA" + Math.max(ultFila, 500));
 
     const rule = SpreadsheetApp.newDataValidation()
-      .allowList(["Aprobado", "Cotización", "Pendiente", "Rechazado"])
-      .setHelpText("Selecciona una opción: Aprobado, Pendiente o Rechazado")
+      .allowList(["Cotización", "Aprobado", "Rechazado", "Terminado"])
+      .setHelpText("Selecciona una opción: Cotización, Aprobado, Rechazado o Terminado")
       .setShowDropdown(true)
       .build();
 
     columnaAE.setDataValidation(rule);
 
-    SpreadsheetApp.getUi().alert("✅ LISTAS DESPLEGABLES CONFIGURADAS\n\nAhora puedes hacer clic en la columna AE y seleccionar de la lista");
+    SpreadsheetApp.getUi().alert("✅ LISTAS DESPLEGABLES CONFIGURADAS\n\nAhora puedes hacer clic en la columna AA y seleccionar de la lista");
 
   } catch (e) {
     SpreadsheetApp.getUi().alert("ERROR: " + e.toString());
@@ -2920,7 +2920,8 @@ function leerRMAsDeHoja(hoja) {
       fila: i + 2,
       eym: (r[4] || "").toString().trim(),
       oportunidad: r[1],
-      aprobada: (r[26] || "").toString().toLowerCase().includes("aprobado"),
+      aprobada: /aprobado|terminado/i.test((r[26] || "").toString()),
+      terminada: /terminado/i.test((r[26] || "").toString()),
       fechaAprobacion: r[27]
     });
   });
@@ -2959,10 +2960,12 @@ function sincronizarAprobacionesOdoo(hoja, creds) {
     }
 
     porRMA[rma.name].forEach(x => {
+      if (x.terminada) return; // ya cerrada: no se vuelve a "Aprobado"
       if (!x.aprobada) hoja.getRange(x.fila, 27).setValue("Aprobado");
       if (aprobarFilaSiCorresponde(hoja, x.fila)) res.aprobadas++;
     });
 
+    if (porRMA[rma.name].every(x => x.terminada)) return;
     if (rma.state === "confirmed" || rma.state === "ready") {
       const r = llamarOdooXMLRPC("repair.order", "action_repair_start", [[rma.id]], creds);
       if (r === null) {
@@ -2983,16 +2986,17 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
     res.errores.push("No se encontró la hoja OP_2026");
     return res;
   }
-  const totalPorEYM = {}, terminadasPorEYM = {};
+  const totalPorEYM = {}, terminadasPorEYM = {}, filasOPporClave = {};
   const ultOP = hojaOP.getLastRow();
   if (ultOP >= 2) {
     // La OP se identifica por oportunidad (col. E) + número EyM (col. P): un EyM repetido en otra oportunidad (pruebas viejas) no debe bloquear el cierre
     const claveOP = (opp, eym) => normalizarNombreOportunidad(opp) + "|" + eym;
-    hojaOP.getRange(2, 1, ultOP - 1, 17).getValues().forEach(r => {
+    hojaOP.getRange(2, 1, ultOP - 1, 17).getValues().forEach((r, i) => {
       const eym = (r[15] || "").toString().trim();
       if (!eym) return;
       const k = claveOP(r[4], eym);
       totalPorEYM[k] = (totalPorEYM[k] || 0) + 1;
+      (filasOPporClave[k] = filasOPporClave[k] || []).push(i + 2);
       if ((r[16] || "").toString().trim().toLowerCase() === CONFIG.ESTADO_OP_TERMINADO.toLowerCase()) {
         terminadasPorEYM[k] = (terminadasPorEYM[k] || 0) + 1;
       }
@@ -3045,8 +3049,40 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
       return;
     }
     res.facturadas.push(rma.name);
+
+    // Estado "Terminado" en el diagnóstico (col. AA) y # de factura con enlace en OP_2026 (col. R)
+    filas.forEach(f => hoja.getRange(f, 27).setValue(CONFIG.ESTADO_OP_TERMINADO));
+    try {
+      const f = datosFacturaRMA(rma.id, creds);
+      if (f) {
+        porRMA[rma.name].forEach(x => {
+          (filasOPporClave[normalizarNombreOportunidad(x.oportunidad) + "|" + x.eym] || []).forEach(filaOP => {
+            const c = hojaOP.getRange(filaOP, 18);
+            c.setFormula('=HYPERLINK("' + f.link + '","' + f.nombre.replace(/"/g, "") + '")');
+          });
+        });
+        if (hojaOP.getRange(1, 18).getValue() === "") hojaOP.getRange(1, 18).setValue("# FACTURA");
+        res.facturas = (res.facturas || []).concat([rma.name + " → " + f.nombre]);
+      } else {
+        res.errores.push(rma.name + ": factura creada pero no pude leer su número en Odoo (revísala en la RMA)");
+      }
+    } catch (e) {
+      Logger.log("⚠️ No se pudo escribir la factura en OP_2026: " + e);
+    }
   });
   return res;
+}
+
+// Factura de la RMA: nombre (número) y enlace al formulario de la factura en Odoo
+function datosFacturaRMA(rmaId, creds) {
+  const info = llamarOdooXMLRPC("repair.order", "read", [[rmaId], ["invoice_id"]], creds);
+  const inv = info && info[0] && info[0].invoice_id;
+  if (!inv) return null;
+  const id = Array.isArray(inv) ? inv[0] : inv;
+  let nombre = Array.isArray(inv) ? inv[1] : "";
+  const m = llamarOdooXMLRPC("account.move", "read", [[id], ["name"]], creds);
+  if (m && m[0] && m[0].name) nombre = m[0].name;
+  return { id: id, nombre: nombre || ("Factura " + id), link: creds.urlWeb + "#id=" + id + "&model=account.move&view_type=form" };
 }
 
 function sincronizarConOdoo() {
@@ -3076,6 +3112,7 @@ function sincronizarConOdoo() {
     lineas.push("");
     lineas.push("B) Cierre");
     lineas.push("• Reparación finalizada y factura creada: " + (b.facturadas.join(", ") || "ninguna"));
+    if (b.facturas && b.facturas.length) lineas.push("• Facturas (en OP_2026 col. R): " + b.facturas.join("; "));
     if (b.omitido) lineas.push("• Cierre cancelado por el usuario");
     if (b.pendientes.length) lineas.push("• RMAs con OP aún sin terminar: " + b.pendientes.join(", "));
     const errores = a.errores.concat(b.errores);
