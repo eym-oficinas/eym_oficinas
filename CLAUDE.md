@@ -566,3 +566,6 @@ con una línea por pieza: `• Pieza | valor | código Odoo`. El usuario complet
 "Finalizar oportunidad", el script lee la nota: suma el valor en T, agrega la pieza al consolidado (PDF) y a la RMA (producto buscado por ese código en Odoo, precio =
 valor de la nota). Con valor y código la celda deja de ser amarilla (la nota se conserva); con solo valor suma pero sigue amarilla pidiendo el código.
 Tornillería y Cabecero van a Otros servicios (U amarilla). Al "Finalizar oportunidad" T se actualiza solo si la nota trae valores.
+
+**Modo de pruebas** (`CONFIG.MODO_PRUEBAS = true`, cambiar a `false` al terminar de probar): "Procesar Manualmente" ignora la memoria de CONTROL_RESPUESTAS y decide por lo que hay en
+DIAGNOSTICOS_2026 (si borras las filas de una oportunidad, vuelven a traerse del formulario, sin duplicar). Menú "♻️ Volver a pasar una oportunidad" hace lo mismo por nombre cuando el modo está en false.

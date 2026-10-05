@@ -25,6 +25,7 @@ const CONFIG = {
   COL_ALARMA: 30,
   ADJUNTAR_CONSOLIDADO: true,
   ESTADO_OP_PRODUCCION: "En producción",
+  MODO_PRUEBAS: true, // true: "Procesar Manualmente" vuelve a traer las sillas cuyas filas borraste de DIAGNOSTICOS_2026 (poner false al terminar las pruebas)
   ESTADO_OP_TERMINADO: "Terminado",
   // Nombre con que llega del formulario -> ítem del catálogo (además de la columna D "ALIAS" del catálogo)
   ALIAS_CATALOGO: { "Platina Curva": "Platina en L", "Telescopio": "Funda Telescópica" },
@@ -529,9 +530,15 @@ function procesarRespuestaFormulario(e) {
       hojaControl.getRange(2, 1, hojaControl.getLastRow() - 1, 1).getValues().forEach(r => { procesadas[(r[0] || "").toString()] = true; });
     }
 
+    // MODO DE PRUEBAS (solo "Procesar Manualmente"): no se usa la memoria de CONTROL_RESPUESTAS; manda lo que hay en DIAGNOSTICOS_2026.
+    // Si borraste las filas de una oportunidad, se vuelven a traer del formulario.
+    const modoPrueba = manual && CONFIG.MODO_PRUEBAS === true && !primeraVez;
+    const enControl = Object.assign({}, procesadas);
+    if (modoPrueba) Object.keys(procesadas).forEach(k => delete procesadas[k]);
+
     // En la primera ejecución se reconocen las sillas que ya están en la hoja (misma oportunidad + # temporal + tipo)
     const reclamables = {};
-    if (primeraVez && hojaDiag.getLastRow() >= 2) {
+    if ((primeraVez || modoPrueba) && hojaDiag.getLastRow() >= 2) {
       hojaDiag.getRange(2, 1, hojaDiag.getLastRow() - 1, 6).getDisplayValues().forEach(r => {
         const k = claveSilla(r[1], r[5], r[3]);
         reclamables[k] = (reclamables[k] || 0) + 1;
@@ -543,7 +550,7 @@ function procesarRespuestaFormulario(e) {
     for (let i = 0; i < n; i++) {
       if (procesadas[ids[i]]) continue;
       if (!(valores[i][2] || "").toString().trim()) continue;
-      if (primeraVez) {
+      if (primeraVez || modoPrueba) {
         const k = claveSilla(visibles[i][2], visibles[i][6], visibles[i][4]);
         if (reclamables[k] > 0) { reclamables[k]--; aMarcar.push([i, "ya estaba en la hoja"]); continue; }
         const ts = esFecha(valores[i][0]) ? valores[i][0].getTime() : 0;
@@ -574,6 +581,8 @@ function procesarRespuestaFormulario(e) {
       hojaControl.hideSheet();
     }
     const registrar = (i, estado) => {
+      if (enControl[ids[i]]) return; // ya está en el control (modo pruebas: no se repite)
+      enControl[ids[i]] = true;
       hojaControl.getRange(hojaControl.getLastRow() + 1, 1, 1, 4).setValues([[ids[i], valores[i][2], visibles[i][6], estado]]);
     };
     aMarcar.forEach(x => registrar(x[0], x[1]));
@@ -598,6 +607,36 @@ function procesarRespuestaFormulario(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// Menú "♻️ Volver a pasar una oportunidad": si borraste sus filas de DIAGNOSTICOS_2026 y quieres que el formulario las vuelva a traer.
+// Quita esa oportunidad de CONTROL_RESPUESTAS y ejecuta el proceso normal.
+function volverAPasarOportunidad() {
+  const ui = SpreadsheetApp.getUi();
+  const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
+  const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
+  const hojaControl = ssDiag.getSheetByName(HOJA_CONTROL_RESPUESTAS);
+  if (!hojaDiag || !hojaControl || hojaControl.getLastRow() < 2) { ui.alert("No hay respuestas registradas para volver a pasar."); return; }
+  const r = ui.prompt("♻️ Volver a pasar una oportunidad del formulario",
+    "Primero borra sus filas de DIAGNOSTICOS_2026.\nEscribe el nombre EXACTO de la oportunidad:", ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const busqueda = normalizarNombreOportunidad(r.getResponseText());
+  if (!busqueda) return;
+
+  const enHoja = hojaDiag.getLastRow() < 2 ? 0 :
+    hojaDiag.getRange(2, 2, hojaDiag.getLastRow() - 1, 1).getValues().filter(x => normalizarNombreOportunidad(x[0]) === busqueda).length;
+  if (enHoja > 0) {
+    ui.alert("⚠️ Esa oportunidad todavía tiene " + enHoja + " fila(s) en DIAGNOSTICOS_2026.\nBórralas primero (para no duplicar) y vuelve a ejecutar esto.");
+    return;
+  }
+  const filas = [];
+  hojaControl.getRange(2, 1, hojaControl.getLastRow() - 1, 2).getValues().forEach((x, i) => {
+    if (normalizarNombreOportunidad(x[1]) === busqueda) filas.push(i + 2);
+  });
+  if (filas.length === 0) { ui.alert("No encontré esa oportunidad en el control de respuestas. Revisa que el nombre sea exacto."); return; }
+  if (ui.alert("♻️ Se volverán a traer " + filas.length + " silla(s) del formulario para '" + r.getResponseText().trim() + "'. ¿Continuar?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  filas.reverse().forEach(f => hojaControl.deleteRow(f));
+  procesarRespuestaFormulario();
 }
 
 function validarYResaltarColumnaU(hoja, fila) {
@@ -3239,6 +3278,7 @@ function probarTodosLosMetodos() {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu("EYM v13.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
+    .addItem("♻️ Volver a pasar una oportunidad", "volverAPasarOportunidad")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addItem("🔎 Verificar activadores", "verificarActivadores")
     .addSeparator()
