@@ -532,6 +532,14 @@ cada 30 minutos como red de seguridad. "Procesar Manualmente" queda solo como re
    **Mantenimiento general**: siempre en *Operaciones*, producto `[SVCMO] SERVICIO TECNICO DE AJUSTE Y MANTENIMIENTO GENERAL`, cantidad = número de sillas.
    La columna X (total) es siempre la fórmula `=SUM(T:W)` (T + U + V + W); el PDF y la RMA leen T..W en vivo de la hoja. Menú "🧮 Recalcular totales (columna X)"
    convierte filas antiguas. NO usar "Recalcular Todo": borra la columna AA y la U.
+   **Cruce repuesto ↔ catálogo (exacto, nunca por una sola palabra)**: los repuestos de la columna N se separan por `;` y por `,`; todas las palabras de cada repuesto
+   deben estar dentro de UN solo ítem del catálogo (se ignoran mayúsculas, tildes, plurales, "50 mm"="50mm", "(X5)"="X 5", "ajustable"="graduable"). Si no hay un único ítem
+   queda "sin precio" y se avisa en la columna AD ("Sin precio en el catálogo: …"); no se adivina. Catálogo columna D (opcional) = ALIAS: otros nombres con que aparece el ítem
+   en el formulario, separados por `;` (ej. "Telescopio"). Tapicería: cada concepto de Q se cruza como "<concepto> asiento" y de R como "<concepto> espaldar"; si alguna
+   dice "Abollonado y Tapizado general" solo cuenta ese ítem, una vez. Observaciones escritas a mano ("NO LLEVA BASE", "se pone politex", textos largos) se ignoran sin alarma.
+   El consolidado y las líneas de la RMA se TOTALIZAN POR REFERENCIA (código del producto). Si un código del catálogo apunta en Odoo a un producto con otro nombre se avisa
+   (caso real: PB3D2 es "Base Nylon 64 cm" en el catálogo y "Cilindro Mini Cromado" en Odoo; PB6D3F1 también está repetido). Menú "🧾 Recalcular repuestos y tapicería (T y V)"
+   recalcula solo T y V de una oportunidad (con vista previa) para filas calculadas con el método anterior.
 4. Impuestos por línea: "IVA Ventas 19%" siempre; "RTFTE 4%" si el total del PDF es **igual o mayor a $550.000**.
 5. Adjunta el PDF a la RMA y escribe el número de RMA (con enlace a Odoo) en la columna AC de todas las sillas de la oportunidad.
 6. Si los totales no cuadran (silla x silla vs ítems, o monto de Odoo vs PDF) la RMA se crea igual y se deja la alarma en la columna AD

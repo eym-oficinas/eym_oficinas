@@ -105,31 +105,167 @@ function normalizarTexto(texto) {
   return texto.toString().toLowerCase().trim().replace(/[()]/g, "").replace(/\s+/g, " ").replace(/\//g, " ");
 }
 
-function obtenerPrecioDelCatalogo(nombreProducto) {
-  if (!nombreProducto) return 0;
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V13.2: CRUCE EXACTO REPUESTO DEL DIAGNÓSTICO ↔ ÍTEM DEL CATÁLOGO
+// Antes se tomaba la primera fila del catálogo que compartiera UNA palabra ("goma" -> goma 60mm).
+// Ahora todas las palabras del repuesto deben estar dentro de UN solo ítem del catálogo; si no hay
+// un único ítem, se marca "sin precio" en vez de adivinar. Opcional: columna D del catálogo = ALIAS
+// (otros nombres con que aparece el ítem en el formulario, separados por ";").
+// ═══════════════════════════════════════════════════════════════════════════════════════
 
-  const catalogo = obtenerCatalogoPreciosDesdeSheet();
-  if (!catalogo || Object.keys(catalogo).length === 0) {
-    Logger.log("⚠️ Catálogo vacío");
-    return 0;
-  }
+const PALABRAS_VACIAS = { de: 1, del: 1, la: 1, el: 1, los: 1, las: 1, y: 1, o: 1, en: 1, con: 1, para: 1, tipo: 1, juego: 1, paq: 1 };
+const SINONIMOS_TOKEN = { ajustable: "graduable" };
+let CATALOGO_ENTRADAS_CACHE = null;
 
-  const nombreNormalizado = normalizarTexto(nombreProducto);
-
-  if (catalogo[nombreNormalizado]) return catalogo[nombreNormalizado];
-
-  const palabras = nombreNormalizado.split(" ");
-  for (const [comp, precio] of Object.entries(catalogo)) {
-    let coincidencias = 0;
-    for (const palabra of palabras) {
-      if (palabra.length > 2 && comp.includes(palabra)) coincidencias++;
-    }
-    if (coincidencias > 0) return precio;
-  }
-
-  return 0;
+function tokensDeTexto(texto) {
+  let t = (texto || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  t = t.replace(/\bx\s*(\d+)\b/g, " x$1 ");
+  t = t.replace(/(\d+)\s*(mm|cms|cm)\b/g, (m, n, u) => " " + n + (u === "mm" ? "mm" : "cm") + " ");
+  t = t.replace(/[^a-z0-9]+/g, " ").trim();
+  if (!t) return [];
+  const raiz = x => (x.length > 3 && /s$/.test(x) && !/ss$/.test(x)) ? x.slice(0, -1) : x;
+  return t.split(" ").filter(x => x && !PALABRAS_VACIAS[x]).map(x => SINONIMOS_TOKEN[x] || raiz(x));
 }
 
+function claveAlias(texto) {
+  return tokensDeTexto(texto).sort().join(" ");
+}
+
+function dividirItems(texto) {
+  return (texto || "").toString().split(/[;,]/).map(x => x.trim()).filter(x => x);
+}
+
+// Observaciones escritas a mano (no son repuestos): no llevan precio ni generan alarma
+function esNotaNoRepuesto(texto) {
+  const t = (texto || "").toString().trim().toLowerCase();
+  return t.length > 45 || /^(no lleva|se |la |el |mantenimiento$)/.test(t);
+}
+
+function cargarEntradasCatalogo() {
+  if (CATALOGO_ENTRADAS_CACHE !== null) return CATALOGO_ENTRADAS_CACHE;
+  const entradas = [];
+  try {
+    const hoja = buscarHojaCatalogo(SpreadsheetApp.openById(ID_DIAGNOSTICOS));
+    if (hoja) {
+      const datos = hoja.getDataRange().getValues();
+      for (let i = 1; i < datos.length; i++) {
+        const nombre = (datos[i][0] || "").toString().trim();
+        const precio = parseFloat(datos[i][1]) || 0;
+        if (!nombre || precio <= 0) continue;
+        entradas.push({
+          nombre: nombre,
+          precio: precio,
+          codigo: (datos[i][2] || "").toString().trim(),
+          tokens: tokensDeTexto(nombre),
+          alias: (datos[i][3] || "").toString().split(/[;,]/).map(a => claveAlias(a)).filter(a => a)
+        });
+      }
+    }
+  } catch (e) {
+    Logger.log("❌ Error leyendo el catálogo: " + e);
+  }
+  CATALOGO_ENTRADAS_CACHE = entradas;
+  return entradas;
+}
+
+// Devuelve { entry } o { entry: null, motivo, opciones }
+function resolverItemCatalogo(texto) {
+  const entradas = cargarEntradasCatalogo();
+  const toks = tokensDeTexto(texto);
+  if (toks.length === 0) return { entry: null, motivo: "vacío" };
+
+  const clave = toks.slice().sort().join(" ");
+  const porAlias = entradas.filter(e => e.alias.indexOf(clave) !== -1);
+  if (porAlias.length > 0) return { entry: porAlias[0] };
+
+  const cand = entradas.filter(e => toks.every(t => e.tokens.indexOf(t) !== -1));
+  if (cand.length === 0) return { entry: null, motivo: "sin coincidencia" };
+  if (cand.length === 1) return { entry: cand[0] };
+  cand.sort((a, b) => a.tokens.length - b.tokens.length);
+  if (cand[0].tokens.length < cand[1].tokens.length) return { entry: cand[0] };
+  if (cand.every(e => e.codigo === cand[0].codigo && e.precio === cand[0].precio)) return { entry: cand[0] };
+  return { entry: null, motivo: "ambiguo", opciones: cand.map(e => e.nombre) };
+}
+
+// Tapicería (col. Q asiento + col. R espaldar). Si alguna dice "Abollonado y Tapizado general": solo ese ítem, una vez.
+function itemsTapiceria(asiento, espaldar) {
+  const general = "abollonado y tapizado general";
+  const deAsiento = dividirItems(asiento), deEspaldar = dividirItems(espaldar);
+  if (deAsiento.concat(deEspaldar).some(t => normalizarTexto(t) === general)) {
+    return [{ texto: "Abollonado y Tapizado general", lugar: "", entry: resolverItemCatalogo(general).entry }];
+  }
+  const out = [];
+  deAsiento.forEach(t => out.push({ texto: t, lugar: "asiento", entry: resolverItemCatalogo(t + " asiento").entry }));
+  deEspaldar.forEach(t => out.push({ texto: t, lugar: "espaldar", entry: resolverItemCatalogo(t + " espaldar").entry }));
+  return out;
+}
+
+// Valor de repuestos (T) y de tapicería (V) de una fila, con la lista de ítems sin precio
+function calcularTyV(hoja, fila) {
+  const sinPrecio = [];
+  let totalT = 0, totalV = 0;
+  dividirItems(hoja.getRange(fila, 14).getValue()).forEach(item => {
+    const r = resolverItemCatalogo(item);
+    if (r.entry) totalT += r.entry.precio;
+    else if (!esNotaNoRepuesto(item)) sinPrecio.push(item);
+  });
+  itemsTapiceria(hoja.getRange(fila, 17).getValue(), hoja.getRange(fila, 18).getValue()).forEach(it => {
+    if (it.entry) totalV += it.entry.precio;
+    else sinPrecio.push(it.texto + (it.lugar ? " (" + it.lugar + ")" : ""));
+  });
+  return { totalT: totalT, totalV: totalV, sinPrecio: sinPrecio };
+}
+
+function marcarSinPrecio(hoja, fila, lista) {
+  const celda = hoja.getRange(fila, CONFIG.COL_ALARMA);
+  const actual = (celda.getValue() || "").toString();
+  if (lista.length > 0) {
+    celda.setValue("⚠️ Sin precio en el catálogo: " + lista.join("; "));
+    celda.setBackground("#F4CCCC");
+    celda.setFontColor("#990000");
+  } else if (actual.indexOf("⚠️ Sin precio en el catálogo") === 0) {
+    celda.clearContent();
+    celda.setBackground(null);
+    celda.setFontColor(null);
+  }
+}
+
+// Botón de menú: recalcula SOLO T (repuestos) y V (tapicería) de una oportunidad con el cruce exacto
+function recalcularRepuestosOportunidad() {
+  const ui = SpreadsheetApp.getUi();
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DIAGNOSTICOS_2026");
+  if (!hoja) { ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada"); return; }
+  const resp = ui.prompt("🧾 Recalcular repuestos y tapicería de una oportunidad\\n\\nNombre EXACTO de la oportunidad (columna B):");
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const nombre = resp.getResponseText().trim();
+  const diagnosticos = obtenerDiagnosticosDeOportunidad(hoja, nombre);
+  if (diagnosticos.length === 0) { ui.alert("❌ " + mensajeOportunidadNoEncontrada(hoja, nombre)); return; }
+
+  const cambios = diagnosticos.map(d => {
+    const n = calcularTyV(hoja, d.fila);
+    const antes = d.valorTotal;
+    const despues = n.totalT + d.valorOtrosServicios + n.totalV + d.valorMO;
+    return { d: d, n: n, antes: antes, despues: despues };
+  });
+  const lineas = cambios.map(c => "• " + c.d.numeroTemporal + ": total $" + formatearNumero(c.antes) + " → $" + formatearNumero(c.despues) +
+    (c.n.sinPrecio.length ? "  (sin precio: " + c.n.sinPrecio.join(", ") + ")" : ""));
+  const ok = ui.alert("🧾 CAMBIOS PROPUESTOS", "Oportunidad: " + nombre + "\\n\\n" + lineas.join("\\n") +
+    "\\n\\nSe reescriben las columnas T y V (no se toca U, W, los estados ni lo demás).\\n¿Aplicar?", ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+
+  cambios.forEach(c => {
+    hoja.getRange(c.d.fila, 20).setValue(c.n.totalT);
+    hoja.getRange(c.d.fila, 22).setValue(c.n.totalV);
+    marcarSinPrecio(hoja, c.d.fila, c.n.sinPrecio);
+  });
+  recalcularTotalXFilas(hoja, Math.min.apply(null, diagnosticos.map(d => d.fila)), Math.max.apply(null, diagnosticos.map(d => d.fila)));
+  ui.alert("✅ Listo: " + cambios.length + " fila(s) actualizadas.");
+}
+
+function obtenerPrecioDelCatalogo(nombreProducto) {
+  const r = resolverItemCatalogo(nombreProducto);
+  return r.entry ? r.entry.precio : 0;
+}
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // SECCIÓN 2: PROCESAMIENTO DE RESPUESTAS
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -400,13 +536,8 @@ function validarYResaltarColumnaU(hoja, fila) {
 
 function calcularSubtotales(hoja, fila) {
   try {
-    const componentes = hoja.getRange(fila, 14).getValue() || "";
-    let totalT = 0;
-    if (componentes) {
-      componentes.toString().split(";").forEach(item => {
-        totalT += obtenerPrecioDelCatalogo(item);
-      });
-    }
+    const tyv = calcularTyV(hoja, fila);
+    const totalT = tyv.totalT;
     hoja.getRange(fila, 20).setValue(totalT);
 
     const otrosServicios = hoja.getRange(fila, 15).getValue() || "";
@@ -418,25 +549,7 @@ function calcularSubtotales(hoja, fila) {
       hoja.getRange(fila, 21).setBackground("#FFFFFF");
     }
 
-    const asiento = hoja.getRange(fila, 17).getValue() || "";
-    const espaldar = hoja.getRange(fila, 18).getValue() || "";
-    let totalV = 0;
-
-    const asientoNormalizado = normalizarTexto(asiento);
-    const espaldarNormalizado = normalizarTexto(espaldar);
-    const textoAbollonado = "abollonado y tapizado general";
-
-    if (asiento && espaldar) {
-      if (asientoNormalizado === textoAbollonado && espaldarNormalizado === textoAbollonado) {
-        totalV = obtenerPrecioDelCatalogo(asiento);
-      } else {
-        totalV = obtenerPrecioDelCatalogo(asiento) + obtenerPrecioDelCatalogo(espaldar);
-      }
-    } else if (asiento) {
-      totalV = obtenerPrecioDelCatalogo(asiento);
-    } else if (espaldar) {
-      totalV = obtenerPrecioDelCatalogo(espaldar);
-    }
+    const totalV = tyv.totalV;
     hoja.getRange(fila, 22).setValue(totalV);
 
     hoja.getRange(fila, 23).setValue(CONFIG.MANTENIMIENTO_GENERAL);
@@ -445,6 +558,7 @@ function calcularSubtotales(hoja, fila) {
     const totalU = (valorU === "" || isNaN(valorU)) ? 0 : parseFloat(valorU);
     const totalX = totalT + totalU + totalV + CONFIG.MANTENIMIENTO_GENERAL;
     hoja.getRange(fila, 24).setFormula("=SUM(T" + fila + ":W" + fila + ")");
+    marcarSinPrecio(hoja, fila, tyv.sinPrecio);
 
   } catch (e) {
     Logger.log("❌ Error: " + e);
@@ -1698,59 +1812,62 @@ function consolidarServiciosTotal(diagnosticos, hoja) {
 function consolidarBorradorRMA(silasDatos) {
   const mapa = {};
   const orden = [];
-  const textoGeneral = "abollonado y tapizado general";
 
-  function agregar(grupo, nombre, cant, total, claveCatalogo) {
-    const key = grupo + "|" + normalizarTexto(nombre);
+  // Se totaliza POR REFERENCIA (código del producto): varios nombres del diagnóstico que son el mismo ítem suman en una sola línea
+  function agregar(grupo, nombre, cant, total, extra) {
+    const e = extra || {};
+    const key = grupo + "|" + (e.codigo ? "cod:" + e.codigo : "nom:" + normalizarTexto(nombre));
     if (!mapa[key]) {
-      mapa[key] = { grupo: grupo, nombre: nombre, catalogo: claveCatalogo || nombre, cant: 0, total: 0 };
+      mapa[key] = { grupo: grupo, nombre: nombre, catalogo: nombre, codigo: e.codigo || null, nombres: [], cant: 0, total: 0 };
       orden.push(key);
     }
-    mapa[key].cant += cant;
-    mapa[key].total += total;
+    const it = mapa[key];
+    it.cant += cant;
+    it.total += total;
+    if (it.nombres.indexOf(nombre) === -1) it.nombres.push(nombre);
   }
 
   silasDatos.forEach(x => {
     const d = x.diag;
     if (!d) return;
 
-    // 1) PARTES (col N): una unidad por cada aparición, precio del catálogo
-    (d.repuestos || "").toString().split(";").map(p => p.trim()).filter(p => p).forEach(p => {
-      agregar(1, p, 1, obtenerPrecioDelCatalogo(p));
+    // 1) PARTES (col N): cada repuesto separado por ";" o ","; una unidad por cada aparición, precio y código del catálogo
+    dividirItems(d.repuestos).forEach(p => {
+      const r = resolverItemCatalogo(p);
+      if (r.entry) agregar(1, r.entry.nombre, 1, r.entry.precio, { codigo: r.entry.codigo });
+      else if (!esNotaNoRepuesto(p)) agregar(1, p, 1, 0, {});
     });
 
     // 2) OTROS SERVICIOS Y ESPECIALES (col O + P): el valor viene de la col U
     const otros = [d.otrosServicios, d.observacionesEspeciales]
       .map(t => (t || "").toString().trim()).filter(t => t).join("; ");
     if (otros) {
-      agregar(2, otros, 1, d.valorOtrosServicios || 0);
+      agregar(2, otros, 1, d.valorOtrosServicios || 0, {});
     }
 
-    // 3) TAPICERÍA (col Q + R): mismo criterio que el cálculo de la col V
-    const asiento = (d.tapiceriaAsiento || "").toString().trim();
-    const espaldar = (d.tapiceriaEspaldar || "").toString().trim();
-    if (asiento && espaldar &&
-        normalizarTexto(asiento) === textoGeneral && normalizarTexto(espaldar) === textoGeneral) {
-      agregar(3, asiento, 1, obtenerPrecioDelCatalogo(asiento), asiento);
-    } else {
-      if (asiento) agregar(3, "Asiento: " + asiento, 1, obtenerPrecioDelCatalogo(asiento), asiento);
-      if (espaldar) agregar(3, "Espaldar: " + espaldar, 1, obtenerPrecioDelCatalogo(espaldar), espaldar);
-    }
+    // 3) TAPICERÍA (col Q + R): mismo criterio que la columna V
+    itemsTapiceria(d.tapiceriaAsiento, d.tapiceriaEspaldar).forEach(it => {
+      if (it.entry) agregar(3, it.entry.nombre, 1, it.entry.precio, { codigo: it.entry.codigo });
+      else agregar(3, it.texto + (it.lugar ? " (" + it.lugar + ")" : ""), 1, 0, {});
+    });
 
     // 4) M.O Y MANTENIMIENTO GENERAL (col W): una por silla
-    agregar(4, "M.O y mantenimiento general", 1, d.valorMO || CONFIG.MANTENIMIENTO_GENERAL);
+    agregar(4, "M.O y mantenimiento general", 1, d.valorMO || CONFIG.MANTENIMIENTO_GENERAL, {});
   });
 
+  const avisos = [];
   const items = orden.map(k => {
     const it = mapa[k];
     it.unitario = it.cant > 0 ? Math.round(it.total / it.cant) : 0;
+    if (it.nombres.length > 1 && it.codigo) {
+      avisos.push("El código " + it.codigo + " está en más de un ítem del catálogo (" + it.nombres.join(" / ") + "): revisar el catálogo");
+    }
     return it;
   }).sort((a, b) => a.grupo - b.grupo);
 
   const total = items.reduce((acc, it) => acc + it.total, 0);
-  return { items: items, total: total };
+  return { items: items, total: total, avisos: avisos };
 }
-
 function agregarHojaBorradorRMA(ssTemp, silasDatos, cliente, nombreOportunidad, totalPresupuesto) {
   const borrador = consolidarBorradorRMA(silasDatos);
   if (borrador.items.length === 0) {
@@ -2225,7 +2342,7 @@ function resolverItemsBorradorEnOdoo(items, creds) {
     } else if (it.grupo === 2) {
       codigo = buscarCodigoCatalogo(base, true);
     } else {
-      codigo = buscarCodigoCatalogo(base, false);
+      codigo = it.codigo || null;
     }
     return { item: it, codigo: codigo, prod: null, generico: false };
   });
@@ -2294,6 +2411,14 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
       avisos.push("Líneas NO cargadas (agregar a mano): " + r.faltantes.join("; "));
     }
     const filasOk = r.filas.filter(x => x.prod);
+
+    // El código del catálogo debe apuntar en Odoo a un producto con nombre parecido (detecta códigos mal copiados)
+    filasOk.filter(x => x.item.grupo === 1 || x.item.grupo === 3).forEach(x => {
+      const a = tokensDeTexto(x.item.nombre), b = tokensDeTexto(x.prod.name);
+      if (a.length > 0 && b.length > 0 && !a.some(t => b.indexOf(t) !== -1)) {
+        avisos.push("Código " + x.codigo + ": en el catálogo es '" + x.item.nombre + "' pero en Odoo es '" + x.prod.name + "' (revisar el código en el catálogo)");
+      }
+    });
 
     // 3) Monto sin impuestos vs subtotal del PDF: si difiere se crea igual y se avisa
     let esperado = 0;
@@ -2495,6 +2620,9 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
 
     // ALARMA (no bloquea): silla x silla vs consolidado por ítem
     const alarmas = [];
+    (borrador.avisos || []).forEach(a => alarmas.push(a));
+    const sinCatalogo = borrador.items.filter(it => (it.grupo === 1 || it.grupo === 3) && !it.codigo).map(it => it.nombre);
+    if (sinCatalogo.length > 0) alarmas.push("Sin código/precio en el catálogo (agregar a mano en la RMA): " + sinCatalogo.join("; "));
     if (Math.abs(totalGeneral - borrador.total) > 1) {
       const dif = Math.round(totalGeneral - borrador.total);
       alarmas.push("Total silla x silla " + formatearNumero(totalGeneral) + " ≠ consolidado por ítem " + formatearNumero(borrador.total) +
@@ -3016,6 +3144,7 @@ function onOpen() {
     .addItem("🔄 Sincronizar con Odoo (aprobar / cerrar)", "sincronizarConOdoo")
     .addSeparator()
     .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
+    .addItem("🧾 Recalcular repuestos y tapicería (T y V)", "recalcularRepuestosOportunidad")
     .addItem("🧮 Recalcular totales (columna X)", "recalcularTotalesX")
     .addItem("🔁 Recalcular Todo", "recalcularTodo")
     .addItem("📋 Configurar Listas Desplegables", "configurarValidacionAprobacion")
