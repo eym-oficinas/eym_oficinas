@@ -560,3 +560,9 @@ aprueba sus sillas y hace clic en "Iniciar reparación" (`action_repair_start`).
 lista, pegado o arrastre) —las OP se relacionan con la RMA por el número EyM: OP col. P ↔ diagnóstico col. E ↔ col. AC— el script pide confirmación y
 hace en Odoo "Finalizar reparación" (`action_repair_end`) y luego "Crear factura" (`action_repair_invoice_create`). Si Odoo rechaza algo, el motivo
 queda en la columna AD. Los cambios hechos por script NO activan `onEdit`: el proceso de aprobación se llama directamente.
+
+**Piezas sin precio en el catálogo (nota de la celda T)**: al pasar la respuesta a DIAGNOSTICOS_2026, la celda T (valor repuestos) queda AMARILLA con una nota
+con una línea por pieza: `• Pieza | valor | código Odoo`. El usuario completa valor y código en la nota. Al recalcular (menú "🧾 Recalcular repuestos") o al
+"Finalizar oportunidad", el script lee la nota: suma el valor en T, agrega la pieza al consolidado (PDF) y a la RMA (producto buscado por ese código en Odoo, precio =
+valor de la nota). Con valor y código la celda deja de ser amarilla (la nota se conserva); con solo valor suma pero sigue amarilla pidiendo el código.
+Tornillería y Cabecero van a Otros servicios (U amarilla). Al "Finalizar oportunidad" T se actualiza solo si la nota trae valores.

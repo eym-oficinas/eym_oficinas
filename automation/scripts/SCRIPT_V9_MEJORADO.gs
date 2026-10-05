@@ -219,31 +219,76 @@ function itemsTapiceria(asiento, espaldar) {
   return out;
 }
 
-// Valor de repuestos (T) y de tapicería (V) de una fila, con la lista de ítems sin precio
+// Nota de la celda T: una línea por pieza sin precio con el formato "• Pieza | valor | código Odoo".
+// El usuario completa valor y código; el script los lee para sumar en T, en el PDF y en la RMA.
+const MARCA_NOTA_REPUESTOS = "Sin precio en el catálogo";
+function parseValorNota(txt) {
+  let t = (txt || "").toString().replace(/[$\s]/g, "");
+  if (!t) return 0;
+  if (/^\d{1,3}([.,]\d{3})+$/.test(t)) t = t.replace(/[.,]/g, "");
+  else t = t.replace(",", ".");
+  const n = parseFloat(t);
+  return isNaN(n) || n < 0 ? 0 : n;
+}
+function parseNotaRepuestos(nota) {
+  const mapa = {};
+  if (!nota || nota.toString().indexOf(MARCA_NOTA_REPUESTOS) !== 0) return mapa;
+  nota.toString().split(/\r?\n/).forEach(linea => {
+    const partes = linea.split("|");
+    if (partes.length < 3) return;
+    const texto = partes[0].replace(/^[\s•\-\*]+/, "").trim();
+    const clave = claveAlias(texto);
+    if (!clave) return;
+    mapa[clave] = { texto: texto, valor: parseValorNota(partes[1]), codigo: (partes[2] || "").toString().trim() };
+  });
+  return mapa;
+}
+
+// Valor de repuestos (T) y de tapicería (V) de una fila, con la lista de ítems sin precio.
+// Las piezas sin precio con valor y código en la nota de T (manuales) se suman a T y quedan resueltas.
 function calcularTyV(hoja, fila) {
-  const sinPrecio = [], sinPrecioRepuestos = [], otrosDeRepuestos = [];
+  const sinPrecio = [], sinPrecioRepuestos = [], otrosDeRepuestos = [], manuales = [];
   let totalT = 0, totalV = 0;
+  let notas = null;
   dividirItems(hoja.getRange(fila, 14).getValue()).forEach(item => {
     if (esItemOtroServicio(item)) { otrosDeRepuestos.push(item); return; }
     const r = resolverItemCatalogo(item);
     if (r.entry) totalT += r.entry.precio;
-    else if (!esNotaNoRepuesto(item)) { sinPrecio.push(item); sinPrecioRepuestos.push(item); }
+    else if (!esNotaNoRepuesto(item)) {
+      if (notas === null) notas = parseNotaRepuestos(hoja.getRange(fila, 20).getNote());
+      const m = notas[claveAlias(item)];
+      if (m && m.valor > 0) {
+        totalT += m.valor;
+        if (m.codigo) { manuales.push({ texto: item, valor: m.valor, codigo: m.codigo }); return; }
+      }
+      sinPrecio.push(item); sinPrecioRepuestos.push(item);
+    }
   });
   itemsTapiceria(hoja.getRange(fila, 17).getValue(), hoja.getRange(fila, 18).getValue()).forEach(it => {
     if (it.entry) totalV += it.entry.precio;
     else sinPrecio.push(it.texto + (it.lugar ? " (" + it.lugar + ")" : ""));
   });
-  return { totalT: totalT, totalV: totalV, sinPrecio: sinPrecio, sinPrecioRepuestos: sinPrecioRepuestos, otrosDeRepuestos: otrosDeRepuestos };
+  return { totalT: totalT, totalV: totalV, sinPrecio: sinPrecio, sinPrecioRepuestos: sinPrecioRepuestos, otrosDeRepuestos: otrosDeRepuestos, manuales: manuales };
 }
 
-// Celda de valor de repuestos (T): amarilla con nota cuando hay piezas sin precio, para sumar a mano el valor adicional
-function marcarCeldaRepuestos(hoja, fila, lista) {
+// Celda de valor de repuestos (T): amarilla con nota cuando hay piezas sin precio (o sin código).
+// La nota conserva lo que el usuario ya escribió (valor | código) y las piezas ya resueltas.
+function marcarCeldaRepuestos(hoja, fila, lista, manuales) {
+  manuales = manuales || [];
   const celda = hoja.getRange(fila, 20);
-  const marca = "Sin precio en el catálogo:";
-  if (lista.length > 0) {
-    celda.setBackground("#FFFF00");
-    celda.setNote(marca + " " + lista.join("; ") + ".\nSuma en esta celda el valor adicional de esas piezas.");
-  } else if ((celda.getNote() || "").indexOf(marca) === 0) {
+  const previa = celda.getNote() || "";
+  if (lista.length > 0 || manuales.length > 0) {
+    const antes = parseNotaRepuestos(previa);
+    const lineas = [];
+    manuales.forEach(m => lineas.push("• " + m.texto + " | " + m.valor + " | " + m.codigo));
+    lista.forEach(t => {
+      const x = antes[claveAlias(t)];
+      lineas.push("• " + t + " | " + (x && x.valor ? x.valor : "") + " | " + (x && x.codigo ? x.codigo : ""));
+    });
+    celda.setNote(MARCA_NOTA_REPUESTOS + " (completa: Pieza | valor | código Odoo)\n" + lineas.join("\n") +
+      "\nAl recalcular o Finalizar oportunidad, el valor se suma en esta celda y la pieza va al PDF y a la RMA.");
+    if (lista.length > 0) celda.setBackground("#FFFF00"); else celda.setBackground(null);
+  } else if (previa.indexOf(MARCA_NOTA_REPUESTOS) === 0) {
     celda.setBackground(null);
     celda.clearNote();
   }
@@ -296,7 +341,7 @@ function recalcularRepuestosOportunidad() {
     hoja.getRange(c.d.fila, 20).setValue(c.n.totalT);
     hoja.getRange(c.d.fila, 22).setValue(c.n.totalV);
     marcarSinPrecio(hoja, c.d.fila, c.n.sinPrecio);
-    marcarCeldaRepuestos(hoja, c.d.fila, c.n.sinPrecioRepuestos);
+    marcarCeldaRepuestos(hoja, c.d.fila, c.n.sinPrecioRepuestos, c.n.manuales);
     validarYResaltarColumnaU(hoja, c.d.fila);
   });
   recalcularTotalXFilas(hoja, Math.min.apply(null, diagnosticos.map(d => d.fila)), Math.max.apply(null, diagnosticos.map(d => d.fila)));
@@ -593,7 +638,7 @@ function calcularSubtotales(hoja, fila) {
     const totalX = totalT + totalU + totalV + CONFIG.MANTENIMIENTO_GENERAL;
     hoja.getRange(fila, 24).setFormula("=SUM(T" + fila + ":W" + fila + ")");
     marcarSinPrecio(hoja, fila, tyv.sinPrecio);
-    marcarCeldaRepuestos(hoja, fila, tyv.sinPrecioRepuestos);
+    marcarCeldaRepuestos(hoja, fila, tyv.sinPrecioRepuestos, tyv.manuales);
 
   } catch (e) {
     Logger.log("❌ Error: " + e);
@@ -1619,6 +1664,7 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
 
     const datos = hoja.getRange(2, 1, ultFila - 1, 24).getValues();
     const temporalesVisibles = hoja.getRange(2, 6, ultFila - 1, 1).getDisplayValues();
+    const notasT = hoja.getRange(2, 20, ultFila - 1, 1).getNotes();
     const busqueda = normalizarNombreOportunidad(nombreOportunidad);
     if (!busqueda) return diagnosticos;
     const num = v => (v === "" || v === null || isNaN(Number(v))) ? 0 : Number(v);
@@ -1646,10 +1692,24 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
           valorOtrosServicios: num(r[20]), // U
           valorTapiceria: num(r[21]),      // V
           valorMO: num(r[22]),             // W
-          valorTotal: num(r[19]) + num(r[20]) + num(r[21]) + num(r[22]) // T+U+V+W (no depende de X)
+          valorTotal: num(r[19]) + num(r[20]) + num(r[21]) + num(r[22]), // T+U+V+W (no depende de X)
+          manuales: parseNotaRepuestos((notasT[i] && notasT[i][0]) || "")  // nota de T: pieza sin precio con valor y código
         });
       }
     }
+
+    // Las piezas con valor y código en la nota de T se suman a T (así el PDF, la RMA y la hoja coinciden)
+    diagnosticos.forEach(d => {
+      if (!Object.keys(d.manuales).some(k => d.manuales[k].valor > 0)) return;
+      const n = calcularTyV(hoja, d.fila);
+      if (n.totalT !== d.valorPartes) {
+        hoja.getRange(d.fila, 20).setValue(n.totalT);
+        d.valorTotal += n.totalT - d.valorPartes;
+        d.valorPartes = n.totalT;
+        marcarCeldaRepuestos(hoja, d.fila, n.sinPrecioRepuestos, n.manuales);
+        Logger.log("🟨 Fila " + d.fila + ": T actualizado a $" + formatearNumero(n.totalT) + " con las piezas de la nota");
+      }
+    });
 
     return diagnosticos;
 
@@ -1853,12 +1913,13 @@ function consolidarBorradorRMA(silasDatos) {
     const e = extra || {};
     const key = grupo + "|" + (e.codigo ? "cod:" + e.codigo : "nom:" + normalizarTexto(nombre));
     if (!mapa[key]) {
-      mapa[key] = { grupo: grupo, nombre: nombre, catalogo: nombre, codigo: e.codigo || null, nombres: [], cant: 0, total: 0 };
+      mapa[key] = { grupo: grupo, nombre: nombre, catalogo: nombre, codigo: e.codigo || null, nombres: [], cant: 0, total: 0, manual: false };
       orden.push(key);
     }
     const it = mapa[key];
     it.cant += cant;
     it.total += total;
+    if (e.manual) it.manual = true;
     if (it.nombres.indexOf(nombre) === -1) it.nombres.push(nombre);
   }
 
@@ -1872,7 +1933,12 @@ function consolidarBorradorRMA(silasDatos) {
       if (esItemOtroServicio(p)) { otrosDeRepuestos.push(p); return; }
       const r = resolverItemCatalogo(p);
       if (r.entry) agregar(1, r.entry.nombre, 1, r.entry.precio, { codigo: r.entry.codigo });
-      else if (!esNotaNoRepuesto(p)) agregar(1, p, 1, 0, {});
+      else if (!esNotaNoRepuesto(p)) {
+        // Pieza sin precio en el catálogo: si la nota de T trae valor (y código de Odoo) se usa ese
+        const m = (d.manuales || {})[claveAlias(p)];
+        if (m && m.valor > 0) agregar(1, m.texto || p, 1, m.valor, { codigo: m.codigo || null, manual: true });
+        else agregar(1, p, 1, 0, {});
+      }
     });
 
     // 2) OTROS SERVICIOS Y ESPECIALES (col O + P): el valor viene de la col U
@@ -1896,7 +1962,7 @@ function consolidarBorradorRMA(silasDatos) {
   const items = orden.map(k => {
     const it = mapa[k];
     it.unitario = it.cant > 0 ? Math.round(it.total / it.cant) : 0;
-    if (it.nombres.length > 1 && it.codigo) {
+    if (it.nombres.length > 1 && it.codigo && !it.manual) {
       avisos.push("El código " + it.codigo + " está en más de un ítem del catálogo (" + it.nombres.join(" / ") + "): revisar el catálogo");
     }
     return it;
@@ -2358,7 +2424,7 @@ function obtenerUbicacionStock(creds) {
 // Otros servicios: el precio unitario es el valor escrito a mano en la columna U (total / cantidad).
 // Los demás ítems usan el precio que trae Odoo.
 function precioLineaRMA(x) {
-  if (x.item.grupo === 2) return x.item.cant > 0 ? x.item.total / x.item.cant : 0;
+  if (x.item.grupo === 2 || x.item.manual) return x.item.cant > 0 ? x.item.total / x.item.cant : 0;
   return x.prod.list_price || 0;
 }
 
@@ -2450,7 +2516,7 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
     const filasOk = r.filas.filter(x => x.prod);
 
     // El código del catálogo debe apuntar en Odoo a un producto con nombre parecido (detecta códigos mal copiados)
-    filasOk.filter(x => x.item.grupo === 1 || x.item.grupo === 3).forEach(x => {
+    filasOk.filter(x => (x.item.grupo === 1 || x.item.grupo === 3) && !x.item.manual).forEach(x => {
       const a = tokensDeTexto(x.item.nombre), b = tokensDeTexto(x.prod.name);
       if (a.length > 0 && b.length > 0 && !a.some(t => b.indexOf(t) !== -1)) {
         avisos.push("Código " + x.codigo + ": en el catálogo es '" + x.item.nombre + "' pero en Odoo es '" + x.prod.name + "' (revisar el código en el catálogo)");
