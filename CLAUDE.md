@@ -537,6 +537,10 @@ cada 30 minutos como red de seguridad. "Procesar Manualmente" queda solo como re
    queda "sin precio" y se avisa en la columna AD ("Sin precio en el catálogo: …"); no se adivina. Catálogo columna D (opcional) = ALIAS: otros nombres con que aparece el ítem
    en el formulario, separados por `;` (ej. "Telescopio"). Tapicería: cada concepto de Q se cruza como "<concepto> asiento" y de R como "<concepto> espaldar"; si alguna
    dice "Abollonado y Tapizado general" solo cuenta ese ítem, una vez. Observaciones escritas a mano ("NO LLEVA BASE", "se pone politex", textos largos) se ignoran sin alarma.
+   Equivalencias integradas (`CONFIG.ALIAS_CATALOGO`): "Platina Curva" = "Platina en L", "Telescopio" = "Funda Telescópica"; "Moon" = "Herradura"; en conchas "int/ext", "asiento" y
+   "espaldar" no distinguen el modelo. "Tornillería" y "Cabecero" dentro de Repuestos (col. N) se tratan como OTROS SERVICIOS (`CONFIG.ITEMS_COMO_OTROS_SERVICIOS`): no suman en T, van
+   al renglón de Otros servicios con el valor de U y ponen U en amarillo (igual que O o P con texto). Repuestos sin precio en el catálogo (p. ej. "Concha Otra", "Concha isósceles"): quedan sin
+   precio, la celda T se pone AMARILLA con una nota ("Suma en esta celda el valor adicional de esas piezas") y se avisa en AD.
    El consolidado y las líneas de la RMA se TOTALIZAN POR REFERENCIA (código del producto). Si un código del catálogo apunta en Odoo a un producto con otro nombre se avisa
    (caso real: PB3D2 es "Base Nylon 64 cm" en el catálogo y "Cilindro Mini Cromado" en Odoo; PB6D3F1 también está repetido). Menú "🧾 Recalcular repuestos y tapicería (T y V)"
    recalcula solo T y V de una oportunidad (con vista previa) para filas calculadas con el método anterior.

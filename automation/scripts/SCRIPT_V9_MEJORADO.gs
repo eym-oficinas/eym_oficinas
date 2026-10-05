@@ -25,7 +25,11 @@ const CONFIG = {
   COL_ALARMA: 30,
   ADJUNTAR_CONSOLIDADO: true,
   ESTADO_OP_PRODUCCION: "En producción",
-  ESTADO_OP_TERMINADO: "Terminado"
+  ESTADO_OP_TERMINADO: "Terminado",
+  // Nombre con que llega del formulario -> ítem del catálogo (además de la columna D "ALIAS" del catálogo)
+  ALIAS_CATALOGO: { "Platina Curva": "Platina en L", "Telescopio": "Funda Telescópica" },
+  // Si vienen en Repuestos (col. N) se tratan como Otros servicios: sin precio de catálogo, U en amarillo
+  ITEMS_COMO_OTROS_SERVICIOS: ["Tornillería", "Cabecero"]
 };
 
 // Logo EyM (PNG 150x150) incrustado para no depender de ningún archivo en Drive
@@ -114,7 +118,7 @@ function normalizarTexto(texto) {
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 const PALABRAS_VACIAS = { de: 1, del: 1, la: 1, el: 1, los: 1, las: 1, y: 1, o: 1, en: 1, con: 1, para: 1, tipo: 1, juego: 1, paq: 1 };
-const SINONIMOS_TOKEN = { ajustable: "graduable" };
+const SINONIMOS_TOKEN = { ajustable: "graduable", moon: "herradura" };
 let CATALOGO_ENTRADAS_CACHE = null;
 
 function tokensDeTexto(texto) {
@@ -164,8 +168,18 @@ function cargarEntradasCatalogo() {
   } catch (e) {
     Logger.log("❌ Error leyendo el catálogo: " + e);
   }
+  Object.keys(CONFIG.ALIAS_CATALOGO).forEach(origen => {
+    const destino = claveAlias(CONFIG.ALIAS_CATALOGO[origen]);
+    const e = entradas.find(x => claveAlias(x.nombre) === destino);
+    if (e) e.alias.push(claveAlias(origen));
+  });
   CATALOGO_ENTRADAS_CACHE = entradas;
   return entradas;
+}
+
+function esItemOtroServicio(texto) {
+  const k = claveAlias(texto);
+  return k !== "" && CONFIG.ITEMS_COMO_OTROS_SERVICIOS.some(x => claveAlias(x) === k);
 }
 
 // Devuelve { entry } o { entry: null, motivo, opciones }
@@ -178,7 +192,12 @@ function resolverItemCatalogo(texto) {
   const porAlias = entradas.filter(e => e.alias.indexOf(clave) !== -1);
   if (porAlias.length > 0) return { entry: porAlias[0] };
 
-  const cand = entradas.filter(e => toks.every(t => e.tokens.indexOf(t) !== -1));
+  let cand = entradas.filter(e => toks.every(t => e.tokens.indexOf(t) !== -1));
+  if (cand.length === 0 && toks.indexOf("concha") !== -1) {
+    // Conchas: "int/ext", "asiento" y "espaldar" no distinguen el modelo (Concha int/ext espaldar GILLS = Concha int/ext gills)
+    const reducidos = toks.filter(t => ["int", "ext", "asiento", "espaldar"].indexOf(t) === -1);
+    if (reducidos.length >= 2) cand = entradas.filter(e => reducidos.every(t => e.tokens.indexOf(t) !== -1));
+  }
   if (cand.length === 0) return { entry: null, motivo: "sin coincidencia" };
   if (cand.length === 1) return { entry: cand[0] };
   cand.sort((a, b) => a.tokens.length - b.tokens.length);
@@ -202,20 +221,40 @@ function itemsTapiceria(asiento, espaldar) {
 
 // Valor de repuestos (T) y de tapicería (V) de una fila, con la lista de ítems sin precio
 function calcularTyV(hoja, fila) {
-  const sinPrecio = [];
+  const sinPrecio = [], sinPrecioRepuestos = [], otrosDeRepuestos = [];
   let totalT = 0, totalV = 0;
   dividirItems(hoja.getRange(fila, 14).getValue()).forEach(item => {
+    if (esItemOtroServicio(item)) { otrosDeRepuestos.push(item); return; }
     const r = resolverItemCatalogo(item);
     if (r.entry) totalT += r.entry.precio;
-    else if (!esNotaNoRepuesto(item)) sinPrecio.push(item);
+    else if (!esNotaNoRepuesto(item)) { sinPrecio.push(item); sinPrecioRepuestos.push(item); }
   });
   itemsTapiceria(hoja.getRange(fila, 17).getValue(), hoja.getRange(fila, 18).getValue()).forEach(it => {
     if (it.entry) totalV += it.entry.precio;
     else sinPrecio.push(it.texto + (it.lugar ? " (" + it.lugar + ")" : ""));
   });
-  return { totalT: totalT, totalV: totalV, sinPrecio: sinPrecio };
+  return { totalT: totalT, totalV: totalV, sinPrecio: sinPrecio, sinPrecioRepuestos: sinPrecioRepuestos, otrosDeRepuestos: otrosDeRepuestos };
 }
 
+// Celda de valor de repuestos (T): amarilla con nota cuando hay piezas sin precio, para sumar a mano el valor adicional
+function marcarCeldaRepuestos(hoja, fila, lista) {
+  const celda = hoja.getRange(fila, 20);
+  const marca = "Sin precio en el catálogo:";
+  if (lista.length > 0) {
+    celda.setBackground("#FFFF00");
+    celda.setNote(marca + " " + lista.join("; ") + ".\nSuma en esta celda el valor adicional de esas piezas.");
+  } else if ((celda.getNote() || "").indexOf(marca) === 0) {
+    celda.setBackground(null);
+    celda.clearNote();
+  }
+}
+
+// ¿La fila tiene Otros servicios? (col. O, col. P, o Tornillería/Cabecero dentro de Repuestos)
+function filaTieneOtrosServicios(hoja, fila) {
+  const o = (hoja.getRange(fila, 15).getValue() || "").toString().trim();
+  const p = (hoja.getRange(fila, 16).getValue() || "").toString().trim();
+  return !!(o || p || dividirItems(hoja.getRange(fila, 14).getValue()).some(esItemOtroServicio));
+}
 function marcarSinPrecio(hoja, fila, lista) {
   const celda = hoja.getRange(fila, CONFIG.COL_ALARMA);
   const actual = (celda.getValue() || "").toString();
@@ -257,6 +296,8 @@ function recalcularRepuestosOportunidad() {
     hoja.getRange(c.d.fila, 20).setValue(c.n.totalT);
     hoja.getRange(c.d.fila, 22).setValue(c.n.totalV);
     marcarSinPrecio(hoja, c.d.fila, c.n.sinPrecio);
+    marcarCeldaRepuestos(hoja, c.d.fila, c.n.sinPrecioRepuestos);
+    validarYResaltarColumnaU(hoja, c.d.fila);
   });
   recalcularTotalXFilas(hoja, Math.min.apply(null, diagnosticos.map(d => d.fila)), Math.max.apply(null, diagnosticos.map(d => d.fila)));
   ui.alert("✅ Listo: " + cambios.length + " fila(s) actualizadas.");
@@ -516,32 +557,25 @@ function procesarRespuestaFormulario(e) {
 
 function validarYResaltarColumnaU(hoja, fila) {
   try {
-    // Columna O = 15, Columna P = 16, Columna U = 21
-    const valorO = hoja.getRange(fila, 15).getValue() || "";
-    const valorP = hoja.getRange(fila, 16).getValue() || "";
     const celdaU = hoja.getRange(fila, 21);
-
-    // Si O o P tienen contenido, resaltar U en amarillo
-    if (valorO || valorP) {
-      celdaU.setBackground("#FFFF00"); // Amarillo
-      celdaU.setFontColor("#000000"); // Texto negro para contrastar
-      Logger.log("✅ Fila " + fila + ": Columna U resaltada en amarillo (O o P tienen contenido)");
+    // Si Otros servicios (O), Observaciones (P) o Tornillería/Cabecero en Repuestos (N) tienen contenido: U en amarillo
+    if (filaTieneOtrosServicios(hoja, fila)) {
+      celdaU.setBackground("#FFFF00");
+      celdaU.setFontColor("#000000");
     } else {
-      celdaU.setBackground("#FFFFFF"); // Blanco si no hay contenido
+      celdaU.setBackground("#FFFFFF");
     }
   } catch (e) {
     Logger.log("⚠️ Error validando columna U: " + e);
   }
 }
-
 function calcularSubtotales(hoja, fila) {
   try {
     const tyv = calcularTyV(hoja, fila);
     const totalT = tyv.totalT;
     hoja.getRange(fila, 20).setValue(totalT);
 
-    const otrosServicios = hoja.getRange(fila, 15).getValue() || "";
-    if (otrosServicios && otrosServicios.toString().trim() !== "") {
+    if (filaTieneOtrosServicios(hoja, fila)) {
       hoja.getRange(fila, 21).setBackground("#FFFF00");
       hoja.getRange(fila, 21).setValue("");
     } else {
@@ -559,6 +593,7 @@ function calcularSubtotales(hoja, fila) {
     const totalX = totalT + totalU + totalV + CONFIG.MANTENIMIENTO_GENERAL;
     hoja.getRange(fila, 24).setFormula("=SUM(T" + fila + ":W" + fila + ")");
     marcarSinPrecio(hoja, fila, tyv.sinPrecio);
+    marcarCeldaRepuestos(hoja, fila, tyv.sinPrecioRepuestos);
 
   } catch (e) {
     Logger.log("❌ Error: " + e);
@@ -1832,14 +1867,16 @@ function consolidarBorradorRMA(silasDatos) {
     if (!d) return;
 
     // 1) PARTES (col N): cada repuesto separado por ";" o ","; una unidad por cada aparición, precio y código del catálogo
+    const otrosDeRepuestos = [];
     dividirItems(d.repuestos).forEach(p => {
+      if (esItemOtroServicio(p)) { otrosDeRepuestos.push(p); return; }
       const r = resolverItemCatalogo(p);
       if (r.entry) agregar(1, r.entry.nombre, 1, r.entry.precio, { codigo: r.entry.codigo });
       else if (!esNotaNoRepuesto(p)) agregar(1, p, 1, 0, {});
     });
 
     // 2) OTROS SERVICIOS Y ESPECIALES (col O + P): el valor viene de la col U
-    const otros = [d.otrosServicios, d.observacionesEspeciales]
+    const otros = [d.otrosServicios, d.observacionesEspeciales, otrosDeRepuestos.join("; ")]
       .map(t => (t || "").toString().trim()).filter(t => t).join("; ");
     if (otros) {
       agregar(2, otros, 1, d.valorOtrosServicios || 0, {});
@@ -2733,8 +2770,8 @@ function onEdit(e) {
     const filaFin = range.getLastRow();
     if (filaFin < 2) return;
 
-    // Columnas O (15) o P (16): resaltar U para llenar el valor a mano
-    if (c1 <= 16 && c2 >= 15) {
+    // Columnas N (14), O (15) o P (16): resaltar U para llenar el valor a mano
+    if (c1 <= 16 && c2 >= 14) {
       for (let f = filaIni; f <= filaFin; f++) validarYResaltarColumnaU(hoja, f);
     }
 
