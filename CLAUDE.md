@@ -575,3 +575,5 @@ DIAGNOSTICOS_2026 (si borras las filas de una oportunidad, vuelven a traerse del
 **Cierre completo (v13.1)**: al cerrar una RMA (Finalizar reparación + Crear factura) el script pone "Terminado" en la columna AA de sus sillas (y la sincronización ya no las devuelve a "Aprobado"),
 y escribe en OP_2026 columna R ("# FACTURA") el número de la factura de Odoo (`repair.order.invoice_id` → `account.move.name`) con enlace `.../web#id=<id>&model=account.move&view_type=form`,
 en las OP de esas sillas (oportunidad + EyM). Estados de AA: Cotización, Aprobado, Rechazado, Terminado (menú "📋 Configurar Listas Desplegables" actualiza la lista de AA).
+
+**Número de factura en OP_2026 col. R**: Odoo 14 llama "/" a la factura en borrador hasta que se valida (publica). Mientras esté así se escribe "Borrador (sin validar)" con el enlace; el siguiente "Sincronizar con Odoo" reemplaza el texto por el número real (`actualizarNumerosFacturaOP`). El script NO valida la factura (decisión contable de la empresa).

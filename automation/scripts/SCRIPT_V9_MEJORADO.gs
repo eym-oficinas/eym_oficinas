@@ -3082,7 +3082,39 @@ function datosFacturaRMA(rmaId, creds) {
   let nombre = Array.isArray(inv) ? inv[1] : "";
   const m = llamarOdooXMLRPC("account.move", "read", [[id], ["name"]], creds);
   if (m && m[0] && m[0].name) nombre = m[0].name;
-  return { id: id, nombre: nombre || ("Factura " + id), link: creds.urlWeb + "#id=" + id + "&model=account.move&view_type=form" };
+  return { id: id, nombre: textoNumeroFactura(nombre), link: enlaceFactura(id, creds) };
+}
+// En Odoo una factura en borrador se llama "/" hasta que se valida (publica): ahí recibe su número
+function textoNumeroFactura(nombre) {
+  const n = (nombre || "").toString().trim();
+  return (!n || n === "/") ? "Borrador (sin validar)" : n;
+}
+function enlaceFactura(id, creds) {
+  return creds.urlWeb + "#id=" + id + "&model=account.move&view_type=form";
+}
+// Facturas que estaban en borrador en OP_2026 col. R: cuando ya fueron validadas en Odoo se pone su número
+function actualizarNumerosFacturaOP(hojaOP, creds) {
+  let actualizadas = 0;
+  try {
+    const ult = hojaOP ? hojaOP.getLastRow() : 0;
+    if (ult < 2) return 0;
+    const formulas = hojaOP.getRange(2, 18, ult - 1, 1).getFormulas();
+    formulas.forEach((fila, i) => {
+      const f = (fila[0] || "").toString();
+      if (f.indexOf("Borrador") === -1) return;
+      const m = f.match(/#id=(\d+)&model=account\.move/);
+      if (!m) return;
+      const r = llamarOdooXMLRPC("account.move", "read", [[parseInt(m[1], 10)], ["name"]], creds);
+      const nombre = r && r[0] && r[0].name;
+      if (nombre && nombre !== "/") {
+        hojaOP.getRange(i + 2, 18).setFormula('=HYPERLINK("' + enlaceFactura(m[1], creds) + '","' + nombre.replace(/"/g, "") + '")');
+        actualizadas++;
+      }
+    });
+  } catch (e) {
+    Logger.log("⚠️ No se pudieron actualizar los números de factura: " + e);
+  }
+  return actualizadas;
 }
 
 function sincronizarConOdoo() {
@@ -3102,6 +3134,7 @@ function sincronizarConOdoo() {
 
     const a = sincronizarAprobacionesOdoo(hoja, creds);
     const b = cerrarRMAsTerminadas(hoja, ss.getSheetByName("OP_2026"), creds, ui);
+    const facturasActualizadas = actualizarNumerosFacturaOP(ss.getSheetByName("OP_2026"), creds);
 
     const lineas = ["🔄 SINCRONIZACIÓN CON ODOO", ""];
     lineas.push("A) Aprobación");
@@ -3112,6 +3145,7 @@ function sincronizarConOdoo() {
     lineas.push("");
     lineas.push("B) Cierre");
     lineas.push("• Reparación finalizada y factura creada: " + (b.facturadas.join(", ") || "ninguna"));
+    if (facturasActualizadas > 0) lineas.push("• Facturas que ya tienen número (actualizadas en OP_2026 col. R): " + facturasActualizadas);
     if (b.facturas && b.facturas.length) lineas.push("• Facturas (en OP_2026 col. R): " + b.facturas.join("; "));
     if (b.omitido) lineas.push("• Cierre cancelado por el usuario");
     if (b.pendientes.length) lineas.push("• RMAs con OP aún sin terminar: " + b.pendientes.join(", "));
