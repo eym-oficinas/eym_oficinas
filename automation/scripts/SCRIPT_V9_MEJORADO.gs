@@ -276,7 +276,7 @@ function procesarRespuestaFormulario(e) {
   }
   try {
     // La fila del formulario puede tardar unos segundos en llegar a la hoja de respuestas
-    if (!manual) Utilities.sleep(8000);
+    if (e && e.response) Utilities.sleep(8000);
 
     const ssResp = SpreadsheetApp.openById(ID_RESPUESTAS_NUEVA);
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
@@ -917,30 +917,45 @@ function escribirRMAenHoja(hoja, fila, numeroRMA, linkRMA) {
 
 function instalarTriggerAutomatico() {
   try {
-    const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(t => {
-      if (t.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT) {
+    // Se reemplazan los activadores anteriores de esta función para no duplicarlos
+    ScriptApp.getProjectTriggers().forEach(t => {
+      if (t.getHandlerFunction() === "procesarRespuestaFormulario" || t.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT) {
         ScriptApp.deleteTrigger(t);
       }
     });
 
-    const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
-    if (hojaDiag) {
-      hojaDiag.getRange(CONFIG.CELDA_CONTROL).setValue(1);
-    }
-
-    ScriptApp.newTrigger('procesarRespuestaFormulario')
+    // 1) Al enviarse el formulario
+    ScriptApp.newTrigger("procesarRespuestaFormulario")
       .forForm(FormApp.openById(ID_FORMULARIO))
       .onFormSubmit()
       .create();
 
-    SpreadsheetApp.getUi().alert("✅ TRIGGER AUTOMÁTICO INSTALADO\n\nCada nueva respuesta se procesará automáticamente");
+    // 2) Red de seguridad: revisa cada 30 minutos por si alguna respuesta no disparó el activador
+    ScriptApp.newTrigger("procesarRespuestaFormulario")
+      .timeBased()
+      .everyMinutes(30)
+      .create();
+
+    SpreadsheetApp.getUi().alert("✅ ACTIVADORES INSTALADOS\n\n" +
+      "• Cada respuesta nueva del formulario pasa sola a DIAGNOSTICOS_2026.\n" +
+      "• Además se revisa cada 30 minutos por si alguna se quedó sin pasar.\n\n" +
+      "Ya no necesitas usar \"Procesar Manualmente\" (queda como respaldo).");
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ ERROR: " + e);
   }
 }
 
+// Muestra si los activadores de las respuestas están instalados
+function verificarActivadores() {
+  const ui = SpreadsheetApp.getUi();
+  const triggers = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === "procesarRespuestaFormulario");
+  const alEnviar = triggers.filter(t => t.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT).length;
+  const cada30 = triggers.filter(t => t.getEventType() === ScriptApp.EventType.CLOCK).length;
+  ui.alert("🔎 ACTIVADORES DE RESPUESTAS\n\n" +
+    (alEnviar > 0 ? "✅" : "❌") + " Al enviarse el formulario: " + (alEnviar > 0 ? "instalado" : "NO instalado") + "\n" +
+    (cada30 > 0 ? "✅" : "❌") + " Revisión cada 30 minutos: " + (cada30 > 0 ? "instalada" : "NO instalada") +
+    ((alEnviar === 0 || cada30 === 0) ? "\n\nPara instalarlos: menú EYM → \"🔧 Instalar Trigger\"." : "\n\nTodo listo: las respuestas pasan solas."));
+}
 function procesarAprobadosAOP() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2994,6 +3009,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu("EYM v13.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
+    .addItem("🔎 Verificar activadores", "verificarActivadores")
     .addSeparator()
     .addItem("🖨️ Presupuesto silla x silla", "generarPresupuestoDescargable")
     .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")

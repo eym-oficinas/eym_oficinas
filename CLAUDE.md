@@ -514,6 +514,8 @@ por su *Marca temporal* (única). NO se descartan respuestas por tener una oport
 quedan en la hoja oculta `CONTROL_RESPUESTAS`, así que no vuelven las filas borradas ni se repiten. La primera vez pide confirmación: reconoce las sillas que ya
 están en la hoja (oportunidad + #temporal + tipo), da por procesadas las respuestas de más de 7 días y agrega las recientes que falten. El # temporal se escribe
 como texto ("1-10", nunca fecha). La hoja de respuestas se detecta por su encabezado "Marca temporal" (ya no depende del nombre de la pestaña).
+Activadores (menú "🔧 Instalar Trigger", una sola vez; "🔎 Verificar activadores" los revisa): al enviarse el formulario (espera 8 s a que llegue la fila) y una revisión
+cada 30 minutos como red de seguridad. "Procesar Manualmente" queda solo como respaldo.
 
 **Estados de la columna AA**: Cotización, Aprobado, Rechazado (no hay otros).
 
