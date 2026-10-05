@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// SISTEMA AUTOMÁTICO EYM OFICINAS v12.0 - INTEGRACIÓN COMPLETA ODOO RMA
+// SISTEMA AUTOMÁTICO EYM OFICINAS v13.0 - INTEGRACIÓN COMPLETA ODOO RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // Versión estable: Diagnósticos + RMA en Odoo + Piezas + Operaciones + PDF (GOOGLE SHEETS) + Impuestos
 // Estados columna AA: COTIZACIÓN (manual) → APROBADO (automático) → RECHAZADO
-// ✅ V12.0: PDF en Google Sheets + borrador RMA + RMA automática en Odoo (New Repair) + aprobación desde Odoo
+// ✅ V13.0: 2 PDF (silla x silla + consolidado) con logo, RMA en Odoo, aprobación + iniciar reparación, cierre + factura
 
 const ID_RESPUESTAS_NUEVA = "151jFiyUYDKxHYgswm5-BIED8py5j1_txVxYU5qyPlW4";
 const ID_DIAGNOSTICOS = "1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y";
@@ -22,17 +22,33 @@ const CONFIG = {
   CODIGO_MANTENIMIENTO: "SVCMO",
   ODOO_ACCION_RMA: 529,
   ODOO_MENU_RMA: 384,
-  COL_ALARMA: 30
+  COL_ALARMA: 30,
+  ADJUNTAR_CONSOLIDADO: true,
+  ESTADO_OP_PRODUCCION: "En producción",
+  ESTADO_OP_TERMINADO: "Terminado"
 };
 
-// ID del archivo del logo EYM en Google Drive (dejar vacío para usar texto "EYM OFICINAS")
-const ID_LOGO_EYM = "";
+// Logo EyM (PNG 150x150) incrustado para no depender de ningún archivo en Drive
+const LOGO_EYM_B64 = "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";
 
 let CATALOGO_CACHE = null;
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // SECCIÓN 1: CATÁLOGO DE PRECIOS
 // ═══════════════════════════════════════════════════════════════════════════════════════
+
+function insertarLogoEYM(hoja, columna, fila, anchoColumna) {
+  try {
+    const blob = Utilities.newBlob(Utilities.base64Decode(LOGO_EYM_B64), "image/png", "logo_eym.png");
+    const offsetX = Math.max(0, (anchoColumna || 60) - 52);
+    hoja.insertImage(blob, columna, fila, offsetX, 2).setWidth(46).setHeight(46);
+    hoja.setRowHeight(fila, 52);
+    return true;
+  } catch (e) {
+    Logger.log("⚠️ No se pudo insertar el logo: " + e);
+    return false;
+  }
+}
 
 function buscarHojaCatalogo(ss) {
   const exacta = ss.getSheetByName("CATÁLOGO_PRECIOS_2026");
@@ -343,7 +359,7 @@ function calcularSubtotales(hoja, fila) {
     const valorU = hoja.getRange(fila, 21).getValue();
     const totalU = (valorU === "" || isNaN(valorU)) ? 0 : parseFloat(valorU);
     const totalX = totalT + totalU + totalV + CONFIG.MANTENIMIENTO_GENERAL;
-    hoja.getRange(fila, 24).setValue(totalX);
+    hoja.getRange(fila, 24).setFormula("=SUM(T" + fila + ":W" + fila + ")");
 
   } catch (e) {
     Logger.log("❌ Error: " + e);
@@ -1053,9 +1069,9 @@ function generarPresupuestoDescargable() {
 
     // Generar PDF (esto crea un documento en Google Drive)
     Logger.log("🖨️ PASO 3: Generando PDF...");
-    const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
+    const pdfs = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
 
-    if (!urlPDF) {
+    if (!pdfs || !pdfs.presupuesto) {
       Logger.log("❌ FALLO en generarPDFDiagnosticos()");
       ui.alert("❌ Error generando PDF\n\nRevisa la consola (Extensions > Apps Script > Executions) para ver detalles del error.");
       return;
@@ -1071,9 +1087,9 @@ function generarPresupuestoDescargable() {
       "Cliente: " + cliente + "\n" +
       "Sillas: " + silasDatos.length + "\n" +
       "Total: $" + formatearNumero(totalGeneral) + "\n\n" +
-      "📄 El PDF se creó en Google Drive.\n" +
-      "Puedes descargarlo y guardarlo donde prefieras.\n\n" +
-      "Link del documento:\n" + urlPDF + advertencia
+      "📄 Se crearon 2 PDF en Google Drive.\n\n" +
+      "1) Presupuesto silla x silla:\n" + pdfs.presupuesto + "\n\n" +
+      "2) Consolidado de repuestos:\n" + (pdfs.consolidado || "(no disponible)") + advertencia
     );
 
     Logger.log("🖨️ ════════════════════════════════════════════════════════");
@@ -1333,7 +1349,8 @@ function crearOP(hojaDiag, hojaOP, fila) {
       serviciosCombinados,                 // M: OTROS_SERVICIOS ← Col O + Col P
       tapiceriaAsiento,                    // N: ABOLLONADO/ASIENTO ← Col Q (TAPICERIA Asiento)
       tapiceriaEspaldar,                   // O: TAPIZADO/ESPALDAR ← Col R (TAPICERIA Espaldar)
-      numeroEYM                             // P: NUM_EYM ← Col E (NUMERO_EYM)
+      numeroEYM,                            // P: NUM_EYM ← Col E (NUMERO_EYM)
+      CONFIG.ESTADO_OP_PRODUCCION           // Q: ESTADO_OP (En producción | Terminado)
     ];
 
     const newFilaOP = hojaOP.getLastRow() + 1;
@@ -1380,7 +1397,7 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
           valorOtrosServicios: num(r[20]), // U
           valorTapiceria: num(r[21]),      // V
           valorMO: num(r[22]),             // W
-          valorTotal: num(r[23])           // X
+          valorTotal: num(r[19]) + num(r[20]) + num(r[21]) + num(r[22]) // T+U+V+W (no depende de X)
         });
       }
     }
@@ -1638,14 +1655,14 @@ function agregarHojaBorradorRMA(ssTemp, silasDatos, cliente, nombreOportunidad, 
   const borrador = consolidarBorradorRMA(silasDatos);
   if (borrador.items.length === 0) {
     Logger.log("⚠️ Borrador RMA: sin detalle de diagnósticos, no se agrega la hoja");
-    return;
+    return null;
   }
 
-  const hoja = ssTemp.insertSheet("BORRADOR_RMA");
+  const hoja = ssTemp.insertSheet("CONSOLIDADO");
   let fila = 1;
 
   hoja.getRange(fila, 1, 1, 4).merge();
-  hoja.getRange(fila, 1).setValue("BORRADOR RMA - CONSOLIDADO POR ÍTEM").setFontSize(11).setFontWeight("normal");
+  hoja.getRange(fila, 1).setValue("EYM OFICINAS - CONSOLIDADO DE REPUESTOS Y SERVICIOS").setFontSize(11).setFontWeight("normal").setVerticalAlignment("middle");
   fila++;
   hoja.getRange(fila, 1).setValue("CLIENTE: " + cliente).setFontSize(8);
   fila++;
@@ -1692,7 +1709,9 @@ function agregarHojaBorradorRMA(ssTemp, silasDatos, cliente, nombreOportunidad, 
   hoja.setColumnWidth(2, 70);
   hoja.setColumnWidth(3, 110);
   hoja.setColumnWidth(4, 120);
-  Logger.log("✅ Borrador RMA: " + borrador.items.length + " ítems, total $" + formatearNumero(borrador.total));
+  insertarLogoEYM(hoja, 4, 1, 120);
+  Logger.log("✅ Consolidado: " + borrador.items.length + " ítems, total $" + formatearNumero(borrador.total));
+  return hoja;
 }
 
 function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral) {
@@ -1746,21 +1765,10 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     const cantNum = numCols - primeraNum + 1;
     Logger.log("🖨️ Columnas del PDF (" + numCols + "): " + columnas.map(c => c.enc).join(" | "));
 
-    // ENCABEZADO CON LOGO Y CLIENTE
+    // ENCABEZADO CON LOGO (arriba a la derecha) Y CLIENTE
     let fila = 1;
-    let logoInsertado = false;
-    if (ID_LOGO_EYM) {
-      try {
-        const logoBlob = DriveApp.getFileById(ID_LOGO_EYM).getBlob();
-        hojaData.insertImage(logoBlob, 1, 1).setWidth(110).setHeight(40);
-        hojaData.setRowHeight(1, 45);
-        logoInsertado = true;
-      } catch (errLogo) {
-        Logger.log("⚠️ No se pudo insertar el logo: " + errLogo);
-      }
-    }
     hojaData.getRange(fila, 1, 1, numCols).merge();
-    hojaData.getRange(fila, 1).setValue(logoInsertado ? "                                   COTIZACIÓN DE REPARACIÓN" : "EYM OFICINAS - COTIZACIÓN DE REPARACIÓN");
+    hojaData.getRange(fila, 1).setValue("EYM OFICINAS - COTIZACIÓN DE REPARACIÓN");
     hojaData.getRange(fila, 1).setHorizontalAlignment("left").setVerticalAlignment("middle");
     hojaData.getRange(fila, 1).setFontSize(11).setFontWeight("normal");
     fila++;
@@ -1835,38 +1843,50 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
       if (c.wrap) hojaData.getRange(filaEncabezado + 1, i + 1, filasDatos.length, 1).setWrap(true);
     });
 
+    let hojaConsolidado = null;
     try {
-      agregarHojaBorradorRMA(ssTemp, silasDatos, cliente, nombreOportunidad, totalGeneral2);
+      hojaConsolidado = agregarHojaBorradorRMA(ssTemp, silasDatos, cliente, nombreOportunidad, totalGeneral2);
     } catch (errRMA) {
-      Logger.log("⚠️ No se pudo agregar el borrador de RMA: " + errRMA);
+      Logger.log("⚠️ No se pudo agregar el consolidado: " + errRMA);
     }
+    insertarLogoEYM(hojaData, numCols, 1, columnas[numCols - 1].ancho);
 
     SpreadsheetApp.flush();
 
-    Logger.log("🖨️ PASO 2: Exportando PDF y guardándolo en Drive...");
+    Logger.log("🖨️ PASO 2: Exportando los PDF y guardándolos en Drive...");
     const ssId = ssTemp.getId();
-    const exportUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=pdf" +
+    const exportBase = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=pdf" +
       "&portrait=false&size=letter&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false" +
       "&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3";
+    const nombreBase = nombreOportunidad.replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp;
+    let todoGuardado = true;
 
-    let pdfUrl = exportUrl;
-    try {
-      const respuesta = UrlFetchApp.fetch(exportUrl, {
-        headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
-        muteHttpExceptions: true
-      });
-      if (respuesta.getResponseCode() === 200) {
-        const nombrePDF = "COTIZACION_" + nombreOportunidad.replace(/[^a-zA-Z0-9]/g, "_") + "_" + timestamp + ".pdf";
-        const archivoPDF = DriveApp.createFile(respuesta.getBlob().setName(nombrePDF));
-        pdfUrl = archivoPDF.getUrl();
-        DriveApp.getFileById(ssId).setTrashed(true);
-        Logger.log("✅ PDF guardado en Drive: " + nombrePDF);
-      } else {
-        Logger.log("⚠️ Export devolvió HTTP " + respuesta.getResponseCode() + ", se entrega enlace de exportación");
+    const exportarHoja = (hojaPDF, nombrePDF) => {
+      const urlExport = exportBase + "&gid=" + hojaPDF.getSheetId();
+      try {
+        const respuesta = UrlFetchApp.fetch(urlExport, {
+          headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+          muteHttpExceptions: true
+        });
+        if (respuesta.getResponseCode() === 200) {
+          const archivo = DriveApp.createFile(respuesta.getBlob().setName(nombrePDF));
+          Logger.log("✅ PDF guardado en Drive: " + nombrePDF);
+          return archivo.getUrl();
+        }
+        Logger.log("⚠️ Export devolvió HTTP " + respuesta.getResponseCode() + " para " + nombrePDF);
+      } catch (errPdf) {
+        Logger.log("⚠️ No se pudo guardar " + nombrePDF + ": " + errPdf);
       }
-    } catch (errPdf) {
-      Logger.log("⚠️ No se pudo guardar PDF en Drive: " + errPdf + " (se entrega enlace de exportación)");
-    }
+      todoGuardado = false;
+      return urlExport;
+    };
+
+    const resultado = {
+      presupuesto: exportarHoja(hojaData, "PRESUPUESTO_SILLA_X_SILLA_" + nombreBase + ".pdf"),
+      consolidado: hojaConsolidado ? exportarHoja(hojaConsolidado, "CONSOLIDADO_REPUESTOS_" + nombreBase + ".pdf") : null
+    };
+    if (todoGuardado) DriveApp.getFileById(ssId).setTrashed(true);
+    const pdfUrl = resultado.presupuesto;
 
     Logger.log("✅ PASO 3: PDF generado");
     Logger.log("✅ Sheet ID: " + ssId);
@@ -1876,7 +1896,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("   ✓ Orientación: LANDSCAPE (Horizontal)");
     Logger.log("   ✓ Tamaño: Letter");
     Logger.log("   ✓ Fuentes: 8pt (datos), 11pt (título)");
-    Logger.log("   ✓ Logo EYM: Superior izquierda");
+    Logger.log("   ✓ Logo EYM: Superior derecha");
     Logger.log("   ✓ Referencia: Incluida bajo cliente y fecha");
     Logger.log("   ✓ COLUMNAS EXACTAS (11):");
     Logger.log("      1. # (Silla)");
@@ -1895,8 +1915,7 @@ function generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGen
     Logger.log("✅ TOTAL GENERAL CALCULADO: $" + formatearNumero(totalGeneral2));
     Logger.log("🖨️ ═══════════════════════════════════════════════════════\n");
 
-    // Retornar URL del PDF (para descargar directamente)
-    return pdfUrl;
+    return resultado;
 
   } catch (e) {
     Logger.log("\n❌ ════════════════════════════════════════════════════════");
@@ -2366,8 +2385,10 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
     const borrador = consolidarBorradorRMA(silasDatos);
     Logger.log("📊 Sillas: " + silasDatos.length + " | Total silla x silla: " + totalGeneral + " | Consolidado por ítem: " + borrador.total);
 
-    // PDF (siempre, para poder revisarlo)
-    const urlPDF = generarPDFDiagnosticos(nombre, cliente, silasDatos, totalGeneral);
+    // PDF (siempre, para poder revisarlos)
+    const pdfs = generarPDFDiagnosticos(nombre, cliente, silasDatos, totalGeneral);
+    const urlPDF = pdfs ? pdfs.presupuesto : null;
+    const urlConsolidado = pdfs ? pdfs.consolidado : null;
     if (!urlPDF) {
       return { exito: false, error: "No se pudo generar el PDF. Revisa el registro de ejecuciones." };
     }
@@ -2397,11 +2418,14 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
     // RMA en columna AC (número de Odoo + enlace) en todas las sillas de la oportunidad
     escribirRMAEnFilas(hojaDiag, filas, rma.nombre, rma.link);
 
-    // Adjuntar PDF
+    // Adjuntar los PDF a la RMA
     const adj = adjuntarPDFaRMAOdoo(rma.id, urlPDF, creds);
+    const adjCons = (CONFIG.ADJUNTAR_CONSOLIDADO && urlConsolidado)
+      ? adjuntarPDFaRMAOdoo(rma.id, urlConsolidado, creds) : { exito: true, omitido: true };
 
     if (rma.alarma) alarmas.push(rma.alarma);
-    if (!adj.exito) alarmas.push("No se pudo adjuntar el PDF a la RMA: " + adj.error);
+    if (!adj.exito) alarmas.push("No se pudo adjuntar el PDF silla x silla a la RMA: " + adj.error);
+    if (!adjCons.exito) alarmas.push("No se pudo adjuntar el consolidado a la RMA: " + adjCons.error);
 
     if (alarmas.length > 0) {
       escribirAlarmaEnFilas(hojaDiag, filas, alarmas.join(" | "));
@@ -2412,10 +2436,12 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
     let mensaje = (alarmas.length > 0 ? "⚠️ RMA CREADA CON ALERTAS\n\n" : "✅ COMPLETADO\n\n") +
       "RMA: " + rma.nombre + "\nLink: " + rma.link + "\n" +
       "Impuestos: IVA 19%" + (rma.aplicaRete ? " + Retefuente 4%" : "") + "\n" +
-      "PDF " + (adj.exito ? "adjunto a la RMA ✅" : "NO adjunto ❌") + "\n" + urlPDF;
+      "PDF silla x silla " + (adj.exito ? "adjunto a la RMA ✅" : "NO adjunto ❌") + "\n" + urlPDF + "\n" +
+      "PDF consolidado " + (!urlConsolidado ? "(no generado)" : (adjCons.omitido ? "(generado, no se adjunta)" : (adjCons.exito ? "adjunto a la RMA ✅" : "NO adjunto ❌"))) +
+      (urlConsolidado ? "\n" + urlConsolidado : "");
     if (alarmas.length > 0) mensaje += "\n\n🚨 " + alarmas.join("\n🚨 ") + "\n(Marcado en la columna AD)";
 
-    return { exito: true, referenciaRMA: rma.nombre, linkRMA: rma.link, urlPDF: urlPDF, mensaje: mensaje };
+    return { exito: true, referenciaRMA: rma.nombre, linkRMA: rma.link, urlPDF: urlPDF, urlConsolidado: urlConsolidado, mensaje: mensaje };
 
   } catch (e) {
     Logger.log("❌ Error en procesarOportunidadCompleta: " + e.toString() + "\n" + e.stack);
@@ -2437,20 +2463,22 @@ function aprobarFilaSiCorresponde(hoja, fila) {
   return true;
 }
 
-// X (TOTAL PPTTO antes de IVA) = T + U + V + W. Solo toca filas con oportunidad (col. B).
+// X (TOTAL PPTTO antes de IVA) = T + U + V + W, siempre como fórmula en la celda. Solo toca filas con oportunidad (col. B).
 function recalcularTotalXFilas(hoja, filaIni, filaFin) {
   const n = filaFin - filaIni + 1;
   if (n < 1) return 0;
-  const num = x => (x === "" || x === null || isNaN(Number(x))) ? 0 : Number(x);
-  const v = hoja.getRange(filaIni, 2, n, 23).getValues(); // B..X (T=idx 18, U=19, V=20, W=21, X=22)
+  const oportunidades = hoja.getRange(filaIni, 2, n, 1).getValues();
+  const rangoX = hoja.getRange(filaIni, 24, n, 1);
+  const formulas = rangoX.getFormulas();
+  const valores = rangoX.getValues();
   let cambios = 0;
-  const salida = v.map(r => {
-    if (!r[0]) return [r[22]];
-    const total = num(r[18]) + num(r[19]) + num(r[20]) + num(r[21]);
-    if (total !== num(r[22])) cambios++;
-    return [total];
+  const salida = oportunidades.map((r, i) => {
+    if (!r[0]) return [formulas[i][0] || valores[i][0]];
+    const f = "=SUM(T" + (filaIni + i) + ":W" + (filaIni + i) + ")";
+    if (formulas[i][0] !== f) cambios++;
+    return [f];
   });
-  hoja.getRange(filaIni, 24, n, 1).setValues(salida);
+  rangoX.setFormulas(salida);
   return cambios;
 }
 
@@ -2462,7 +2490,7 @@ function recalcularTotalesX() {
   const ult = hoja.getLastRow();
   if (ult < 2) { ui.alert("No hay diagnósticos."); return; }
   const cambios = recalcularTotalXFilas(hoja, 2, ult);
-  ui.alert("✅ Totales recalculados (columna X = T + U + V + W).\n\nFilas corregidas: " + cambios);
+  ui.alert("✅ Totales actualizados: la columna X ahora es siempre T + U + V + W.\n\nFilas corregidas: " + cambios);
 }
 
 // Cubre: lista desplegable, escrito, pegado, arrastrado (varias filas a la vez)
@@ -2504,8 +2532,134 @@ function onEdit(e) {
   }
 }
 
-// Botón del menú: RMAs que ya no están en borrador/canceladas en Odoo -> "Aprobado" en sus sillas
-function sincronizarRMAsDesdeOdoo() {
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V13: SINCRONIZAR CON ODOO (botón único)
+//  A) RMA ya no está en borrador -> sillas "Aprobado" (EYM + fecha + OP "En producción") y "Iniciar reparación"
+//  B) Todas las OP de una RMA en "Terminado" -> "Finalizar reparación" y "Crear factura"
+// Los cambios hechos por script no activan onEdit, por eso aquí se llama directamente al proceso de aprobación.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+function leerRMAsDeHoja(hoja) {
+  const ult = hoja.getLastRow();
+  const porRMA = {};
+  if (ult < 2) return porRMA;
+  hoja.getRange(2, 1, ult - 1, 30).getValues().forEach((r, i) => {
+    const rma = (r[28] || "").toString().trim();
+    if (!rma || rma.indexOf("⏳") !== -1 || rma.toUpperCase().indexOf("ERROR") === 0) return;
+    (porRMA[rma] = porRMA[rma] || []).push({
+      fila: i + 2,
+      eym: (r[4] || "").toString().trim(),
+      aprobada: (r[26] || "").toString().toLowerCase().includes("aprobado"),
+      fechaAprobacion: r[27]
+    });
+  });
+  return porRMA;
+}
+
+function estadosRMAenOdoo(nombres, creds) {
+  if (nombres.length === 0) return [];
+  return llamarOdooXMLRPC("repair.order", "search_read", [[["name", "in", nombres]], ["name", "state"]], creds);
+}
+
+// A) Aprobación e inicio de reparación
+function sincronizarAprobacionesOdoo(hoja, creds) {
+  const res = { aprobadas: 0, iniciadas: [], borradores: [], errores: [] };
+  const porRMA = leerRMAsDeHoja(hoja);
+  const rmas = estadosRMAenOdoo(Object.keys(porRMA), creds);
+  if (rmas === null) {
+    res.errores.push("No se pudo consultar Odoo: " + ODOO_ULTIMO_ERROR);
+    return res;
+  }
+  rmas.forEach(rma => {
+    if (rma.state === "draft") { res.borradores.push(rma.name); return; }
+    if (rma.state === "cancel") return;
+
+    porRMA[rma.name].forEach(x => {
+      if (!x.aprobada) hoja.getRange(x.fila, 27).setValue("Aprobado");
+      if (aprobarFilaSiCorresponde(hoja, x.fila)) res.aprobadas++;
+    });
+
+    if (rma.state === "confirmed" || rma.state === "ready") {
+      const r = llamarOdooXMLRPC("repair.order", "action_repair_start", [[rma.id]], creds);
+      if (r === null) {
+        res.errores.push(rma.name + ": no se pudo iniciar la reparación. " + ODOO_ULTIMO_ERROR);
+        escribirAlarmaEnFilas(hoja, porRMA[rma.name].map(x => x.fila), "Odoo no pudo iniciar la reparación de " + rma.name + ": " + ODOO_ULTIMO_ERROR);
+      } else {
+        res.iniciadas.push(rma.name);
+      }
+    }
+  });
+  return res;
+}
+
+// B) Cierre: todas las OP de la RMA en "Terminado" (se relacionan por el número EyM: OP col. P <-> diagnóstico col. E)
+function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
+  const res = { facturadas: [], pendientes: [], errores: [], omitido: false };
+  if (!hojaOP) {
+    res.errores.push("No se encontró la hoja OP_2026");
+    return res;
+  }
+  const totalPorEYM = {}, terminadasPorEYM = {};
+  const ultOP = hojaOP.getLastRow();
+  if (ultOP >= 2) {
+    hojaOP.getRange(2, 16, ultOP - 1, 2).getValues().forEach(r => {
+      const eym = (r[0] || "").toString().trim();
+      if (!eym) return;
+      totalPorEYM[eym] = (totalPorEYM[eym] || 0) + 1;
+      if ((r[1] || "").toString().trim().toLowerCase() === CONFIG.ESTADO_OP_TERMINADO.toLowerCase()) {
+        terminadasPorEYM[eym] = (terminadasPorEYM[eym] || 0) + 1;
+      }
+    });
+  }
+
+  const porRMA = leerRMAsDeHoja(hoja);
+  const candidatas = Object.keys(porRMA).filter(nombre => {
+    const filas = porRMA[nombre];
+    const completa = filas.every(x => x.eym && totalPorEYM[x.eym] > 0 && terminadasPorEYM[x.eym] === totalPorEYM[x.eym]);
+    if (!completa) res.pendientes.push(nombre);
+    return completa;
+  });
+  if (candidatas.length === 0) return res;
+
+  const rmas = estadosRMAenOdoo(candidatas, creds);
+  if (rmas === null) {
+    res.errores.push("No se pudo consultar Odoo: " + ODOO_ULTIMO_ERROR);
+    return res;
+  }
+  const porCerrar = rmas.filter(r => r.state === "under_repair" || r.state === "2binvoiced");
+  if (porCerrar.length === 0) return res;
+
+  const resp = ui.alert("🏁 CERRAR RMAs TERMINADAS",
+    "Todas las OP de estas RMAs están en 'Terminado':\n\n" +
+    porCerrar.map(r => "• " + r.name + (r.state === "2binvoiced" ? " (solo falta la factura)" : "")).join("\n") +
+    "\n\nSe hará 'Finalizar reparación' y luego 'Crear factura' en Odoo.\n¿Continuar?", ui.ButtonSet.YES_NO);
+  if (resp !== ui.Button.YES) {
+    res.omitido = true;
+    return res;
+  }
+
+  porCerrar.forEach(rma => {
+    const filas = porRMA[rma.name].map(x => x.fila);
+    if (rma.state === "under_repair") {
+      const fin = llamarOdooXMLRPC("repair.order", "action_repair_end", [[rma.id]], creds);
+      if (fin === null) {
+        res.errores.push(rma.name + ": no se pudo finalizar la reparación. " + ODOO_ULTIMO_ERROR);
+        escribirAlarmaEnFilas(hoja, filas, "Odoo no pudo finalizar la reparación de " + rma.name + ": " + ODOO_ULTIMO_ERROR);
+        return;
+      }
+    }
+    const fac = llamarOdooXMLRPC("repair.order", "action_repair_invoice_create", [[rma.id]], creds);
+    if (fac === null) {
+      res.errores.push(rma.name + ": reparación finalizada pero no se pudo crear la factura. " + ODOO_ULTIMO_ERROR);
+      escribirAlarmaEnFilas(hoja, filas, "Odoo no pudo crear la factura de " + rma.name + ": " + ODOO_ULTIMO_ERROR);
+      return;
+    }
+    res.facturadas.push(rma.name);
+  });
+  return res;
+}
+
+function sincronizarConOdoo() {
   const ui = SpreadsheetApp.getUi();
   try {
     const creds = obtenerCredencialesOdoo();
@@ -2513,60 +2667,36 @@ function sincronizarRMAsDesdeOdoo() {
       ui.alert("Faltan las credenciales de Odoo. Usa: ⚙️ Configurar Credenciales Odoo");
       return;
     }
-    const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DIAGNOSTICOS_2026");
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
     if (!hoja) {
       ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada");
       return;
     }
 
-    const ult = hoja.getLastRow();
-    if (ult < 2) {
-      ui.alert("No hay diagnósticos.");
-      return;
+    const a = sincronizarAprobacionesOdoo(hoja, creds);
+    const b = cerrarRMAsTerminadas(hoja, ss.getSheetByName("OP_2026"), creds, ui);
+
+    const lineas = ["🔄 SINCRONIZACIÓN CON ODOO", ""];
+    lineas.push("A) Aprobación");
+    lineas.push("• Sillas aprobadas ahora (EYM + fecha + OP en producción): " + a.aprobadas);
+    lineas.push("• Reparaciones iniciadas en Odoo: " + (a.iniciadas.join(", ") || "ninguna"));
+    if (a.borradores.length) lineas.push("• RMAs aún en borrador en Odoo (confírmalas allá): " + a.borradores.join(", "));
+    lineas.push("");
+    lineas.push("B) Cierre");
+    lineas.push("• Reparación finalizada y factura creada: " + (b.facturadas.join(", ") || "ninguna"));
+    if (b.omitido) lineas.push("• Cierre cancelado por el usuario");
+    if (b.pendientes.length) lineas.push("• RMAs con OP aún sin terminar: " + b.pendientes.join(", "));
+    const errores = a.errores.concat(b.errores);
+    if (errores.length) {
+      lineas.push("");
+      lineas.push("🚨 PROBLEMAS (también marcados en la columna AD):");
+      errores.forEach(e => lineas.push("• " + e));
     }
-    const datos = hoja.getRange(2, 1, ult - 1, 29).getValues();
-
-    // RMAs (col. AC) de sillas que aún no están aprobadas
-    const porRMA = {};
-    datos.forEach((r, i) => {
-      const rma = (r[28] || "").toString().trim();
-      const estado = (r[26] || "").toString().toLowerCase();
-      const aprobada = estado.includes("aprobado") || r[27];
-      if (rma && rma.indexOf("⏳") === -1 && rma.toUpperCase().indexOf("ERROR") !== 0 && !aprobada) {
-        (porRMA[rma] = porRMA[rma] || []).push(i + 2);
-      }
-    });
-    const nombres = Object.keys(porRMA);
-    if (nombres.length === 0) {
-      ui.alert("No hay RMAs pendientes de aprobar en la columna AC.");
-      return;
-    }
-
-    const confirmadas = llamarOdooXMLRPC("repair.order", "search_read",
-      [[["name", "in", nombres], ["state", "not in", ["draft", "cancel"]]], ["name", "state"]], creds);
-    if (confirmadas === null) {
-      ui.alert("❌ No se pudo consultar Odoo.\n" + ODOO_ULTIMO_ERROR);
-      return;
-    }
-
-    let aprobadas = 0;
-    const detalle = [];
-    confirmadas.forEach(rma => {
-      (porRMA[rma.name] || []).forEach(f => {
-        hoja.getRange(f, 27).setValue("Aprobado");
-        // Los cambios hechos por script NO disparan onEdit: se ejecuta el proceso directamente
-        if (aprobarFilaSiCorresponde(hoja, f)) aprobadas++;
-      });
-      detalle.push(rma.name);
-    });
-
-    const pendientes = nombres.filter(n => detalle.indexOf(n) === -1);
-    ui.alert("✅ Sincronización lista\n\nSillas aprobadas: " + aprobadas +
-      "\nRMAs confirmadas: " + (detalle.join(", ") || "ninguna") +
-      "\nRMAs aún sin confirmar en Odoo: " + (pendientes.join(", ") || "ninguna"));
+    ui.alert(lineas.join("\n"));
 
   } catch (e) {
-    Logger.log("❌ Error en sincronización: " + e + "\n" + e.stack);
+    Logger.log("❌ Error en sincronizarConOdoo: " + e + "\n" + e.stack);
     ui.alert("❌ ERROR: " + e.toString());
   }
 }
@@ -2762,13 +2892,13 @@ function probarTodosLosMetodos() {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("EYM v12.0")
+  SpreadsheetApp.getUi().createMenu("EYM v13.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
     .addSeparator()
     .addItem("🖨️ Presupuesto silla x silla", "generarPresupuestoDescargable")
     .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")
-    .addItem("🔄 Sincronizar RMAs desde Odoo", "sincronizarRMAsDesdeOdoo")
+    .addItem("🔄 Sincronizar con Odoo (aprobar / cerrar)", "sincronizarConOdoo")
     .addSeparator()
     .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
     .addItem("🧮 Recalcular totales (columna X)", "recalcularTotalesX")
@@ -2841,7 +2971,8 @@ function pruebaGenerarPDFConEjemplo() {
     Logger.log("   - Oportunidad: " + nombreOportunidad);
 
     // Generar PDF
-    const urlPDF = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
+    const pdfsEjemplo = generarPDFDiagnosticos(nombreOportunidad, cliente, silasDatos, totalGeneral);
+    const urlPDF = pdfsEjemplo ? pdfsEjemplo.presupuesto : null;
 
     if (urlPDF) {
       Logger.log("\n✅ PRUEBA EXITOSA");

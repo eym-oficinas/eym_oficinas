@@ -489,7 +489,7 @@ Odoo: account.invoice (Factura)
 
 ---
 
-## 🔐 MEMORIA DEL PROYECTO: Acceso a Odoo y flujo RMA (V12)
+## 🔐 MEMORIA DEL PROYECTO: Acceso a Odoo y flujo RMA (V13)
 
 > **Nunca escribir claves en el repositorio ni en el chat.** La clave vive en las *Propiedades del script* de Apps Script
 > (menú "⚙️ Configurar Credenciales Odoo", formato `usuario|clave|eym1|https://eym-oficinas.ovh`) y, para sesiones de
@@ -501,7 +501,7 @@ Odoo: account.invoice (Factura)
   antes se había mencionado `eymclaude@eym-oficinas.com`: si falla la autenticación, probar el otro).
 - Apps Script conecta a Odoo sin problema. El entorno cloud de Claude Code NO llega a Odoo salvo que se agregue
   `eym-oficinas.ovh` en *Network access → Custom → Allowed domains*.
-- Script vigente: `automation/scripts/SCRIPT_V9_MEJORADO.gs` (v12). Menú "EYM v12.0" → "🔬 DIAGNÓSTICO: Esquema RMA en Odoo".
+- Script vigente: `automation/scripts/SCRIPT_V9_MEJORADO.gs` (v13). Menú "EYM v13.0" → "🔬 DIAGNÓSTICO: Esquema RMA en Odoo".
 
 **Archivos y rutas**
 - Worksheet "Diagnosticos y OP 2026": `1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y` (hojas DIAGNOSTICOS_2026, OP_2026 y el catálogo).
@@ -512,7 +512,8 @@ Odoo: account.invoice (Factura)
 **Estados de la columna AA**: Cotización, Aprobado, Rechazado (no hay otros).
 
 **Fase 1: Cotización** (manual: el usuario escribe "Cotización" y ejecuta "Finalizar oportunidad" con el nombre EXACTO de la oportunidad)
-1. PDF silla x silla (+ hoja "BORRADOR_RMA" consolidada por ítem) guardado en Drive.
+1. Dos PDF en Drive, horizontal/carta, con el logo EyM arriba a la derecha (incrustado en el script): "PRESUPUESTO_SILLA_X_SILLA_…" y
+   "CONSOLIDADO_REPUESTOS_…" (ítems, cantidad, precio unitario, total). Ambos se adjuntan a la RMA (`CONFIG.ADJUNTAR_CONSOLIDADO`).
 2. Busca la oportunidad en Odoo (coincidencia exacta), toma el cliente y crea la RMA (New Repair):
    Producto a reparar `[MOBILIARIO] Mobiliario`, vencimiento de garantía vacío, método de facturación "Después de la reparación".
    Dirección de facturación = el mismo cliente (campo `partner_invoice_id`).
@@ -521,12 +522,20 @@ Odoo: account.invoice (Factura)
    **Otros servicios**: el precio unitario es el valor escrito a mano en la columna U (total ÷ cantidad), no el de Odoo; si el texto no está
    en el catálogo se usa el producto genérico `[SVARIOS] Otros servicios` (la descripción de la línea es el texto del servicio).
    **Mantenimiento general**: siempre en *Operaciones*, producto `[SVCMO] SERVICIO TECNICO DE AJUSTE Y MANTENIMIENTO GENERAL`, cantidad = número de sillas.
-   La columna X (total) = T + U + V + W y se recalcula sola al editar T-W (menú "🧮 Recalcular totales (columna X)"). NO usar "Recalcular Todo": borra la columna AA y la U.
+   La columna X (total) es siempre la fórmula `=SUM(T:W)` (T + U + V + W); el PDF y la RMA leen T..W en vivo de la hoja. Menú "🧮 Recalcular totales (columna X)"
+   convierte filas antiguas. NO usar "Recalcular Todo": borra la columna AA y la U.
 4. Impuestos por línea: "IVA Ventas 19%" siempre; "RTFTE 4%" si el total del PDF es **igual o mayor a $550.000**.
 5. Adjunta el PDF a la RMA y escribe el número de RMA (con enlace a Odoo) en la columna AC de todas las sillas de la oportunidad.
 6. Si los totales no cuadran (silla x silla vs ítems, o monto de Odoo vs PDF) la RMA se crea igual y se deja la alarma en la columna AD
    para corregir a mano. No se crea una segunda RMA si AC ya tiene una.
 
-**Fase 2: Aprobado** (5 formas equivalentes: lista desplegable, escrito, pegado, arrastrado, o botón "Sincronizar RMAs desde Odoo"
-cuando la RMA ya no está en borrador/cancelada). Cada silla aprobada ejecuta automáticamente: número EyM (el mayor + 1; solo al aprobar),
-fecha de aprobación (AB) y creación de la OP en OP_2026 (consecutivo = el mayor de la columna A + 1). La OP no la crea el paso de la RMA.
+**Fase 2: Aprobado** (5 formas equivalentes: lista desplegable, escrito, pegado, arrastrado, o confirmar la RMA en Odoo y pulsar el botón
+"🔄 Sincronizar con Odoo (aprobar / cerrar)"). Cada silla aprobada ejecuta automáticamente: número EyM (el mayor + 1; solo al aprobar),
+fecha de aprobación (AB) y creación de la OP en OP_2026 (consecutivo = el mayor de la columna A + 1) con la columna Q (ESTADO_OP) en "En producción".
+La OP no la crea el paso de la RMA ni se escribe la RMA en OP_2026. Al sincronizar, si la RMA ya no está en borrador/cancelada en Odoo, el script
+aprueba sus sillas y hace clic en "Iniciar reparación" (`action_repair_start`). Las RMAs aún en borrador solo se reportan (se confirman a mano en Odoo).
+
+**Fase 3: Cierre** (mismo botón "🔄 Sincronizar con Odoo"): cuando TODAS las OP de una RMA están en "Terminado" (OP_2026 columna Q, marcado a mano:
+lista, pegado o arrastre) —las OP se relacionan con la RMA por el número EyM: OP col. P ↔ diagnóstico col. E ↔ col. AC— el script pide confirmación y
+hace en Odoo "Finalizar reparación" (`action_repair_end`) y luego "Crear factura" (`action_repair_invoice_create`). Si Odoo rechaza algo, el motivo
+queda en la columna AD. Los cambios hechos por script NO activan `onEdit`: el proceso de aprobación se llama directamente.
