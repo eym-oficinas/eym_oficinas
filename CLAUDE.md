@@ -533,7 +533,8 @@ Odoo: account.invoice (Factura)
 "🔄 Sincronizar con Odoo (aprobar / cerrar)"). Cada silla aprobada ejecuta automáticamente: número EyM (el mayor + 1; solo al aprobar),
 fecha de aprobación (AB) y creación de la OP en OP_2026 (consecutivo = el mayor de la columna A + 1) con la columna Q (ESTADO_OP) en "En producción".
 La OP no la crea el paso de la RMA ni se escribe la RMA en OP_2026. Al sincronizar, si la RMA ya no está en borrador/cancelada en Odoo, el script
-aprueba sus sillas y hace clic en "Iniciar reparación" (`action_repair_start`). Las RMAs aún en borrador solo se reportan (se confirman a mano en Odoo).
+aprueba sus sillas y hace clic en "Iniciar reparación" (`action_repair_start`). Si la RMA sigue en borrador pero una de sus sillas ya está "Aprobado" en la hoja (escrito a mano), el botón la confirma en Odoo
+(`action_repair_confirm`) y luego inicia la reparación; las RMAs en borrador sin ninguna silla aprobada solo se reportan.
 
 **Fase 3: Cierre** (mismo botón "🔄 Sincronizar con Odoo"): cuando TODAS las OP de una RMA están en "Terminado" (OP_2026 columna Q, marcado a mano:
 lista, pegado o arrastre) —las OP se relacionan con la RMA por el número EyM: OP col. P ↔ diagnóstico col. E ↔ col. AC— el script pide confirmación y

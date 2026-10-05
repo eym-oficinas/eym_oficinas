@@ -2563,7 +2563,7 @@ function estadosRMAenOdoo(nombres, creds) {
 
 // A) Aprobación e inicio de reparación
 function sincronizarAprobacionesOdoo(hoja, creds) {
-  const res = { aprobadas: 0, iniciadas: [], borradores: [], errores: [] };
+  const res = { aprobadas: 0, iniciadas: [], confirmadas: [], borradores: [], errores: [] };
   const porRMA = leerRMAsDeHoja(hoja);
   const rmas = estadosRMAenOdoo(Object.keys(porRMA), creds);
   if (rmas === null) {
@@ -2571,8 +2571,21 @@ function sincronizarAprobacionesOdoo(hoja, creds) {
     return res;
   }
   rmas.forEach(rma => {
-    if (rma.state === "draft") { res.borradores.push(rma.name); return; }
     if (rma.state === "cancel") return;
+
+    // Aprobado a mano en la hoja con la RMA aún en borrador: se confirma la RMA en Odoo
+    if (rma.state === "draft") {
+      const aprobadaEnHoja = porRMA[rma.name].some(x => x.aprobada || x.fechaAprobacion);
+      if (!aprobadaEnHoja) { res.borradores.push(rma.name); return; }
+      const conf = llamarOdooXMLRPC("repair.order", "action_repair_confirm", [[rma.id]], creds);
+      if (conf === null) {
+        res.errores.push(rma.name + ": no se pudo confirmar la RMA en Odoo. " + ODOO_ULTIMO_ERROR);
+        escribirAlarmaEnFilas(hoja, porRMA[rma.name].map(x => x.fila), "Odoo no pudo confirmar la RMA " + rma.name + ": " + ODOO_ULTIMO_ERROR);
+        return;
+      }
+      res.confirmadas.push(rma.name);
+      rma.state = "confirmed";
+    }
 
     porRMA[rma.name].forEach(x => {
       if (!x.aprobada) hoja.getRange(x.fila, 27).setValue("Aprobado");
@@ -2680,8 +2693,9 @@ function sincronizarConOdoo() {
     const lineas = ["🔄 SINCRONIZACIÓN CON ODOO", ""];
     lineas.push("A) Aprobación");
     lineas.push("• Sillas aprobadas ahora (EYM + fecha + OP en producción): " + a.aprobadas);
+    if (a.confirmadas.length) lineas.push("• RMAs confirmadas en Odoo desde la hoja: " + a.confirmadas.join(", "));
     lineas.push("• Reparaciones iniciadas en Odoo: " + (a.iniciadas.join(", ") || "ninguna"));
-    if (a.borradores.length) lineas.push("• RMAs aún en borrador en Odoo (confírmalas allá): " + a.borradores.join(", "));
+    if (a.borradores.length) lineas.push("• RMAs en borrador sin aprobar (escribe 'Aprobado' en la hoja o confírmalas en Odoo): " + a.borradores.join(", "));
     lineas.push("");
     lineas.push("B) Cierre");
     lineas.push("• Reparación finalizada y factura creada: " + (b.facturadas.join(", ") || "ninguna"));
