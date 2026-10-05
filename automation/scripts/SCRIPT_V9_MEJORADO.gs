@@ -171,125 +171,210 @@ function guardarUltimaRespuestaProcesada(numRespuesta) {
   }
 }
 
-function procesarRespuestaFormulario() {
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V13.1: PASO DE RESPUESTAS DEL FORMULARIO A DIAGNOSTICOS_2026
+// Cada respuesta = una silla, identificada por su MARCA TEMPORAL (única). Antes se descartaba toda respuesta
+// cuya oportunidad ya existía, y una oportunidad tiene varias sillas.
+// Las respuestas ya procesadas quedan en la hoja oculta CONTROL_RESPUESTAS (así no vuelven las que se borren).
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+const HOJA_CONTROL_RESPUESTAS = "CONTROL_RESPUESTAS";
+const DIAS_RESPUESTAS_ANTIGUAS = 7;
+
+function esFecha(v) {
+  return Object.prototype.toString.call(v) === "[object Date]";
+}
+
+function buscarHojaRespuestas(ssResp) {
+  const candidatas = ssResp.getSheets().filter(h => {
+    const a1 = (h.getRange(1, 1).getValue() || "").toString().toLowerCase();
+    return a1.indexOf("marca temporal") !== -1 || a1.indexOf("timestamp") !== -1;
+  });
+  if (candidatas.length === 0) return ssResp.getSheetByName("Respuestas de formulario 1");
+  if (candidatas.length === 1) return candidatas[0];
+  let mejor = candidatas[0], mejorTs = 0;
+  candidatas.forEach(h => {
+    const ult = h.getLastRow();
+    if (ult < 2) return;
+    const v = h.getRange(ult, 1).getValue();
+    const t = esFecha(v) ? v.getTime() : 0;
+    if (t > mejorTs) { mejorTs = t; mejor = h; }
+  });
+  return mejor;
+}
+
+function idsDeRespuestas(valores) {
+  const tz = Session.getScriptTimeZone();
+  const usados = {};
+  return valores.map(r => {
+    const ts = r[0];
+    const base = esFecha(ts) ? Utilities.formatDate(ts, tz, "yyyyMMdd-HHmmss") : (ts || "").toString().trim();
+    let id = base, n = 2;
+    while (usados[id]) { id = base + "-" + n++; }
+    usados[id] = true;
+    return id;
+  });
+}
+
+function claveSilla(oportunidad, temporal, tipo) {
+  return [oportunidad, temporal, tipo].map(x => normalizarNombreOportunidad(x)).join("|");
+}
+
+function agregarRespuestaADiagnosticos(hojaDiag, resp, temporalTexto) {
+  const componentes = [];
+  if (resp[14]) componentes.push(resp[14]);
+  if (resp[15]) componentes.push(resp[15]);
+  if (resp[16]) componentes.push(resp[16]);
+  if (resp[17]) componentes.push(resp[17]);
+  if (resp[18]) componentes.push("Concha " + resp[18]);
+  if (resp[20]) componentes.push("Concha " + resp[20]);
+  if (resp[22]) componentes.push(resp[22]);
+  if (resp[23]) componentes.push(resp[23]);
+  if (resp[24]) componentes.push(resp[24]);
+
+  const fila = [
+    resp[1] || new Date(),
+    resp[2] || "",
+    resp[3] || "",
+    resp[4] || "",
+    "",
+    temporalTexto || "",
+    resp[13] || "",
+    resp[7] || "",
+    resp[8] || "",
+    resp[9] || "",
+    resp[10] || "",
+    resp[11] || "",
+    resp[12] || "",
+    componentes.join("; "),
+    resp[25] || "",
+    resp[26] || "",
+    resp[27] || "",
+    resp[28] || "",
+    "",
+    0, 0, 0, 0, 0,
+    resp[29] || "",
+    "Diagnosticado",
+    "", "", "", ""
+  ];
+
+  const newFila = hojaDiag.getLastRow() + 1;
+  hojaDiag.getRange(newFila, 6).setNumberFormat("@"); // "1-10" debe quedar como texto, no como fecha
+  hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
+  calcularSubtotales(hojaDiag, newFila);
+  validarYResaltarColumnaU(hojaDiag, newFila);
+  return newFila;
+}
+
+function procesarRespuestaFormulario(e) {
+  const manual = !e;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    Logger.log("⚠️ Otro proceso está pasando respuestas; intenta de nuevo en un momento");
+    if (manual) SpreadsheetApp.getUi().alert("Otro proceso está pasando respuestas. Intenta de nuevo en un minuto.");
+    return;
+  }
   try {
+    // La fila del formulario puede tardar unos segundos en llegar a la hoja de respuestas
+    if (!manual) Utilities.sleep(8000);
+
     const ssResp = SpreadsheetApp.openById(ID_RESPUESTAS_NUEVA);
     const ssDiag = SpreadsheetApp.openById(ID_DIAGNOSTICOS);
-    const hojaResp = ssResp.getSheetByName("Respuestas de formulario 1");
+    const hojaResp = buscarHojaRespuestas(ssResp);
     const hojaDiag = ssDiag.getSheetByName("DIAGNOSTICOS_2026");
-
     if (!hojaResp || !hojaDiag) {
       Logger.log("❌ ERROR: Hojas no encontradas");
+      if (manual) SpreadsheetApp.getUi().alert("❌ No se encontró la hoja de respuestas o DIAGNOSTICOS_2026");
       return;
     }
 
-    const ultFilaResp = hojaResp.getLastRow();
-    if (ultFilaResp <= 1) {
+    const ultResp = hojaResp.getLastRow();
+    if (ultResp < 2) {
       Logger.log("⚠️ No hay respuestas");
+      if (manual) SpreadsheetApp.getUi().alert("No hay respuestas en el formulario.");
       return;
     }
+    const n = ultResp - 1;
+    const rango = hojaResp.getRange(2, 1, n, 34);
+    const valores = rango.getValues();
+    const visibles = rango.getDisplayValues();
+    const ids = idsDeRespuestas(valores);
 
-    const ultimaProcesada = obtenerUltimaRespuestaProcesada();
-    let procesadas = 0;
-
-    // Cargar TODOS los datos de DIAGNOSTICOS_2026 una sola vez para comparación eficiente
-    const ultFilaDiag = hojaDiag.getLastRow();
-    const datoDiagnosticos = ultFilaDiag > 1 ? hojaDiag.getRange(2, 1, ultFilaDiag - 1, 29).getValues() : [];
-
-    Logger.log("🔍 Última respuesta procesada: " + ultimaProcesada);
-    Logger.log("🔍 Total respuestas en formulario: " + (ultFilaResp - 1));
-    Logger.log("🔍 Procesando SOLO desde fila " + (ultimaProcesada + 1) + " en adelante");
-    Logger.log("🔍 Diagnósticos existentes: " + datoDiagnosticos.length);
-
-    // ⚠️ CRÍTICO: Solo procesar NUEVAS respuestas desde la última procesada
-    // Validación de duplicados por OPORTUNIDAD (es única)
-    for (let r = ultimaProcesada + 1; r <= ultFilaResp; r++) {
-      Logger.log("\n📌 Validando respuesta #" + r);
-      const resp = hojaResp.getRange(r, 1, 1, 34).getValues()[0];
-
-      const oportunidadResp = resp[2] ? resp[2].toString().trim() : "";
-
-      let yaExiste = false;
-
-      // Validación por OPORTUNIDAD (es el identificador único)
-      for (let diagRow of datoDiagnosticos) {
-        const oportunidadDiag = diagRow[1] ? diagRow[1].toString().trim() : ""; // Columna B
-
-        if (oportunidadResp === oportunidadDiag && oportunidadResp !== "") {
-          Logger.log("⚠️ DUPLICADO DETECTADO - Oportunidad: " + oportunidadResp);
-          Logger.log("⚠️ Esta oportunidad ya existe en DIAGNOSTICOS_2026, saltando...");
-          yaExiste = true;
-          break;
-        }
-      }
-
-      if (yaExiste) {
-        Logger.log("⏭️ Respuesta #" + r + " IGNORADA (oportunidad ya existe)");
-        continue;
-      }
-
-      Logger.log("✅ Respuesta #" + r + " es NUEVA, procesando...");
-
-      const componentes = [];
-      if (resp[14]) componentes.push(resp[14]);
-      if (resp[15]) componentes.push(resp[15]);
-      if (resp[16]) componentes.push(resp[16]);
-      if (resp[17]) componentes.push(resp[17]);
-      if (resp[18]) componentes.push("Concha " + resp[18]);
-      if (resp[20]) componentes.push("Concha " + resp[20]);
-      if (resp[22]) componentes.push(resp[22]);
-      if (resp[23]) componentes.push(resp[23]);
-      if (resp[24]) componentes.push(resp[24]);
-
-      const fila = [
-        resp[1] || new Date(),
-        resp[2] || "",
-        resp[3] || "",
-        resp[4] || "",
-        "",
-        resp[6] || "",
-        resp[13] || "",
-        resp[7] || "",
-        resp[8] || "",
-        resp[9] || "",
-        resp[10] || "",
-        resp[11] || "",
-        resp[12] || "",
-        componentes.join("; "),
-        resp[25] || "",
-        resp[26] || "",
-        resp[27] || "",
-        resp[28] || "",
-        "",
-        0,
-        0,
-        0,
-        0,
-        0,
-        resp[29] || "",
-        "Diagnosticado",
-        "",
-        "",
-        "",
-        ""
-      ];
-
-      const newFila = hojaDiag.getLastRow() + 1;
-      hojaDiag.getRange(newFila, 1, 1, fila.length).setValues([fila]);
-
-      calcularSubtotales(hojaDiag, newFila);
-      validarYResaltarColumnaU(hojaDiag, newFila);
-
-      procesadas++;
+    let hojaControl = ssDiag.getSheetByName(HOJA_CONTROL_RESPUESTAS);
+    const primeraVez = !hojaControl;
+    const procesadas = {};
+    if (hojaControl && hojaControl.getLastRow() >= 2) {
+      hojaControl.getRange(2, 1, hojaControl.getLastRow() - 1, 1).getValues().forEach(r => { procesadas[(r[0] || "").toString()] = true; });
     }
 
-    if (procesadas > 0) {
-      guardarUltimaRespuestaProcesada(ultFilaResp);
-      Logger.log("✅ " + procesadas + " diagnóstico(s) procesado(s) automáticamente");
+    // En la primera ejecución se reconocen las sillas que ya están en la hoja (misma oportunidad + # temporal + tipo)
+    const reclamables = {};
+    if (primeraVez && hojaDiag.getLastRow() >= 2) {
+      hojaDiag.getRange(2, 1, hojaDiag.getLastRow() - 1, 6).getDisplayValues().forEach(r => {
+        const k = claveSilla(r[1], r[5], r[3]);
+        reclamables[k] = (reclamables[k] || 0) + 1;
+      });
     }
 
-  } catch (e) {
-    Logger.log("❌ ERROR: " + e);
+    const limite = Date.now() - DIAS_RESPUESTAS_ANTIGUAS * 24 * 3600 * 1000;
+    const pendientes = [], aMarcar = [];
+    for (let i = 0; i < n; i++) {
+      if (procesadas[ids[i]]) continue;
+      if (!(valores[i][2] || "").toString().trim()) continue;
+      if (primeraVez) {
+        const k = claveSilla(visibles[i][2], visibles[i][6], visibles[i][4]);
+        if (reclamables[k] > 0) { reclamables[k]--; aMarcar.push([i, "ya estaba en la hoja"]); continue; }
+        const ts = esFecha(valores[i][0]) ? valores[i][0].getTime() : 0;
+        if (ts && ts < limite) { aMarcar.push([i, "respuesta antigua"]); continue; }
+      }
+      pendientes.push(i);
+    }
+
+    const descr = i => visibles[i][2] + " (" + visibles[i][6] + ")";
+    if (primeraVez && manual) {
+      const ui = SpreadsheetApp.getUi();
+      const yaEstaban = aMarcar.filter(x => x[1] === "ya estaba en la hoja").length;
+      const antiguas = aMarcar.length - yaEstaban;
+      const resp = ui.alert("📥 PRIMERA SINCRONIZACIÓN",
+        "Respuestas en el formulario: " + n + "\n" +
+        "• Ya estaban en la hoja: " + yaEstaban + "\n" +
+        "• Antiguas (más de " + DIAS_RESPUESTAS_ANTIGUAS + " días) que se darán por procesadas sin agregar: " + antiguas + "\n" +
+        "• Por agregar ahora: " + pendientes.length +
+        (pendientes.length ? "\n\n" + pendientes.slice(0, 15).map(i => "  - " + descr(i)).join("\n") + (pendientes.length > 15 ? "\n  …" : "") : "") +
+        "\n\n¿Continuar?", ui.ButtonSet.YES_NO);
+      if (resp !== ui.Button.YES) return;
+    }
+
+    if (!hojaControl) {
+      hojaControl = ssDiag.insertSheet(HOJA_CONTROL_RESPUESTAS);
+      hojaControl.getRange("A:D").setNumberFormat("@");
+      hojaControl.getRange(1, 1, 1, 4).setValues([["ID_RESPUESTA", "OPORTUNIDAD", "#TEMPORAL", "ESTADO"]]);
+      hojaControl.hideSheet();
+    }
+    const registrar = (i, estado) => {
+      hojaControl.getRange(hojaControl.getLastRow() + 1, 1, 1, 4).setValues([[ids[i], valores[i][2], visibles[i][6], estado]]);
+    };
+    aMarcar.forEach(x => registrar(x[0], x[1]));
+
+    const agregadas = [];
+    pendientes.forEach(i => {
+      agregarRespuestaADiagnosticos(hojaDiag, valores[i], visibles[i][6]);
+      registrar(i, "agregada");
+      agregadas.push(descr(i));
+    });
+
+    Logger.log("✅ Respuestas agregadas: " + agregadas.length + " | marcadas sin agregar: " + aMarcar.length);
+    if (manual) {
+      SpreadsheetApp.getUi().alert(agregadas.length > 0
+        ? "✅ Se agregaron " + agregadas.length + " diagnóstico(s):\n\n" + agregadas.slice(0, 20).join("\n")
+        : "✅ Todo al día: no hay respuestas nuevas por pasar.");
+    }
+
+  } catch (err) {
+    Logger.log("❌ ERROR pasando respuestas: " + err + "\n" + err.stack);
+    if (manual) SpreadsheetApp.getUi().alert("❌ ERROR: " + err.toString());
+  } finally {
+    lock.releaseLock();
   }
 }
 

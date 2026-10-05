@@ -509,6 +509,12 @@ Odoo: account.invoice (Factura)
 - Oportunidades (CRM, `crm.lead`, tipo oportunidad, sin filtro "Mi pipeline"): `.../web#action=478&model=crm.lead&view_type=list&menu_id=320`.
 - RMAs (`repair.order`): `.../web#action=529&model=repair.order&view_type=list&menu_id=384`.
 
+**Respuestas del formulario → DIAGNOSTICOS_2026** (activador del formulario o menú "📥 Procesar Manualmente"): cada respuesta es UNA silla y se identifica
+por su *Marca temporal* (única). NO se descartan respuestas por tener una oportunidad ya existente (una oportunidad tiene varias sillas). Las ya procesadas
+quedan en la hoja oculta `CONTROL_RESPUESTAS`, así que no vuelven las filas borradas ni se repiten. La primera vez pide confirmación: reconoce las sillas que ya
+están en la hoja (oportunidad + #temporal + tipo), da por procesadas las respuestas de más de 7 días y agrega las recientes que falten. El # temporal se escribe
+como texto ("1-10", nunca fecha). La hoja de respuestas se detecta por su encabezado "Marca temporal" (ya no depende del nombre de la pestaña).
+
 **Estados de la columna AA**: Cotización, Aprobado, Rechazado (no hay otros).
 
 **Fase 1: Cotización** (manual: el usuario escribe "Cotización" y ejecuta "Finalizar oportunidad" con el nombre EXACTO de la oportunidad)
