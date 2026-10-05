@@ -569,3 +569,5 @@ Tornillería y Cabecero van a Otros servicios (U amarilla). Al "Finalizar oportu
 
 **Modo de pruebas** (`CONFIG.MODO_PRUEBAS = true`, cambiar a `false` al terminar de probar): "Procesar Manualmente" ignora la memoria de CONTROL_RESPUESTAS y decide por lo que hay en
 DIAGNOSTICOS_2026 (si borras las filas de una oportunidad, vuelven a traerse del formulario, sin duplicar). Menú "♻️ Volver a pasar una oportunidad" hace lo mismo por nombre cuando el modo está en false.
+
+**Cierre (fix)**: las OP se cruzan con las sillas por oportunidad (OP col. E) + número EyM (OP col. P), no solo por EyM: un EyM repetido en una OP de pruebas viejas ya no bloquea "Finalizar reparación" / "Crear factura".

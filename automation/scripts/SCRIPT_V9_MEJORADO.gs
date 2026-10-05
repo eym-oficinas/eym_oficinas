@@ -2919,6 +2919,7 @@ function leerRMAsDeHoja(hoja) {
     (porRMA[rma] = porRMA[rma] || []).push({
       fila: i + 2,
       eym: (r[4] || "").toString().trim(),
+      oportunidad: r[1],
       aprobada: (r[26] || "").toString().toLowerCase().includes("aprobado"),
       fechaAprobacion: r[27]
     });
@@ -2985,12 +2986,15 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
   const totalPorEYM = {}, terminadasPorEYM = {};
   const ultOP = hojaOP.getLastRow();
   if (ultOP >= 2) {
-    hojaOP.getRange(2, 16, ultOP - 1, 2).getValues().forEach(r => {
-      const eym = (r[0] || "").toString().trim();
+    // La OP se identifica por oportunidad (col. E) + número EyM (col. P): un EyM repetido en otra oportunidad (pruebas viejas) no debe bloquear el cierre
+    const claveOP = (opp, eym) => normalizarNombreOportunidad(opp) + "|" + eym;
+    hojaOP.getRange(2, 1, ultOP - 1, 17).getValues().forEach(r => {
+      const eym = (r[15] || "").toString().trim();
       if (!eym) return;
-      totalPorEYM[eym] = (totalPorEYM[eym] || 0) + 1;
-      if ((r[1] || "").toString().trim().toLowerCase() === CONFIG.ESTADO_OP_TERMINADO.toLowerCase()) {
-        terminadasPorEYM[eym] = (terminadasPorEYM[eym] || 0) + 1;
+      const k = claveOP(r[4], eym);
+      totalPorEYM[k] = (totalPorEYM[k] || 0) + 1;
+      if ((r[16] || "").toString().trim().toLowerCase() === CONFIG.ESTADO_OP_TERMINADO.toLowerCase()) {
+        terminadasPorEYM[k] = (terminadasPorEYM[k] || 0) + 1;
       }
     });
   }
@@ -2998,7 +3002,10 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
   const porRMA = leerRMAsDeHoja(hoja);
   const candidatas = Object.keys(porRMA).filter(nombre => {
     const filas = porRMA[nombre];
-    const completa = filas.every(x => x.eym && totalPorEYM[x.eym] > 0 && terminadasPorEYM[x.eym] === totalPorEYM[x.eym]);
+    const completa = filas.every(x => {
+      const k = normalizarNombreOportunidad(x.oportunidad) + "|" + x.eym;
+      return x.eym && totalPorEYM[k] > 0 && terminadasPorEYM[k] === totalPorEYM[k];
+    });
     if (!completa) res.pendientes.push(nombre);
     return completa;
   });
