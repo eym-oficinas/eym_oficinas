@@ -25,6 +25,7 @@ const CONFIG = {
   COL_ALARMA: 30,
   ADJUNTAR_CONSOLIDADO: true,
   ESTADO_OP_PRODUCCION: "En producción",
+  AVISAR_SERVICIOS_SIN_CODIGO: false, // true: avisa en AD y en la RMA los servicios que no están en el catálogo (hoy van todos como [SVARIOS])
   MODO_PRUEBAS: true, // true: "Procesar Manualmente" vuelve a traer las sillas cuyas filas borraste de DIAGNOSTICOS_2026 (poner false al terminar las pruebas)
   ESTADO_OP_TERMINADO: "Terminado",
   // Nombre con que llega del formulario -> ítem del catálogo (además de la columna D "ALIAS" del catálogo)
@@ -316,7 +317,7 @@ function marcarSinPrecio(hoja, fila, lista, servicios) {
   const esNuestra = actual.indexOf("⚠️ Sin precio en el catálogo") === 0 || actual.indexOf("⚠️ Servicio sin código") === 0;
   const partes = [];
   if (lista.length > 0) partes.push("⚠️ Sin precio en el catálogo: " + lista.join("; "));
-  if (servicios.length > 0) partes.push("⚠️ Servicio sin código en el catálogo/Odoo (se carga como [" + CONFIG.CODIGO_OTROS_SERVICIOS + "] Otros servicios): " + servicios.join("; ") + ". Créalo en el catálogo y en Odoo, o indica con qué código trabajar");
+  if (servicios.length > 0 && CONFIG.AVISAR_SERVICIOS_SIN_CODIGO) partes.push("⚠️ Servicio sin código en el catálogo/Odoo (se carga como [" + CONFIG.CODIGO_OTROS_SERVICIOS + "] Otros servicios): " + servicios.join("; ") + ". Créalo en el catálogo y en Odoo, o indica con qué código trabajar");
   if (partes.length > 0) {
     if (actual && !esNuestra) return; // otra alarma (RMA, Odoo): no se pisa
     celda.setValue(partes.join(" | "));
@@ -2021,6 +2022,9 @@ function consolidarBorradorRMA(silasDatos) {
     if (it.nombres.indexOf(nombre) === -1) it.nombres.push(nombre);
   }
 
+  const serviciosVistos = {}, serviciosNombres = [];
+  let serviciosTotal = 0, hayServicios = false;
+
   silasDatos.forEach(x => {
     const d = x.diag;
     if (!d) return;
@@ -2040,27 +2044,15 @@ function consolidarBorradorRMA(silasDatos) {
     });
 
     // 2) OTROS SERVICIOS Y ESPECIALES (col O + P): el valor viene de la col U
-    // En el consolidado cada servicio va SEPARADO: los que están en el catálogo con su código y precio; lo que no, en una línea genérica con el resto del valor de U.
-    const otros = [d.otrosServicios, d.observacionesEspeciales, otrosDeRepuestos.join("; ")]
-      .map(t => (t || "").toString().trim()).filter(t => t).join("; ");
-    const vistosServ = {}, sinCodigoServ = [];
-    let totalCatalogoServ = 0;
+    // Todos los servicios y otros servicios de TODAS las sillas en UNA línea: nombres discriminados y valor totalizado (col. U); código [SVARIOS]
     [].concat(otrosDeRepuestos, dividirItems(d.otrosServicios), dividirItems(d.observacionesEspeciales)).forEach(t => {
       const k = claveAlias(t);
-      if (!k || vistosServ[k] || esNotaNoRepuesto(t) || /^otr[oa]s?$/.test(k)) return;
-      vistosServ[k] = true;
-      const rs = resolverItemCatalogo(t);
-      if (rs.entry) {
-        agregar(2, rs.entry.nombre, 1, rs.entry.precio, { codigo: rs.entry.codigo });
-        totalCatalogoServ += rs.entry.precio;
-      } else {
-        sinCodigoServ.push(t);
-      }
+      if (!k || serviciosVistos[k] || esNotaNoRepuesto(t) || /^otr[oa]s?$/.test(k)) return;
+      serviciosVistos[k] = true;
+      serviciosNombres.push(t);
     });
-    const restoServ = Math.max(0, (d.valorOtrosServicios || 0) - totalCatalogoServ);
-    if (sinCodigoServ.length > 0 || restoServ > 0 || (totalCatalogoServ === 0 && otros)) {
-      agregar(2, sinCodigoServ.length > 0 ? sinCodigoServ.join("; ") : (totalCatalogoServ > 0 ? "Otros servicios" : otros), 1, restoServ, {});
-    }
+    serviciosTotal += d.valorOtrosServicios || 0;
+    if ([d.otrosServicios, d.observacionesEspeciales].some(t => (t || "").toString().trim()) || otrosDeRepuestos.length) hayServicios = true;
 
     // 3) TAPICERÍA (col Q + R): mismo criterio que la columna V
     itemsTapiceria(d.tapiceriaAsiento, d.tapiceriaEspaldar).forEach(it => {
@@ -2071,6 +2063,10 @@ function consolidarBorradorRMA(silasDatos) {
     // 4) M.O Y MANTENIMIENTO GENERAL (col W): una por silla
     agregar(4, "M.O y mantenimiento general", 1, d.valorMO || CONFIG.MANTENIMIENTO_GENERAL, {});
   });
+
+  if (hayServicios || serviciosTotal > 0) {
+    agregar(2, serviciosNombres.length > 0 ? serviciosNombres.join("; ") : "Otros servicios", 1, serviciosTotal, {});
+  }
 
   const avisos = [];
   const items = orden.map(k => {
@@ -2557,7 +2553,7 @@ function resolverItemsBorradorEnOdoo(items, creds) {
     if (it.grupo === 4) {
       codigo = CONFIG.CODIGO_MANTENIMIENTO;
     } else if (it.grupo === 2) {
-      codigo = it.codigo || buscarCodigoCatalogo(base, true);
+      codigo = null; // los servicios van siempre con el producto genérico [SVARIOS] Otros servicios
     } else {
       codigo = it.codigo || null;
     }
@@ -2639,7 +2635,7 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
 
     // Servicios cargados con el producto genérico (sin código propio en el catálogo)
     const genericos = r.filas.filter(x => x.generico).map(x => x.item.nombre);
-    if (genericos.length > 0) {
+    if (genericos.length > 0 && CONFIG.AVISAR_SERVICIOS_SIN_CODIGO) {
       avisos.push("Cargado como [" + CONFIG.CODIGO_OTROS_SERVICIOS + "] Otros servicios (no tiene código propio en el catálogo): " + genericos.join(" / "));
     }
 
