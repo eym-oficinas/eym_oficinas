@@ -248,7 +248,7 @@ function parseNotaRepuestos(nota) {
 // Valor de repuestos (T) y de tapicería (V) de una fila, con la lista de ítems sin precio.
 // Las piezas sin precio con valor y código en la nota de T (manuales) se suman a T y quedan resueltas.
 function calcularTyV(hoja, fila) {
-  const sinPrecio = [], sinPrecioRepuestos = [], otrosDeRepuestos = [], manuales = [];
+  const sinPrecio = [], sinPrecioRepuestos = [], otrosDeRepuestos = [], manuales = [], serviciosSinCodigo = [];
   let totalT = 0, totalV = 0;
   let notas = null;
   dividirItems(hoja.getRange(fila, 14).getValue()).forEach(item => {
@@ -269,7 +269,15 @@ function calcularTyV(hoja, fila) {
     if (it.entry) totalV += it.entry.precio;
     else sinPrecio.push(it.texto + (it.lugar ? " (" + it.lugar + ")" : ""));
   });
-  return { totalT: totalT, totalV: totalV, sinPrecio: sinPrecio, sinPrecioRepuestos: sinPrecioRepuestos, otrosDeRepuestos: otrosDeRepuestos, manuales: manuales };
+  // Servicios (col. O, P y Tornillería/Cabecero de N) que no existen en el catálogo: se cargan como [SVARIOS] Otros servicios; se avisa para crearlos
+  const vistos = {};
+  otrosDeRepuestos.concat(dividirItems(hoja.getRange(fila, 15).getValue()), dividirItems(hoja.getRange(fila, 16).getValue())).forEach(item => {
+    const k = claveAlias(item);
+    if (!k || vistos[k] || esNotaNoRepuesto(item) || /^otr[oa]s?$/.test(k)) return;
+    vistos[k] = true;
+    if (!resolverItemCatalogo(item).entry) serviciosSinCodigo.push(item);
+  });
+  return { totalT: totalT, totalV: totalV, sinPrecio: sinPrecio, sinPrecioRepuestos: sinPrecioRepuestos, otrosDeRepuestos: otrosDeRepuestos, manuales: manuales, serviciosSinCodigo: serviciosSinCodigo };
 }
 
 // Celda de valor de repuestos (T): amarilla con nota cuando hay piezas sin precio (o sin código).
@@ -301,14 +309,20 @@ function filaTieneOtrosServicios(hoja, fila) {
   const p = (hoja.getRange(fila, 16).getValue() || "").toString().trim();
   return !!(o || p || dividirItems(hoja.getRange(fila, 14).getValue()).some(esItemOtroServicio));
 }
-function marcarSinPrecio(hoja, fila, lista) {
+function marcarSinPrecio(hoja, fila, lista, servicios) {
+  servicios = servicios || [];
   const celda = hoja.getRange(fila, CONFIG.COL_ALARMA);
   const actual = (celda.getValue() || "").toString();
-  if (lista.length > 0) {
-    celda.setValue("⚠️ Sin precio en el catálogo: " + lista.join("; "));
+  const esNuestra = actual.indexOf("⚠️ Sin precio en el catálogo") === 0 || actual.indexOf("⚠️ Servicio sin código") === 0;
+  const partes = [];
+  if (lista.length > 0) partes.push("⚠️ Sin precio en el catálogo: " + lista.join("; "));
+  if (servicios.length > 0) partes.push("⚠️ Servicio sin código en el catálogo/Odoo (se carga como [" + CONFIG.CODIGO_OTROS_SERVICIOS + "] Otros servicios): " + servicios.join("; ") + ". Créalo en el catálogo y en Odoo, o indica con qué código trabajar");
+  if (partes.length > 0) {
+    if (actual && !esNuestra) return; // otra alarma (RMA, Odoo): no se pisa
+    celda.setValue(partes.join(" | "));
     celda.setBackground("#F4CCCC");
     celda.setFontColor("#990000");
-  } else if (actual.indexOf("⚠️ Sin precio en el catálogo") === 0) {
+  } else if (esNuestra) {
     celda.clearContent();
     celda.setBackground(null);
     celda.setFontColor(null);
@@ -341,7 +355,7 @@ function recalcularRepuestosOportunidad() {
   cambios.forEach(c => {
     hoja.getRange(c.d.fila, 20).setValue(c.n.totalT);
     hoja.getRange(c.d.fila, 22).setValue(c.n.totalV);
-    marcarSinPrecio(hoja, c.d.fila, c.n.sinPrecio);
+    marcarSinPrecio(hoja, c.d.fila, c.n.sinPrecio, c.n.serviciosSinCodigo);
     marcarCeldaRepuestos(hoja, c.d.fila, c.n.sinPrecioRepuestos, c.n.manuales);
     validarYResaltarColumnaU(hoja, c.d.fila);
   });
@@ -676,7 +690,7 @@ function calcularSubtotales(hoja, fila) {
     const totalU = (valorU === "" || isNaN(valorU)) ? 0 : parseFloat(valorU);
     const totalX = totalT + totalU + totalV + CONFIG.MANTENIMIENTO_GENERAL;
     hoja.getRange(fila, 24).setFormula("=SUM(T" + fila + ":W" + fila + ")");
-    marcarSinPrecio(hoja, fila, tyv.sinPrecio);
+    marcarSinPrecio(hoja, fila, tyv.sinPrecio, tyv.serviciosSinCodigo);
     marcarCeldaRepuestos(hoja, fila, tyv.sinPrecioRepuestos, tyv.manuales);
 
   } catch (e) {
@@ -2606,6 +2620,12 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
         avisos.push("Código " + x.codigo + ": en el catálogo es '" + x.item.nombre + "' pero en Odoo es '" + x.prod.name + "' (revisar el código en el catálogo)");
       }
     });
+
+    // Servicios cargados con el producto genérico (sin código propio en el catálogo)
+    const genericos = r.filas.filter(x => x.generico).map(x => x.item.nombre);
+    if (genericos.length > 0) {
+      avisos.push("Cargado como [" + CONFIG.CODIGO_OTROS_SERVICIOS + "] Otros servicios (no tiene código propio en el catálogo): " + genericos.join(" / "));
+    }
 
     // 3) Monto sin impuestos vs subtotal del PDF: si difiere se crea igual y se avisa
     let esperado = 0;
