@@ -2040,10 +2040,26 @@ function consolidarBorradorRMA(silasDatos) {
     });
 
     // 2) OTROS SERVICIOS Y ESPECIALES (col O + P): el valor viene de la col U
+    // En el consolidado cada servicio va SEPARADO: los que están en el catálogo con su código y precio; lo que no, en una línea genérica con el resto del valor de U.
     const otros = [d.otrosServicios, d.observacionesEspeciales, otrosDeRepuestos.join("; ")]
       .map(t => (t || "").toString().trim()).filter(t => t).join("; ");
-    if (otros) {
-      agregar(2, otros, 1, d.valorOtrosServicios || 0, {});
+    const vistosServ = {}, sinCodigoServ = [];
+    let totalCatalogoServ = 0;
+    [].concat(otrosDeRepuestos, dividirItems(d.otrosServicios), dividirItems(d.observacionesEspeciales)).forEach(t => {
+      const k = claveAlias(t);
+      if (!k || vistosServ[k] || esNotaNoRepuesto(t) || /^otr[oa]s?$/.test(k)) return;
+      vistosServ[k] = true;
+      const rs = resolverItemCatalogo(t);
+      if (rs.entry) {
+        agregar(2, rs.entry.nombre, 1, rs.entry.precio, { codigo: rs.entry.codigo });
+        totalCatalogoServ += rs.entry.precio;
+      } else {
+        sinCodigoServ.push(t);
+      }
+    });
+    const restoServ = Math.max(0, (d.valorOtrosServicios || 0) - totalCatalogoServ);
+    if (sinCodigoServ.length > 0 || restoServ > 0 || (totalCatalogoServ === 0 && otros)) {
+      agregar(2, sinCodigoServ.length > 0 ? sinCodigoServ.join("; ") : (totalCatalogoServ > 0 ? "Otros servicios" : otros), 1, restoServ, {});
     }
 
     // 3) TAPICERÍA (col Q + R): mismo criterio que la columna V
@@ -2541,7 +2557,7 @@ function resolverItemsBorradorEnOdoo(items, creds) {
     if (it.grupo === 4) {
       codigo = CONFIG.CODIGO_MANTENIMIENTO;
     } else if (it.grupo === 2) {
-      codigo = buscarCodigoCatalogo(base, true);
+      codigo = it.codigo || buscarCodigoCatalogo(base, true);
     } else {
       codigo = it.codigo || null;
     }
