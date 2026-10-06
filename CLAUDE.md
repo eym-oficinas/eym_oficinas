@@ -577,3 +577,9 @@ y escribe en OP_2026 columna R ("# FACTURA") el número de la factura de Odoo (`
 en las OP de esas sillas (oportunidad + EyM). Estados de AA: Cotización, Aprobado, Rechazado, Terminado (menú "📋 Configurar Listas Desplegables" actualiza la lista de AA).
 
 **Número de factura en OP_2026 col. R**: Odoo 14 llama "/" a la factura en borrador hasta que se valida (publica). Mientras esté así se escribe "Borrador (sin validar)" con el enlace; el siguiente "Sincronizar con Odoo" reemplaza el texto por el número real (`actualizarNumerosFacturaOP`). El script NO valida la factura (decisión contable de la empresa).
+
+**Cambios del 2026-10-06 (OP_2026 y RMA)**:
+- **RMA → OP col. B**: al aprobar una silla, la OP nueva lleva en la columna B el número de RMA con su enlace (copiado de DIAGNOSTICOS_2026 col. AC). Si la OP se creó antes de tener RMA, "Sincronizar con Odoo" completa la B (solo si está vacía; no pisa un SO escrito a mano).
+- **Factura → OP col. C** (ya NO la R): al cerrar la RMA el número de factura con enlace va en la columna C de las OP de esas sillas ("Borrador (sin validar)" hasta que se valide en Odoo; el siguiente Sincronizar pone el número real).
+- **Col. R de OP_2026 = "Ensamble"**: se escribe a mano en las sillas nuevas que se ensamblan (no son reparación). Esas OP se ignoran en el cierre: no cuentan, no finalizan reparación ni crean factura en Odoo. La facturación de ensamble (cotización/SO, Entrega, Validar) se hará manualmente o en otro proceso aparte (NO automatizado por ahora).
+- **RMA → Cantidad producto** (`product_qty` de `[MOBILIARIO]`) = total de sillas de la oportunidad (cantidad de la línea de M.O consolidada).

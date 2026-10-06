@@ -1688,11 +1688,56 @@ function crearOP(hojaDiag, hojaOP, fila) {
 
     const newFilaOP = hojaOP.getLastRow() + 1;
     hojaOP.getRange(newFilaOP, 1, 1, filaOP.length).setValues([filaOP]);
+    ponerRMAenOP(hojaOP, newFilaOP, hojaDiag.getRange(fila, 29));
 
     Logger.log("✅ OP " + nuevoOP + " creada automáticamente");
   } catch (e) {
     Logger.log("❌ Error creando OP: " + e.toString());
   }
+}
+
+// Copia el número de RMA (con su enlace) de DIAGNOSTICOS_2026 col. AC a OP_2026 col. B. Devuelve true si lo puso.
+function ponerRMAenOP(hojaOP, filaOP, celdaRMA) {
+  try {
+    const f = (celdaRMA.getFormula() || "").toString();
+    const m = f.match(/HYPERLINK\("([^"]+)"\s*[,;]\s*"([^"]+)"\)/i);
+    if (m) {
+      hojaOP.getRange(filaOP, 2).setFormula('=HYPERLINK("' + m[1] + '","' + m[2] + '")');
+      return true;
+    }
+    const v = (celdaRMA.getValue() || "").toString().trim();
+    if (v && v.indexOf("⏳") === -1 && v.toUpperCase().indexOf("ERROR") !== 0) {
+      hojaOP.getRange(filaOP, 2).setValue(v);
+      return true;
+    }
+  } catch (e) {
+    Logger.log("⚠️ No se pudo poner la RMA en OP_2026: " + e);
+  }
+  return false;
+}
+
+// OP creadas antes de tener RMA: se completa la columna B (solo si está vacía; no pisa un SO escrito a mano)
+function completarRMAenOP(hoja, hojaOP) {
+  let n = 0;
+  try {
+    const ultD = hoja.getLastRow(), ultOP = hojaOP ? hojaOP.getLastRow() : 0;
+    if (ultD < 2 || ultOP < 2) return 0;
+    const diag = hoja.getRange(2, 1, ultD - 1, 29).getValues();
+    const op = hojaOP.getRange(2, 1, ultOP - 1, 16).getValues();
+    diag.forEach((r, i) => {
+      const eym = (r[4] || "").toString().trim(), rma = (r[28] || "").toString().trim();
+      if (!eym || !rma) return;
+      op.forEach((o, j) => {
+        if ((o[1] || "").toString().trim()) return;
+        if ((o[15] || "").toString().trim() !== eym) return;
+        if (normalizarNombreOportunidad(o[4]) !== normalizarNombreOportunidad(r[1])) return;
+        if (ponerRMAenOP(hojaOP, j + 2, hoja.getRange(i + 2, 29))) { o[1] = rma; n++; }
+      });
+    });
+  } catch (e) {
+    Logger.log("⚠️ completarRMAenOP: " + e);
+  }
+  return n;
 }
 
 function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
@@ -2595,7 +2640,10 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
       product_id: prodReparar.id,
       product_uom: prodReparar.uom_id ? prodReparar.uom_id[0] : defaults.product_uom
     });
-    if (camposOrden.product_qty && !valsOrden.product_qty) valsOrden.product_qty = 1;
+    // Cantidad del producto a reparar = total de sillas de la oportunidad (la mano de obra / mantenimiento va una vez por silla)
+    const itemMO = (borrador.items || []).find(it => it.grupo === 4);
+    const totalSillas = itemMO && itemMO.cant > 0 ? itemMO.cant : 1;
+    if (camposOrden.product_qty) valsOrden.product_qty = totalSillas;
     // Dirección de facturación = el mismo cliente de la oportunidad
     if (camposOrden.partner_invoice_id) valsOrden.partner_invoice_id = partnerId;
     if (camposOrden.invoice_method) valsOrden.invoice_method = "after_repair";
@@ -2991,9 +3039,10 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
   if (ultOP >= 2) {
     // La OP se identifica por oportunidad (col. E) + número EyM (col. P): un EyM repetido en otra oportunidad (pruebas viejas) no debe bloquear el cierre
     const claveOP = (opp, eym) => normalizarNombreOportunidad(opp) + "|" + eym;
-    hojaOP.getRange(2, 1, ultOP - 1, 17).getValues().forEach((r, i) => {
+    hojaOP.getRange(2, 1, ultOP - 1, 18).getValues().forEach((r, i) => {
       const eym = (r[15] || "").toString().trim();
       if (!eym) return;
+      if (esOPEnsamble(r[17])) return; // sillas de ensamble (col. R): no van a Odoo ni se facturan aquí
       const k = claveOP(r[4], eym);
       totalPorEYM[k] = (totalPorEYM[k] || 0) + 1;
       (filasOPporClave[k] = filasOPporClave[k] || []).push(i + 2);
@@ -3050,18 +3099,17 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
     }
     res.facturadas.push(rma.name);
 
-    // Estado "Terminado" en el diagnóstico (col. AA) y # de factura con enlace en OP_2026 (col. R)
+    // Estado "Terminado" en el diagnóstico (col. AA) y # de factura con enlace en OP_2026 (col. C)
     filas.forEach(f => hoja.getRange(f, 27).setValue(CONFIG.ESTADO_OP_TERMINADO));
     try {
       const f = datosFacturaRMA(rma.id, creds);
       if (f) {
         porRMA[rma.name].forEach(x => {
           (filasOPporClave[normalizarNombreOportunidad(x.oportunidad) + "|" + x.eym] || []).forEach(filaOP => {
-            const c = hojaOP.getRange(filaOP, 18);
+            const c = hojaOP.getRange(filaOP, 3);
             c.setFormula('=HYPERLINK("' + f.link + '","' + f.nombre.replace(/"/g, "") + '")');
           });
         });
-        if (hojaOP.getRange(1, 18).getValue() === "") hojaOP.getRange(1, 18).setValue("# FACTURA");
         res.facturas = (res.facturas || []).concat([rma.name + " → " + f.nombre]);
       } else {
         res.errores.push(rma.name + ": factura creada pero no pude leer su número en Odoo (revísala en la RMA)");
@@ -3071,6 +3119,11 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
     }
   });
   return res;
+}
+
+// Columna R de OP_2026: "Ensamble" marca las sillas nuevas (no son reparación): el sistema no las cierra ni factura
+function esOPEnsamble(v) {
+  return /ensambl/i.test((v || "").toString());
 }
 
 // Factura de la RMA: nombre (número) y enlace al formulario de la factura en Odoo
@@ -3092,13 +3145,13 @@ function textoNumeroFactura(nombre) {
 function enlaceFactura(id, creds) {
   return creds.urlWeb + "#id=" + id + "&model=account.move&view_type=form";
 }
-// Facturas que estaban en borrador en OP_2026 col. R: cuando ya fueron validadas en Odoo se pone su número
+// Facturas que estaban en borrador en OP_2026 col. C: cuando ya fueron validadas en Odoo se pone su número
 function actualizarNumerosFacturaOP(hojaOP, creds) {
   let actualizadas = 0;
   try {
     const ult = hojaOP ? hojaOP.getLastRow() : 0;
     if (ult < 2) return 0;
-    const formulas = hojaOP.getRange(2, 18, ult - 1, 1).getFormulas();
+    const formulas = hojaOP.getRange(2, 3, ult - 1, 1).getFormulas();
     formulas.forEach((fila, i) => {
       const f = (fila[0] || "").toString();
       if (f.indexOf("Borrador") === -1) return;
@@ -3107,7 +3160,7 @@ function actualizarNumerosFacturaOP(hojaOP, creds) {
       const r = llamarOdooXMLRPC("account.move", "read", [[parseInt(m[1], 10)], ["name"]], creds);
       const nombre = r && r[0] && r[0].name;
       if (nombre && nombre !== "/") {
-        hojaOP.getRange(i + 2, 18).setFormula('=HYPERLINK("' + enlaceFactura(m[1], creds) + '","' + nombre.replace(/"/g, "") + '")');
+        hojaOP.getRange(i + 2, 3).setFormula('=HYPERLINK("' + enlaceFactura(m[1], creds) + '","' + nombre.replace(/"/g, "") + '")');
         actualizadas++;
       }
     });
@@ -3134,6 +3187,7 @@ function sincronizarConOdoo() {
 
     const a = sincronizarAprobacionesOdoo(hoja, creds);
     const b = cerrarRMAsTerminadas(hoja, ss.getSheetByName("OP_2026"), creds, ui);
+    completarRMAenOP(hoja, ss.getSheetByName("OP_2026"));
     const facturasActualizadas = actualizarNumerosFacturaOP(ss.getSheetByName("OP_2026"), creds);
 
     const lineas = ["🔄 SINCRONIZACIÓN CON ODOO", ""];
@@ -3145,8 +3199,8 @@ function sincronizarConOdoo() {
     lineas.push("");
     lineas.push("B) Cierre");
     lineas.push("• Reparación finalizada y factura creada: " + (b.facturadas.join(", ") || "ninguna"));
-    if (facturasActualizadas > 0) lineas.push("• Facturas que ya tienen número (actualizadas en OP_2026 col. R): " + facturasActualizadas);
-    if (b.facturas && b.facturas.length) lineas.push("• Facturas (en OP_2026 col. R): " + b.facturas.join("; "));
+    if (facturasActualizadas > 0) lineas.push("• Facturas que ya tienen número (actualizadas en OP_2026 col. C): " + facturasActualizadas);
+    if (b.facturas && b.facturas.length) lineas.push("• Facturas (en OP_2026 col. C): " + b.facturas.join("; "));
     if (b.omitido) lineas.push("• Cierre cancelado por el usuario");
     if (b.pendientes.length) lineas.push("• RMAs con OP aún sin terminar: " + b.pendientes.join(", "));
     const errores = a.errores.concat(b.errores);
