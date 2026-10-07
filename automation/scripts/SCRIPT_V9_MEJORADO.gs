@@ -142,6 +142,10 @@ function dividirItems(texto) {
 }
 
 // Observaciones escritas a mano (no son repuestos): no llevan precio ni generan alarma
+// "Otros" / "Otro" / "Otra" suelto es la opción del formulario; el repuesto real viene después (ej. "Otros; platina especial")
+function esOpcionOtros(texto) {
+  return /^otr[oa]s?$/.test(claveAlias(texto));
+}
 function esNotaNoRepuesto(texto) {
   const t = (texto || "").toString().trim().toLowerCase();
   return t.length > 45 || /^(no lleva|se |la |el |mantenimiento$)/.test(t);
@@ -256,7 +260,7 @@ function calcularTyV(hoja, fila) {
     if (esItemOtroServicio(item)) { otrosDeRepuestos.push(item); return; }
     const r = resolverItemCatalogo(item);
     if (r.entry) totalT += r.entry.precio;
-    else if (!esNotaNoRepuesto(item)) {
+    else if (!esNotaNoRepuesto(item) && !esOpcionOtros(item)) {
       if (notas === null) notas = parseNotaRepuestos(hoja.getRange(fila, 20).getNote());
       const m = notas[claveAlias(item)];
       if (m && m.valor > 0) {
@@ -458,6 +462,13 @@ function claveSilla(oportunidad, temporal, tipo) {
   return [oportunidad, temporal, tipo].map(x => normalizarNombreOportunidad(x)).join("|");
 }
 
+// El # EYM que el técnico escribe en el formulario NO se reemplaza: solo se asigna uno nuevo cuando la celda está vacía
+function numeroEYMDeFormulario(v) {
+  const t = (v === null || v === undefined) ? "" : v.toString().trim();
+  if (!t) return "";
+  return /^\d+$/.test(t) ? Number(t) : t;
+}
+
 function agregarRespuestaADiagnosticos(hojaDiag, resp, temporalTexto) {
   const componentes = [];
   if (resp[14]) componentes.push(resp[14]);
@@ -475,7 +486,7 @@ function agregarRespuestaADiagnosticos(hojaDiag, resp, temporalTexto) {
     resp[2] || "",
     resp[3] || "",
     resp[4] || "",
-    "",
+    numeroEYMDeFormulario(resp[5]),   // E: # EYM escrito a mano en el formulario (si viene vacío se asigna al aprobar)
     temporalTexto || "",
     resp[13] || "",
     resp[7] || "",
@@ -2035,7 +2046,7 @@ function consolidarBorradorRMA(silasDatos) {
       if (esItemOtroServicio(p)) { otrosDeRepuestos.push(p); return; }
       const r = resolverItemCatalogo(p);
       if (r.entry) agregar(1, r.entry.nombre, 1, r.entry.precio, { codigo: r.entry.codigo });
-      else if (!esNotaNoRepuesto(p)) {
+      else if (!esNotaNoRepuesto(p) && !esOpcionOtros(p)) {
         // Pieza sin precio en el catálogo: si la nota de T trae valor (y código de Odoo) se usa ese
         const m = (d.manuales || {})[claveAlias(p)];
         if (m && m.valor > 0) agregar(1, m.texto || p, 1, m.valor, { codigo: m.codigo || null, manual: true });
@@ -3178,21 +3189,27 @@ function enlaceFactura(id, creds) {
   return creds.urlWeb + "#id=" + id + "&model=account.move&view_type=form";
 }
 // Facturas que estaban en borrador en OP_2026 col. C: cuando ya fueron validadas en Odoo se pone su número
+// y, en la columna F, la "Ref. de la orden" de la factura (la OC del cliente), si F está vacía.
 function actualizarNumerosFacturaOP(hojaOP, creds) {
   let actualizadas = 0;
   try {
     const ult = hojaOP ? hojaOP.getLastRow() : 0;
     if (ult < 2) return 0;
     const formulas = hojaOP.getRange(2, 3, ult - 1, 1).getFormulas();
+    const ocActual = hojaOP.getRange(2, 6, ult - 1, 1).getValues();
     formulas.forEach((fila, i) => {
       const f = (fila[0] || "").toString();
       if (f.indexOf("Borrador") === -1) return;
       const m = f.match(/#id=(\d+)&model=account\.move/);
       if (!m) return;
-      const r = llamarOdooXMLRPC("account.move", "read", [[parseInt(m[1], 10)], ["name"]], creds);
+      const id = parseInt(m[1], 10);
+      let r = llamarOdooXMLRPC("account.move", "read", [[id], ["name", "order_ref_number"]], creds);
+      if (!r || !r[0]) r = llamarOdooXMLRPC("account.move", "read", [[id], ["name"]], creds);
       const nombre = r && r[0] && r[0].name;
       if (nombre && nombre !== "/") {
         hojaOP.getRange(i + 2, 3).setFormula('=HYPERLINK("' + enlaceFactura(m[1], creds) + '","' + nombre.replace(/"/g, "") + '")');
+        const oc = r[0].order_ref_number ? r[0].order_ref_number.toString().trim() : "";
+        if (oc && !(ocActual[i][0] || "").toString().trim()) hojaOP.getRange(i + 2, 6).setValue(oc);
         actualizadas++;
       }
     });
@@ -3200,6 +3217,57 @@ function actualizarNumerosFacturaOP(hojaOP, creds) {
     Logger.log("⚠️ No se pudieron actualizar los números de factura: " + e);
   }
   return actualizadas;
+}
+
+// BOTÓN 1: procesa las RMA confirmadas (aprueba sillas, crea OP, inicia reparación)
+function procesarRMAsConfirmadas() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const creds = obtenerCredencialesOdoo();
+    if (!creds) { ui.alert("Faltan las credenciales de Odoo. Usa: ⚙️ Configurar Credenciales Odoo"); return; }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
+    if (!hoja) { ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada"); return; }
+    const a = sincronizarAprobacionesOdoo(hoja, creds);
+    const rmaEnOP = completarRMAenOP(hoja, ss.getSheetByName("OP_2026"));
+    const lineas = ["✅ RMA CONFIRMADAS", ""];
+    lineas.push("• Sillas aprobadas ahora (EYM + fecha + OP en producción): " + a.aprobadas);
+    if (a.confirmadas.length) lineas.push("• RMAs confirmadas en Odoo desde la hoja: " + a.confirmadas.join(", "));
+    lineas.push("• Reparaciones iniciadas en Odoo: " + (a.iniciadas.join(", ") || "ninguna"));
+    if (a.borradores.length) lineas.push("• RMAs en borrador sin aprobar (escribe 'Aprobado' en la hoja o confírmalas en Odoo): " + a.borradores.join(", "));
+    if (rmaEnOP > 0) lineas.push("• RMA completada en OP_2026 (columna B): " + rmaEnOP);
+    if (a.errores.length) { lineas.push(""); lineas.push("🚨 PROBLEMAS (también marcados en la columna AD):"); a.errores.forEach(e => lineas.push("• " + e)); }
+    ui.alert(lineas.join("\n"));
+  } catch (e) {
+    Logger.log("❌ Error en procesarRMAsConfirmadas: " + e + "\n" + e.stack);
+    ui.alert("❌ ERROR: " + e.toString());
+  }
+}
+
+// BOTÓN 2: procesa las OP terminadas (finaliza reparación, crea factura) y actualiza los números de factura ya validados
+function procesarOPsTerminadas() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const creds = obtenerCredencialesOdoo();
+    if (!creds) { ui.alert("Faltan las credenciales de Odoo. Usa: ⚙️ Configurar Credenciales Odoo"); return; }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
+    if (!hoja) { ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada"); return; }
+    const hojaOP = ss.getSheetByName("OP_2026");
+    const b = cerrarRMAsTerminadas(hoja, hojaOP, creds, ui);
+    const facturasActualizadas = actualizarNumerosFacturaOP(hojaOP, creds);
+    const lineas = ["🏁 OP TERMINADAS", ""];
+    lineas.push("• Reparación finalizada y factura creada: " + (b.facturadas.join(", ") || "ninguna"));
+    if (b.facturas && b.facturas.length) lineas.push("• Facturas (en OP_2026 col. C): " + b.facturas.join("; "));
+    if (b.omitido) lineas.push("• Cierre cancelado por el usuario");
+    if (b.pendientes.length) lineas.push("• RMAs con OP aún sin terminar: " + b.pendientes.join(", "));
+    if (facturasActualizadas > 0) lineas.push("• Facturas validadas: número en la columna C y OC en la F (si la factura la tiene): " + facturasActualizadas);
+    if (b.errores.length) { lineas.push(""); lineas.push("🚨 PROBLEMAS (también marcados en la columna AD):"); b.errores.forEach(e => lineas.push("• " + e)); }
+    ui.alert(lineas.join("\n"));
+  } catch (e) {
+    Logger.log("❌ Error en procesarOPsTerminadas: " + e + "\n" + e.stack);
+    ui.alert("❌ ERROR: " + e.toString());
+  }
 }
 
 function sincronizarConOdoo() {
@@ -3448,7 +3516,8 @@ function onOpen() {
     .addSeparator()
     .addItem("🖨️ Presupuesto silla x silla", "generarPresupuestoDescargable")
     .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")
-    .addItem("🔄 Sincronizar con Odoo (aprobar / cerrar)", "sincronizarConOdoo")
+    .addItem("✅ Procesar RMA confirmadas", "procesarRMAsConfirmadas")
+    .addItem("🏁 Procesar OP terminadas", "procesarOPsTerminadas")
     .addSeparator()
     .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
     .addItem("🧾 Recalcular repuestos y tapicería (T y V)", "recalcularRepuestosOportunidad")
