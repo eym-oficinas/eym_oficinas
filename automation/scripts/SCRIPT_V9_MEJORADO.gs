@@ -27,6 +27,7 @@ const CONFIG = {
   ESTADO_OP_PRODUCCION: "En producción",
   AVISAR_SERVICIOS_SIN_CODIGO: false, // true: avisa en AD y en la RMA los servicios que no están en el catálogo (hoy van todos como [SVARIOS])
   ETAPA_CRM_OP_REPARACIONES: "OP Reparaciones",   // etapa del CRM cuando la RMA se confirma y se genera la OP (coincide el comienzo del nombre)
+  CARPETA_FOTOS_ID: "1G60d3HC8qKVnM-pgntmPi2TVT44OLEyJFd__vD9MCWfNOZfG2Y-e5hX7flhZSKWGuRKw5hU4", // "📷 Link Fotografía Inicial (File responses)": ahí se crea una carpeta por oportunidad
   ETAPA_CRM_COTIZACION: "Proceso de cotización",  // etapa del CRM cuando se elabora la RMA (comienzo del nombre)
   TARIFA_IVA: 0.19,
   ETAPA_CRM_FACTURACION: "Facturación",           // etapa del CRM cuando la OP termina y se crea la factura en borrador
@@ -473,7 +474,23 @@ function numeroEYMDeFormulario(v) {
   return /^\d+$/.test(t) ? Number(t) : t;
 }
 
-function agregarRespuestaADiagnosticos(hojaDiag, resp, temporalTexto) {
+// Tipo de tela: el formulario tiene una cuadrícula Asiento / Espaldar (dos columnas: "Tipo de Tela [Asiento]" y "[Espaldar]").
+// En la hoja queda en una sola celda (col. J): "Asiento Paño; Espaldar Malla". Si el formulario no trae espaldar (versión anterior), se deja el texto tal cual.
+function combinarTipoTela(asiento, espaldar) {
+  const a = (asiento || "").toString().trim(), e = (espaldar || "").toString().trim();
+  if (a && e) return "Asiento " + a + "; Espaldar " + e;
+  if (e) return "Espaldar " + e;
+  return a;
+}
+function indiceTelaEspaldar(encabezados) {
+  for (let i = 0; i < encabezados.length; i++) {
+    const h = sinTildes(encabezados[i]);
+    if (h.indexOf("tela") !== -1 && h.indexOf("espaldar") !== -1) return i;
+  }
+  return -1;
+}
+
+function agregarRespuestaADiagnosticos(hojaDiag, resp, temporalTexto, idxTelaEspaldar) {
   const componentes = [];
   if (resp[14]) componentes.push(resp[14]);
   if (resp[15]) componentes.push(resp[15]);
@@ -495,7 +512,7 @@ function agregarRespuestaADiagnosticos(hojaDiag, resp, temporalTexto) {
     resp[13] || "",
     resp[7] || "",
     resp[8] || "",
-    resp[9] || "",
+    combinarTipoTela(resp[9], idxTelaEspaldar >= 0 ? resp[idxTelaEspaldar] : ""),
     resp[10] || "",
     resp[11] || "",
     resp[12] || "",
@@ -552,6 +569,7 @@ function procesarRespuestaFormulario(e) {
     const valores = rango.getValues();
     const visibles = rango.getDisplayValues();
     const ids = idsDeRespuestas(valores);
+    const idxTelaEspaldar = indiceTelaEspaldar(hojaResp.getRange(1, 1, 1, 34).getDisplayValues()[0]);
 
     let hojaControl = ssDiag.getSheetByName(HOJA_CONTROL_RESPUESTAS);
     const primeraVez = !hojaControl;
@@ -619,7 +637,8 @@ function procesarRespuestaFormulario(e) {
 
     const agregadas = [];
     pendientes.forEach(i => {
-      agregarRespuestaADiagnosticos(hojaDiag, valores[i], visibles[i][6]);
+      agregarRespuestaADiagnosticos(hojaDiag, valores[i], visibles[i][6], idxTelaEspaldar);
+      guardarFotosSilla(valores[i][2], visibles[i][6], valores[i][13]); // carpeta de la oportunidad + fotos renombradas (no bloquea)
       registrar(i, "agregada");
       agregadas.push(descr(i));
     });
@@ -667,6 +686,51 @@ function volverAPasarOportunidad() {
   if (ui.alert("♻️ Se volverán a traer " + filas.length + " silla(s) del formulario para '" + r.getResponseText().trim() + "'. ¿Continuar?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
   filas.reverse().forEach(f => hojaControl.deleteRow(f));
   procesarRespuestaFormulario();
+}
+
+// ═══ Fotos por oportunidad ═══
+// Crea (si no existe) la carpeta "<oportunidad>" dentro de CONFIG.CARPETA_FOTOS_ID y mueve ahí las fotos de la silla,
+// renombradas "<Oportunidad> <#Temporal>" (si la silla tiene varias fotos: "... 1", "... 2", "... 3"). Nunca lanza error.
+function nombreCarpetaSeguro(t) {
+  return (t || "").toString().replace(/[\/\\:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();
+}
+function idsDeFotos(texto) {
+  const out = [], re = /(?:id=|\/d\/|\/folders\/)([-\w]{25,})/g;
+  let m;
+  while ((m = re.exec((texto || "").toString())) !== null) { if (out.indexOf(m[1]) === -1) out.push(m[1]); }
+  return out;
+}
+function guardarFotosSilla(oportunidad, temporal, linksTexto) {
+  const res = { carpeta: "", movidas: 0, errores: [] };
+  try {
+    const nombreOpp = nombreCarpetaSeguro(oportunidad);
+    if (!nombreOpp) return res;
+    const raiz = DriveApp.getFolderById(CONFIG.CARPETA_FOTOS_ID);
+    const it = raiz.getFoldersByName(nombreOpp);
+    const carpeta = it.hasNext() ? it.next() : raiz.createFolder(nombreOpp);
+    res.carpeta = carpeta.getUrl();
+
+    const ids = idsDeFotos(linksTexto);
+    const base = nombreOpp + " " + nombreCarpetaSeguro(temporal);
+    ids.forEach((id, i) => {
+      try {
+        const archivo = DriveApp.getFileById(id);
+        const m = archivo.getName().match(/\.[A-Za-z0-9]{2,5}$/);
+        const nombre = (ids.length > 1 ? base + " " + (i + 1) : base) + (m ? m[0] : "");
+        if (carpeta.getFilesByName(nombre).hasNext()) return; // ya está guardada
+        archivo.moveTo(carpeta);
+        archivo.setName(nombre);
+        res.movidas++;
+      } catch (e) {
+        res.errores.push(id + ": " + e);
+      }
+    });
+    if (res.errores.length > 0) Logger.log("⚠️ Fotos de '" + base + "': " + res.errores.join(" | "));
+  } catch (e) {
+    res.errores.push(e.toString());
+    Logger.log("⚠️ No se pudo preparar la carpeta de fotos de '" + oportunidad + "': " + e);
+  }
+  return res;
 }
 
 function validarYResaltarColumnaU(hoja, fila) {
@@ -1795,6 +1859,7 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
           tipoSilla: r[3],
           numeroEYM: r[4],
           numeroTemporal: String(temporalesVisibles[i][0]).trim(),
+          fotos: r[6],                     // G: enlaces de las fotos
           color: r[10],                    // K
           ubicacion: r[11],                // L
           repuestos: r[13],                // N
@@ -2845,6 +2910,9 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
         return { exito: false, error: "Esta oportunidad ya tiene la RMA '" + ac + "' en la columna AC (fila " + d.fila + ").\nNo se crea otra. Si necesitas rehacerla, borra primero esa columna." };
       }
     }
+
+    // Fotos de la oportunidad (si aún no están en su carpeta: respaldo de lo que hace la llegada del formulario)
+    diagnosticos.forEach(d => guardarFotosSilla(d.oportunidad, d.numeroTemporal, d.fotos));
 
     const cliente = diagnosticos[0].cliente;
     const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
