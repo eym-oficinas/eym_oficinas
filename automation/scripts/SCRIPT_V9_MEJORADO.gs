@@ -733,6 +733,30 @@ function guardarFotosSilla(oportunidad, temporal, linksTexto) {
   return res;
 }
 
+// Botón de menú: organiza las fotos de una oportunidad (también las ya cotizadas): crea su carpeta y mueve/renombra las fotos
+function organizarFotosOportunidad() {
+  const ui = SpreadsheetApp.getUi();
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DIAGNOSTICOS_2026");
+  if (!hoja) { ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada"); return; }
+  const r = ui.prompt("📷 Organizar fotos de una oportunidad", "Nombre EXACTO de la oportunidad (columna B):", ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const nombre = r.getResponseText().trim();
+  const diagnosticos = obtenerDiagnosticosDeOportunidad(hoja, nombre);
+  if (diagnosticos.length === 0) { ui.alert("❌ " + mensajeOportunidadNoEncontrada(hoja, nombre)); return; }
+  let movidas = 0, sinFoto = 0, carpeta = "";
+  const errores = [];
+  diagnosticos.forEach(d => {
+    if (idsDeFotos(d.fotos).length === 0) { sinFoto++; return; }
+    const g = guardarFotosSilla(d.oportunidad, d.numeroTemporal, d.fotos);
+    movidas += g.movidas;
+    carpeta = g.carpeta || carpeta;
+    g.errores.forEach(e => errores.push(d.numeroTemporal + ": " + e));
+  });
+  ui.alert("📷 FOTOS DE '" + nombre + "'\n\n• Sillas: " + diagnosticos.length + "\n• Fotos movidas ahora: " + movidas +
+    (sinFoto ? "\n• Sillas sin enlace de foto: " + sinFoto : "") + (carpeta ? "\n• Carpeta: " + carpeta : "") +
+    (errores.length ? "\n\n⚠️ No se pudieron mover:\n" + errores.slice(0, 5).join("\n") : ""));
+}
+
 function validarYResaltarColumnaU(hoja, fila) {
   try {
     const celdaU = hoja.getRange(fila, 21);
@@ -2903,6 +2927,9 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
     }
     const filas = diagnosticos.map(d => d.fila);
 
+    // Fotos de la oportunidad (si aún no están en su carpeta: respaldo de lo que hace la llegada del formulario)
+    diagnosticos.forEach(d => guardarFotosSilla(d.oportunidad, d.numeroTemporal, d.fotos));
+
     // Evitar RMA duplicada
     for (const d of diagnosticos) {
       const ac = (hojaDiag.getRange(d.fila, 29).getValue() || "").toString().trim();
@@ -2910,9 +2937,6 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
         return { exito: false, error: "Esta oportunidad ya tiene la RMA '" + ac + "' en la columna AC (fila " + d.fila + ").\nNo se crea otra. Si necesitas rehacerla, borra primero esa columna." };
       }
     }
-
-    // Fotos de la oportunidad (si aún no están en su carpeta: respaldo de lo que hace la llegada del formulario)
-    diagnosticos.forEach(d => guardarFotosSilla(d.oportunidad, d.numeroTemporal, d.fotos));
 
     const cliente = diagnosticos[0].cliente;
     const silasDatos = agruparPorSilla(diagnosticos, hojaDiag);
@@ -3674,6 +3698,7 @@ function onOpen() {
     .addItem("🔎 Verificar activadores", "verificarActivadores")
     .addSeparator()
     .addItem("🖨️ Presupuesto silla x silla", "generarPresupuestoDescargable")
+    .addItem("📷 Organizar fotos de una oportunidad", "organizarFotosOportunidad")
     .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")
     .addItem("✅ Procesar RMA confirmadas", "procesarRMAsConfirmadas")
     .addItem("🏁 Procesar OP terminadas", "procesarOPsTerminadas")
