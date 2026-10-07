@@ -26,6 +26,8 @@ const CONFIG = {
   ADJUNTAR_CONSOLIDADO: true,
   ESTADO_OP_PRODUCCION: "En producción",
   AVISAR_SERVICIOS_SIN_CODIGO: false, // true: avisa en AD y en la RMA los servicios que no están en el catálogo (hoy van todos como [SVARIOS])
+  ETAPA_CRM_OP_REPARACIONES: "OP Reparaciones",   // etapa del CRM cuando la RMA se confirma y se genera la OP (coincide el comienzo del nombre)
+  ETAPA_CRM_FACTURACION: "Facturación",           // etapa del CRM cuando la OP termina y se crea la factura en borrador
   MODO_PRUEBAS: true, // true: "Procesar Manualmente" vuelve a traer las sillas cuyas filas borraste de DIAGNOSTICOS_2026 (poner false al terminar las pruebas)
   ESTADO_OP_TERMINADO: "Terminado",
   // Nombre con que llega del formulario -> ítem del catálogo (además de la columna D "ALIAS" del catálogo)
@@ -3026,7 +3028,7 @@ function estadosRMAenOdoo(nombres, creds) {
 
 // A) Aprobación e inicio de reparación
 function sincronizarAprobacionesOdoo(hoja, creds) {
-  const res = { aprobadas: 0, iniciadas: [], confirmadas: [], borradores: [], errores: [] };
+  const res = { aprobadas: 0, iniciadas: [], confirmadas: [], borradores: [], errores: [], etapas: [], avisosEtapa: [] };
   const porRMA = leerRMAsDeHoja(hoja);
   const rmas = estadosRMAenOdoo(Object.keys(porRMA), creds);
   if (rmas === null) {
@@ -3057,6 +3059,12 @@ function sincronizarAprobacionesOdoo(hoja, creds) {
     });
 
     if (porRMA[rma.name].every(x => x.terminada)) return;
+    // Confirmada y con OP generada: la oportunidad pasa a "OP Reparaciones"
+    if (["confirmed", "ready", "under_repair"].indexOf(rma.state) !== -1) {
+      const m = moverOportunidadDeRMAaEtapa(rma.id, CONFIG.ETAPA_CRM_OP_REPARACIONES, creds);
+      if (m.movida) res.etapas.push(rma.name + " → " + m.etapa);
+      else if (m.error) res.avisosEtapa.push(rma.name + ": " + m.error);
+    }
     if (rma.state === "confirmed" || rma.state === "ready") {
       const r = llamarOdooXMLRPC("repair.order", "action_repair_start", [[rma.id]], creds);
       if (r === null) {
@@ -3141,6 +3149,9 @@ function cerrarRMAsTerminadas(hoja, hojaOP, creds, ui) {
       return;
     }
     res.facturadas.push(rma.name);
+    const mf = moverOportunidadDeRMAaEtapa(rma.id, CONFIG.ETAPA_CRM_FACTURACION, creds);
+    if (mf.movida) (res.etapas = res.etapas || []).push(rma.name + " → " + mf.etapa);
+    else if (mf.error) (res.avisosEtapa = res.avisosEtapa || []).push(rma.name + ": " + mf.error);
 
     // Estado "Terminado" en el diagnóstico (col. AA) y # de factura con enlace en OP_2026 (col. C)
     filas.forEach(f => hoja.getRange(f, 27).setValue(CONFIG.ESTADO_OP_TERMINADO));
@@ -3188,6 +3199,39 @@ function textoNumeroFactura(nombre) {
 function enlaceFactura(id, creds) {
   return creds.urlWeb + "#id=" + id + "&model=account.move&view_type=form";
 }
+// ═══ Etapa de la oportunidad en el CRM de Odoo ═══
+function sinTildes(t) {
+  return (t || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+}
+// Mueve la oportunidad de la RMA a la etapa cuyo nombre EMPIEZA con `nombreEtapa` (sin importar mayúsculas ni tildes).
+// Devuelve { movida, etapa, error }. Nunca lanza ni bloquea el proceso.
+function moverOportunidadDeRMAaEtapa(rmaId, nombreEtapa, creds) {
+  const res = { movida: false, etapa: "", error: "" };
+  try {
+    const campos = odooCampos("repair.order", creds);
+    const campoLead = Object.keys(campos).find(k => campos[k].type === "many2one" && campos[k].relation === "crm.lead");
+    if (!campoLead) { res.error = "la RMA no tiene campo de oportunidad"; return res; }
+    const rma = llamarOdooXMLRPC("repair.order", "read", [[rmaId], [campoLead]], creds);
+    const lead = rma && rma[0] && rma[0][campoLead];
+    const leadId = Array.isArray(lead) ? lead[0] : lead;
+    if (!leadId) { res.error = "la RMA no tiene oportunidad"; return res; }
+    const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds) || [];
+    const buscada = sinTildes(nombreEtapa);
+    const etapa = etapas.find(e => sinTildes(e.name).indexOf(buscada) === 0);
+    if (!etapa) { res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM"; return res; }
+    res.etapa = etapa.name;
+    const actual = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
+    const stageActual = actual && actual[0] && actual[0].stage_id;
+    if (stageActual && stageActual[0] === etapa.id) return res; // ya está en esa etapa
+    const ok = llamarOdooXMLRPC("crm.lead", "write", [[leadId], { stage_id: etapa.id }], creds);
+    if (ok === null) { res.error = "Odoo no permitió mover la oportunidad: " + ODOO_ULTIMO_ERROR; return res; }
+    res.movida = true;
+  } catch (e) {
+    res.error = e.toString();
+  }
+  return res;
+}
+
 // Facturas que estaban en borrador en OP_2026 col. C: cuando ya fueron validadas en Odoo se pone su número
 // y, en la columna F, la "Ref. de la orden" de la factura (la OC del cliente), si F está vacía.
 function actualizarNumerosFacturaOP(hojaOP, creds) {
@@ -3236,6 +3280,8 @@ function procesarRMAsConfirmadas() {
     lineas.push("• Reparaciones iniciadas en Odoo: " + (a.iniciadas.join(", ") || "ninguna"));
     if (a.borradores.length) lineas.push("• RMAs en borrador sin aprobar (escribe 'Aprobado' en la hoja o confírmalas en Odoo): " + a.borradores.join(", "));
     if (rmaEnOP > 0) lineas.push("• RMA completada en OP_2026 (columna B): " + rmaEnOP);
+    if (a.etapas.length) lineas.push("• Oportunidad movida de etapa en el CRM: " + a.etapas.join("; "));
+    if (a.avisosEtapa.length) lineas.push("• ⚠️ No se pudo mover la etapa del CRM: " + a.avisosEtapa.join("; "));
     if (a.errores.length) { lineas.push(""); lineas.push("🚨 PROBLEMAS (también marcados en la columna AD):"); a.errores.forEach(e => lineas.push("• " + e)); }
     ui.alert(lineas.join("\n"));
   } catch (e) {
@@ -3259,6 +3305,8 @@ function procesarOPsTerminadas() {
     const lineas = ["🏁 OP TERMINADAS", ""];
     lineas.push("• Reparación finalizada y factura creada: " + (b.facturadas.join(", ") || "ninguna"));
     if (b.facturas && b.facturas.length) lineas.push("• Facturas (en OP_2026 col. C): " + b.facturas.join("; "));
+    if (b.etapas && b.etapas.length) lineas.push("• Oportunidad movida de etapa en el CRM: " + b.etapas.join("; "));
+    if (b.avisosEtapa && b.avisosEtapa.length) lineas.push("• ⚠️ No se pudo mover la etapa del CRM: " + b.avisosEtapa.join("; "));
     if (b.omitido) lineas.push("• Cierre cancelado por el usuario");
     if (b.pendientes.length) lineas.push("• RMAs con OP aún sin terminar: " + b.pendientes.join(", "));
     if (facturasActualizadas > 0) lineas.push("• Facturas validadas: número en la columna C y OC en la F (si la factura la tiene): " + facturasActualizadas);
