@@ -27,6 +27,8 @@ const CONFIG = {
   ESTADO_OP_PRODUCCION: "En producción",
   AVISAR_SERVICIOS_SIN_CODIGO: false, // true: avisa en AD y en la RMA los servicios que no están en el catálogo (hoy van todos como [SVARIOS])
   ETAPA_CRM_OP_REPARACIONES: "OP Reparaciones",   // etapa del CRM cuando la RMA se confirma y se genera la OP (coincide el comienzo del nombre)
+  ETAPA_CRM_COTIZACION: "Proceso de cotización",  // etapa del CRM cuando se elabora la RMA (comienzo del nombre)
+  TARIFA_IVA: 0.19,
   ETAPA_CRM_FACTURACION: "Facturación",           // etapa del CRM cuando la OP termina y se crea la factura en borrador
   MODO_PRUEBAS: true, // true: "Procesar Manualmente" vuelve a traer las sillas cuyas filas borraste de DIAGNOSTICOS_2026 (poner false al terminar las pruebas)
   ESTADO_OP_TERMINADO: "Terminado",
@@ -2763,6 +2765,11 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
       "&model=repair.order&view_type=form&cids=1&menu_id=" + CONFIG.ODOO_MENU_RMA;
     res.aplicaRete = imp.aplicaRete;
 
+    // Oportunidad: "Ingreso esperado" = valor de la RMA antes de IVA, segunda casilla = IVA, y etapa "Proceso de cotización"
+    const baseIngreso = (typeof sinImpuestos === "number" && sinImpuestos > 0) ? sinImpuestos : totalPDF;
+    const lead = actualizarOportunidadTrasRMA(op.id, baseIngreso, Math.round(baseIngreso * CONFIG.TARIFA_IVA), creds);
+    if (lead.avisos.length > 0) avisos.push(lead.avisos.join("; "));
+
     if (errores.length > 0) {
       avisos.push("Fallaron líneas: " + errores.join("; "));
     }
@@ -3203,6 +3210,42 @@ function enlaceFactura(id, creds) {
 function sinTildes(t) {
   return (t || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
+// Mueve la oportunidad (crm.lead) a la etapa cuyo nombre EMPIEZA con `nombreEtapa`. Devuelve { movida, etapa, error }.
+function moverLeadAEtapa(leadId, nombreEtapa, creds) {
+  const res = { movida: false, etapa: "", error: "" };
+  const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds) || [];
+  const buscada = sinTildes(nombreEtapa);
+  const etapa = etapas.find(e => sinTildes(e.name).indexOf(buscada) === 0);
+  if (!etapa) { res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM"; return res; }
+  res.etapa = etapa.name;
+  const actual = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
+  const stageActual = actual && actual[0] && actual[0].stage_id;
+  if (stageActual && stageActual[0] === etapa.id) return res; // ya está en esa etapa
+  const ok = llamarOdooXMLRPC("crm.lead", "write", [[leadId], { stage_id: etapa.id }], creds);
+  if (ok === null) { res.error = "Odoo no permitió mover la oportunidad: " + ODOO_ULTIMO_ERROR; return res; }
+  res.movida = true;
+  return res;
+}
+
+// Al elaborar la RMA: ingreso esperado (antes de IVA), IVA en la casilla "+" y etapa "Proceso de cotización". Nunca bloquea la RMA.
+function actualizarOportunidadTrasRMA(leadId, base, iva, creds) {
+  const out = { avisos: [] };
+  try {
+    const campos = odooCampos("crm.lead", creds);
+    const vals = { expected_revenue: base };
+    if (campos.recurring_revenue) vals.recurring_revenue = iva;
+    else out.avisos.push("El CRM no tiene la casilla del IVA (recurring_revenue): solo se escribió el ingreso esperado");
+    if (llamarOdooXMLRPC("crm.lead", "write", [[leadId], vals], creds) === null) {
+      out.avisos.push("No se pudo escribir el ingreso esperado en la oportunidad: " + ODOO_ULTIMO_ERROR);
+    }
+    const m = moverLeadAEtapa(leadId, CONFIG.ETAPA_CRM_COTIZACION, creds);
+    if (m.error) out.avisos.push("Etapa del CRM: " + m.error);
+  } catch (e) {
+    out.avisos.push("Oportunidad no actualizada: " + e);
+  }
+  return out;
+}
+
 // Mueve la oportunidad de la RMA a la etapa cuyo nombre EMPIEZA con `nombreEtapa` (sin importar mayúsculas ni tildes).
 // Devuelve { movida, etapa, error }. Nunca lanza ni bloquea el proceso.
 function moverOportunidadDeRMAaEtapa(rmaId, nombreEtapa, creds) {
