@@ -28,6 +28,9 @@ const CONFIG = {
   AVISAR_SERVICIOS_SIN_CODIGO: false, // true: avisa en AD y en la RMA los servicios que no están en el catálogo (hoy van todos como [SVARIOS])
   ETAPA_CRM_OP_REPARACIONES: "OP Reparaciones",   // etapa del CRM cuando la RMA se confirma y se genera la OP (coincide el comienzo del nombre)
   CARPETA_FOTOS_ID: "1G60d3HC8qKVnM-pgntmPi2TVT44OLEyJFd__vD9MCWfNOZfG2Y-e5hX7flhZSKWGuRKw5hU4", // "📷 Link Fotografía Inicial (File responses)": ahí se crea una carpeta por oportunidad
+  ODOO_ACCION_CRM: 478,
+  ODOO_MENU_CRM: 320,
+  FOTOS_COMO_CHIP: true, // intenta chip de Drive en la columna G (necesita el servicio avanzado "API de Hojas de cálculo"); si no, deja un enlace corto "📷 Foto"
   ETAPA_CRM_COTIZACION: "Proceso de cotización",  // etapa del CRM cuando se elabora la RMA (comienzo del nombre)
   TARIFA_IVA: 0.19,
   ETAPA_CRM_FACTURACION: "Facturación",           // etapa del CRM cuando la OP termina y se crea la factura en borrador
@@ -701,7 +704,7 @@ function idsDeFotos(texto) {
   return out;
 }
 function guardarFotosSilla(oportunidad, temporal, linksTexto) {
-  const res = { carpeta: "", movidas: 0, errores: [] };
+  const res = { carpeta: "", movidas: 0, errores: [], fotos: [] };
   try {
     const nombreOpp = nombreCarpetaSeguro(oportunidad);
     if (!nombreOpp) return res;
@@ -717,6 +720,7 @@ function guardarFotosSilla(oportunidad, temporal, linksTexto) {
         const archivo = DriveApp.getFileById(id);
         const m = archivo.getName().match(/\.[A-Za-z0-9]{2,5}$/);
         const nombre = (ids.length > 1 ? base + " " + (i + 1) : base) + (m ? m[0] : "");
+        res.fotos.push({ id: id, nombre: nombre, url: "https://drive.google.com/open?id=" + id });
         if (carpeta.getFilesByName(nombre).hasNext()) return; // ya está guardada
         archivo.moveTo(carpeta);
         archivo.setName(nombre);
@@ -731,6 +735,68 @@ function guardarFotosSilla(oportunidad, temporal, linksTexto) {
     Logger.log("⚠️ No se pudo preparar la carpeta de fotos de '" + oportunidad + "': " + e);
   }
   return res;
+}
+
+// ═══ Enlaces de la oportunidad ═══
+// Columna G (foto): chip de Drive si se puede; si no, un enlace corto "📷 Foto" (nunca deja la URL larga a la vista)
+function actualizarCeldaFotos(hoja, fila, fotos) {
+  if (!fotos || fotos.length === 0) return "";
+  if (CONFIG.FOTOS_COMO_CHIP && typeof Sheets !== "undefined") {
+    try {
+      const ssId = hoja.getParent().getId();
+      const texto = fotos.map(() => "@").join(" ");
+      const runs = fotos.map((f, i) => ({ startIndex: i * 2, chip: { richLinkProperties: { uri: f.url } } }));
+      Sheets.Spreadsheets.batchUpdate({ requests: [{ updateCells: {
+        rows: [{ values: [{ userEnteredValue: { stringValue: texto }, chipRuns: runs }] }],
+        fields: "userEnteredValue,chipRuns",
+        start: { sheetId: hoja.getSheetId(), rowIndex: fila - 1, columnIndex: 6 }
+      } }] }, ssId);
+      const check = Sheets.Spreadsheets.get(ssId, { ranges: ["'" + hoja.getName() + "'!G" + fila], fields: "sheets.data.rowData.values.chipRuns" });
+      const v = check.sheets && check.sheets[0].data[0].rowData && check.sheets[0].data[0].rowData[0].values[0];
+      if (v && v.chipRuns && v.chipRuns.length > 0) return "chip";
+      Logger.log("⚠️ El chip no quedó aplicado en G" + fila + ": se usa enlace corto");
+    } catch (e) {
+      Logger.log("⚠️ No se pudo crear el chip en G" + fila + " (" + e + "): se usa enlace corto");
+    }
+  }
+  try {
+    const etiquetas = fotos.map((f, i) => "📷 Foto" + (fotos.length > 1 ? " " + (i + 1) : ""));
+    const texto = etiquetas.join("  ");
+    let b = SpreadsheetApp.newRichTextValue().setText(texto);
+    let pos = 0;
+    etiquetas.forEach((e, i) => { b = b.setLinkUrl(pos, pos + e.length, fotos[i].url); pos += e.length + 2; });
+    hoja.getRange(fila, 7).setRichTextValue(b.build());
+    return "enlace";
+  } catch (e) {
+    Logger.log("⚠️ No se pudo actualizar la celda de fotos G" + fila + ": " + e);
+    return "";
+  }
+}
+
+// Nombre de la oportunidad (col. B) con enlace a la oportunidad en el CRM de Odoo (el texto no cambia)
+function ponerEnlaceOportunidadEnHoja(hoja, filas, leadId, creds) {
+  try {
+    const url = creds.urlWeb + "#id=" + leadId + "&action=" + CONFIG.ODOO_ACCION_CRM + "&model=crm.lead&view_type=form&cids=1&menu_id=" + CONFIG.ODOO_MENU_CRM;
+    filas.forEach(f => {
+      const c = hoja.getRange(f, 2);
+      const txt = (c.getValue() || "").toString();
+      if (txt) c.setRichTextValue(SpreadsheetApp.newRichTextValue().setText(txt).setLinkUrl(url).build());
+    });
+    return url;
+  } catch (e) {
+    Logger.log("⚠️ No se pudo enlazar la oportunidad en la hoja: " + e);
+    return "";
+  }
+}
+
+// Nota interna en la oportunidad de Odoo con el enlace "Fotografias" a la carpeta de fotos (no se repite si ya existe)
+function registrarEnlaceFotosEnOdoo(leadId, carpetaUrl, creds) {
+  if (!leadId || !carpetaUrl) return { ok: false, omitido: true };
+  const previo = llamarOdooXMLRPC("mail.message", "search", [[["model", "=", "crm.lead"], ["res_id", "=", leadId], ["body", "ilike", carpetaUrl]]], creds);
+  if (previo && previo.length > 0) return { ok: true, yaExistia: true };
+  const cuerpo = '<p><a href="' + carpetaUrl + '" target="_blank">Fotografias</a></p>';
+  const r = llamarOdooXMLRPC("crm.lead", "message_post", [[leadId]], creds, { body: cuerpo, message_type: "comment", subtype_xmlid: "mail.mt_note" });
+  return { ok: r !== null };
 }
 
 // Botón de menú: organiza las fotos de una oportunidad (también las ya cotizadas): crea su carpeta y mueve/renombra las fotos
@@ -748,6 +814,7 @@ function organizarFotosOportunidad() {
   diagnosticos.forEach(d => {
     if (idsDeFotos(d.fotos).length === 0) { sinFoto++; return; }
     const g = guardarFotosSilla(d.oportunidad, d.numeroTemporal, d.fotos);
+    if (g.fotos.length > 0) actualizarCeldaFotos(hoja, d.fila, g.fotos);
     movidas += g.movidas;
     carpeta = g.carpeta || carpeta;
     g.errores.forEach(e => errores.push(d.numeroTemporal + ": " + e));
@@ -2853,6 +2920,7 @@ function crearRMAenOdooDesdeBorrador(nombreOportunidad, borrador, totalPDF, cred
     res.link = creds.urlWeb + "#id=" + rmaId + "&action=" + CONFIG.ODOO_ACCION_RMA +
       "&model=repair.order&view_type=form&cids=1&menu_id=" + CONFIG.ODOO_MENU_RMA;
     res.aplicaRete = imp.aplicaRete;
+    res.leadId = op.id;
 
     // Oportunidad: "Ingreso esperado" = valor de la RMA antes de IVA, segunda casilla = IVA, y etapa "Proceso de cotización"
     const baseIngreso = (typeof sinImpuestos === "number" && sinImpuestos > 0) ? sinImpuestos : totalPDF;
@@ -2928,7 +2996,12 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
     const filas = diagnosticos.map(d => d.fila);
 
     // Fotos de la oportunidad (si aún no están en su carpeta: respaldo de lo que hace la llegada del formulario)
-    diagnosticos.forEach(d => guardarFotosSilla(d.oportunidad, d.numeroTemporal, d.fotos));
+    let carpetaFotos = "";
+    diagnosticos.forEach(d => {
+      const g = guardarFotosSilla(d.oportunidad, d.numeroTemporal, d.fotos);
+      if (g.carpeta) carpetaFotos = g.carpeta;
+      if (g.fotos.length > 0) actualizarCeldaFotos(hojaDiag, d.fila, g.fotos);
+    });
 
     // Evitar RMA duplicada
     for (const d of diagnosticos) {
@@ -2979,6 +3052,15 @@ function procesarOportunidadCompleta(hojaDiag, nombreOportunidad, mostrarAlerta 
 
     // RMA en columna AC (número de Odoo + enlace) en todas las sillas de la oportunidad
     escribirRMAEnFilas(hojaDiag, filas, rma.nombre, rma.link);
+
+    // Nombre de la oportunidad con enlace al CRM, y enlace "Fotografias" dentro de la oportunidad en Odoo (nota interna)
+    if (rma.leadId) {
+      ponerEnlaceOportunidadEnHoja(hojaDiag, filas, rma.leadId, creds);
+      if (carpetaFotos) {
+        const nota = registrarEnlaceFotosEnOdoo(rma.leadId, carpetaFotos, creds);
+        if (!nota.ok) alarmas.push("No se pudo dejar el enlace de Fotografías en la oportunidad de Odoo: " + ODOO_ULTIMO_ERROR);
+      }
+    }
 
     // Adjuntar los PDF a la RMA
     const adj = adjuntarPDFaRMAOdoo(rma.id, urlPDF, creds);
