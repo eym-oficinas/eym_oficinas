@@ -607,3 +607,5 @@ en las OP de esas sillas (oportunidad + EyM). Estados de AA: Cotización, Aproba
 - En la oportunidad de Odoo se deja una NOTA INTERNA (chatter, `message_post` con `mail.mt_note`) con el enlace "Fotografias" a la carpeta de fotos (`registrarEnlaceFotosEnOdoo`); no se repite si ya existe.
 
 **V15 (2026-10-09)**: (1) al "Finalizar oportunidad", T (repuestos) y V (tapicería) se recalculan SIEMPRE con el catálogo vigente antes del PDF/RMA (`obtenerDiagnosticosDeOportunidad`); U y W no se tocan. (2) Verificación de precios catálogo vs Odoo (list_price por código, col. C): menú "⚖️ Verificar precios catálogo vs Odoo" (todo el catálogo) y aviso con confirmación SÍ/NO antes de Finalizar para los repuestos de la oportunidad. Menú "EYM v15.0".
+
+**Etapa del CRM más robusta (2026-10-09)**: `buscarEtapaCRM` busca la etapa que EMPIEZA con el texto y, si no hay, la que lo CONTIENE; con varias, prefiere la del equipo de ventas de la oportunidad. `moverLeadAEtapa` vuelve a leer la oportunidad tras escribir y avisa en AD si Odoo no la movió realmente.

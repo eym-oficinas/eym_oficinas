@@ -3465,19 +3465,42 @@ function enlaceFactura(id, creds) {
 function sinTildes(t) {
   return (t || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
+// Busca la etapa del CRM por nombre: primero las que EMPIEZAN con el texto, si no hay, las que lo CONTIENEN (sin mayúsculas ni tildes).
+// Si hay varias, prefiere la del equipo de ventas de la oportunidad (o la que no tiene equipo) y la de menor secuencia.
+function buscarEtapaCRM(nombreEtapa, teamId, creds) {
+  let etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name", "team_id", "sequence"]], creds);
+  if (!etapas) etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds) || [];
+  const buscada = sinTildes(nombreEtapa);
+  let c = etapas.filter(e => sinTildes(e.name).indexOf(buscada) === 0);
+  if (c.length === 0) c = etapas.filter(e => sinTildes(e.name).indexOf(buscada) !== -1);
+  if (c.length === 0) return null;
+  const tid = e => (Array.isArray(e.team_id) ? e.team_id[0] : e.team_id) || 0;
+  c.sort((x, y) => {
+    const px = (teamId && tid(x) === teamId) ? 0 : (!tid(x) ? 1 : 2);
+    const py = (teamId && tid(y) === teamId) ? 0 : (!tid(y) ? 1 : 2);
+    return px !== py ? px - py : (x.sequence || 0) - (y.sequence || 0);
+  });
+  return c[0];
+}
+
 // Mueve la oportunidad (crm.lead) a la etapa cuyo nombre EMPIEZA con `nombreEtapa`. Devuelve { movida, etapa, error }.
+// Después de escribir vuelve a leer la oportunidad para confirmar que la etapa quedó cambiada.
 function moverLeadAEtapa(leadId, nombreEtapa, creds) {
   const res = { movida: false, etapa: "", error: "" };
-  const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds) || [];
-  const buscada = sinTildes(nombreEtapa);
-  const etapa = etapas.find(e => sinTildes(e.name).indexOf(buscada) === 0);
+  const actual = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id", "team_id"]], creds) ||
+    llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
+  const l = actual && actual[0];
+  const teamId = l && l.team_id ? (Array.isArray(l.team_id) ? l.team_id[0] : l.team_id) : 0;
+  const etapa = buscarEtapaCRM(nombreEtapa, teamId, creds);
   if (!etapa) { res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM"; return res; }
   res.etapa = etapa.name;
-  const actual = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
-  const stageActual = actual && actual[0] && actual[0].stage_id;
+  const stageActual = l && l.stage_id;
   if (stageActual && stageActual[0] === etapa.id) return res; // ya está en esa etapa
   const ok = llamarOdooXMLRPC("crm.lead", "write", [[leadId], { stage_id: etapa.id }], creds);
-  if (ok === null) { res.error = "Odoo no permitió mover la oportunidad: " + ODOO_ULTIMO_ERROR; return res; }
+  if (ok === null) { res.error = "Odoo no permitió mover la oportunidad a '" + etapa.name + "': " + ODOO_ULTIMO_ERROR; return res; }
+  const despues = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
+  const st = despues && despues[0] && despues[0].stage_id;
+  if (st && st[0] !== etapa.id) { res.error = "Odoo aceptó el cambio pero la oportunidad sigue en '" + st[1] + "' (no pasó a '" + etapa.name + "')"; return res; }
   res.movida = true;
   return res;
 }
@@ -3513,17 +3536,7 @@ function moverOportunidadDeRMAaEtapa(rmaId, nombreEtapa, creds) {
     const lead = rma && rma[0] && rma[0][campoLead];
     const leadId = Array.isArray(lead) ? lead[0] : lead;
     if (!leadId) { res.error = "la RMA no tiene oportunidad"; return res; }
-    const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds) || [];
-    const buscada = sinTildes(nombreEtapa);
-    const etapa = etapas.find(e => sinTildes(e.name).indexOf(buscada) === 0);
-    if (!etapa) { res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM"; return res; }
-    res.etapa = etapa.name;
-    const actual = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
-    const stageActual = actual && actual[0] && actual[0].stage_id;
-    if (stageActual && stageActual[0] === etapa.id) return res; // ya está en esa etapa
-    const ok = llamarOdooXMLRPC("crm.lead", "write", [[leadId], { stage_id: etapa.id }], creds);
-    if (ok === null) { res.error = "Odoo no permitió mover la oportunidad: " + ODOO_ULTIMO_ERROR; return res; }
-    res.movida = true;
+    return moverLeadAEtapa(leadId, nombreEtapa, creds);
   } catch (e) {
     res.error = e.toString();
   }
