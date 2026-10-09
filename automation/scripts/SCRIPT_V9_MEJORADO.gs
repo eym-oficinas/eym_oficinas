@@ -32,7 +32,7 @@ const CONFIG = {
   ODOO_ACCION_CRM: 478,
   ODOO_MENU_CRM: 320,
   FOTOS_COMO_CHIP: true, // intenta chip de Drive en la columna G (necesita el servicio avanzado "API de Hojas de cálculo"); si no, deja un enlace corto "📷 Foto"
-  ETAPA_CRM_COTIZACION: "Proceso de cotización",  // etapa del CRM cuando se elabora la RMA (comienzo del nombre)
+  ETAPA_CRM_COTIZACION: "Proceso de cotización (Ccial)",  // etapa del CRM cuando se elabora la RMA (nombre completo en Odoo; si no coincide exacto se busca por comienzo/contenido)
   TARIFA_IVA: 0.19,
   ETAPA_CRM_FACTURACION: "Facturación",           // etapa del CRM cuando la OP termina y se crea la factura en borrador
   MODO_PRUEBAS: true, // true: "Procesar Manualmente" vuelve a traer las sillas cuyas filas borraste de DIAGNOSTICOS_2026 (poner false al terminar las pruebas)
@@ -3465,13 +3465,32 @@ function enlaceFactura(id, creds) {
 function sinTildes(t) {
   return (t || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 }
+// V15: busca la etapa tolerando mayúsculas, tildes, signos, espacios y números/emoji al comienzo.
+// Orden: nombre completo exacto -> empieza con -> contiene. Ej.: "Proceso de cotización (Ccial)" o solo "Proceso de cotización".
+function claveEtapa(t) {
+  return sinTildes(t).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function buscarEtapaPorNombre(etapas, nombreEtapa) {
+  const k = claveEtapa(nombreEtapa);
+  if (!k) return null;
+  const conClave = etapas.map(e => ({ e: e, c: claveEtapa(e.name) }));
+  const exacta = conClave.find(x => x.c === k);
+  if (exacta) return exacta.e;
+  const empieza = conClave.find(x => x.c.indexOf(k) === 0);
+  if (empieza) return empieza.e;
+  const contiene = conClave.find(x => x.c.indexOf(k) !== -1);
+  return contiene ? contiene.e : null;
+}
 // Mueve la oportunidad (crm.lead) a la etapa cuyo nombre EMPIEZA con `nombreEtapa`. Devuelve { movida, etapa, error }.
 function moverLeadAEtapa(leadId, nombreEtapa, creds) {
   const res = { movida: false, etapa: "", error: "" };
-  const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds) || [];
-  const buscada = sinTildes(nombreEtapa);
-  const etapa = etapas.find(e => sinTildes(e.name).indexOf(buscada) === 0);
-  if (!etapa) { res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM"; return res; }
+  const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds, { context: { active_test: false } });
+  if (!etapas) { res.error = "no se pudieron leer las etapas del CRM: " + ODOO_ULTIMO_ERROR; return res; }
+  const etapa = buscarEtapaPorNombre(etapas, nombreEtapa);
+  if (!etapa) {
+    res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM. Etapas disponibles: " + etapas.map(e => e.name).join(" | ");
+    return res;
+  }
   res.etapa = etapa.name;
   const actual = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
   const stageActual = actual && actual[0] && actual[0].stage_id;
