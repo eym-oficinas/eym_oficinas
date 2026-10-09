@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// SISTEMA AUTOMÁTICO EYM OFICINAS v13.0 - INTEGRACIÓN COMPLETA ODOO RMA
+// SISTEMA AUTOMÁTICO EYM OFICINAS v15.0 - INTEGRACIÓN COMPLETA ODOO RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // Versión estable: Diagnósticos + RMA en Odoo + Piezas + Operaciones + PDF (GOOGLE SHEETS) + Impuestos
 // Estados columna AA: COTIZACIÓN (manual) → APROBADO (automático) → RECHAZADO
+// ✅ V15.0: T/V siempre recalculados con el catálogo vigente + verificación de precios catálogo vs Odoo (antes de Finalizar y por menú)
 // ✅ V13.0: 2 PDF (silla x silla + consolidado) con logo, RMA en Odoo, aprobación + iniciar reparación, cierre + factura
 
 const ID_RESPUESTAS_NUEVA = "151jFiyUYDKxHYgswm5-BIED8py5j1_txVxYU5qyPlW4";
@@ -374,6 +375,59 @@ function recalcularRepuestosOportunidad() {
   });
   recalcularTotalXFilas(hoja, Math.min.apply(null, diagnosticos.map(d => d.fila)), Math.max.apply(null, diagnosticos.map(d => d.fila)));
   ui.alert("✅ Listo: " + cambios.length + " fila(s) actualizadas.");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// V15: VERIFICACIÓN DE PRECIOS CATÁLOGO ↔ ODOO
+// El PDF y la hoja usan el precio del catálogo; la RMA usa el list_price de Odoo (por código, columna C).
+// Si difieren, el total del PDF no coincide con la RMA. Aquí se detecta antes de crearla.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+function compararPreciosCatalogoConOdoo(entradas, creds) {
+  const porCodigo = {};
+  entradas.forEach(e => { if (e.codigo) porCodigo[e.codigo] = e; });
+  const codigos = Object.keys(porCodigo);
+  if (codigos.length === 0) return { difs: [], sinProducto: [] };
+  const prods = llamarOdooXMLRPC("product.product", "search_read",
+    [[["default_code", "in", codigos]], ["default_code", "list_price", "name"]], creds) || [];
+  const enOdoo = {};
+  prods.forEach(p => { enOdoo[p.default_code] = p; });
+  const difs = [], sinProducto = [];
+  codigos.forEach(c => {
+    const e = porCodigo[c], p = enOdoo[c];
+    if (!p) { sinProducto.push(e.nombre + " [" + c + "]"); return; }
+    if (Math.round(p.list_price) !== Math.round(e.precio)) {
+      difs.push({ nombre: e.nombre, codigo: c, catalogo: e.precio, odoo: p.list_price });
+    }
+  });
+  return { difs: difs, sinProducto: sinProducto };
+}
+
+function textoDifsPrecios(r) {
+  const l = r.difs.map(d => "• " + d.nombre + " [" + d.codigo + "]: catálogo $" + formatearNumero(d.catalogo) +
+    " vs Odoo $" + formatearNumero(d.odoo));
+  r.sinProducto.forEach(x => l.push("• Sin producto en Odoo: " + x));
+  return l.join("\n");
+}
+
+// Menú: compara TODO el catálogo contra Odoo
+function verificarPreciosCatalogoVsOdoo() {
+  const ui = SpreadsheetApp.getUi();
+  const creds = obtenerCredencialesOdoo();
+  if (!creds) { ui.alert("⚠️ Configura primero las credenciales de Odoo (menú)."); return; }
+  const r = compararPreciosCatalogoConOdoo(cargarEntradasCatalogo(), creds);
+  if (r.difs.length === 0 && r.sinProducto.length === 0) { ui.alert("✅ Todos los precios del catálogo coinciden con Odoo."); return; }
+  ui.alert("⚖️ Diferencias catálogo vs Odoo (" + (r.difs.length + r.sinProducto.length) + ")", textoDifsPrecios(r).substring(0, 1800) +
+    "\n\nCorrige el precio en el catálogo o en Odoo para que coincidan.", ui.ButtonSet.OK);
+}
+
+// Solo los ítems de repuestos usados por una oportunidad
+function preciosDesalineadosOportunidad(diagnosticos, creds) {
+  const usados = {};
+  diagnosticos.forEach(d => dividirItems(d.repuestos).forEach(it => {
+    const r = resolverItemCatalogo(it);
+    if (r.entry && r.entry.codigo) usados[r.entry.codigo] = r.entry;
+  }));
+  return compararPreciosCatalogoConOdoo(Object.keys(usados).map(k => usados[k]), creds);
 }
 
 function obtenerPrecioDelCatalogo(nombreProducto) {
@@ -935,7 +989,7 @@ function obtenerCredencialesOdoo() {
 
   // Si faltan credenciales, avisar
   if (!creds.username || !creds.password) {
-    Logger.log("⚠️ Credenciales no configuradas. Usa: Menú → EYM v6.0 → ⚙️ Configurar Credenciales");
+    Logger.log("⚠️ Credenciales no configuradas. Usa: Menú → EYM v15.0 → ⚙️ Configurar Credenciales");
     return null;
   }
 
@@ -1652,6 +1706,20 @@ function finalizarOportunidad() {
     }
 
     Logger.log("Finalizando: " + nombreOportunidad);
+
+    // V15: avisa si algún repuesto de la oportunidad tiene en Odoo un precio distinto al del catálogo (la RMA no cuadraría con el PDF)
+    try {
+      const credsPrecios = obtenerCredencialesOdoo();
+      if (credsPrecios) {
+        const dxs = obtenerDiagnosticosDeOportunidad(hojaDiag, nombreOportunidad);
+        const rp = preciosDesalineadosOportunidad(dxs, credsPrecios);
+        if (rp.difs.length > 0 || rp.sinProducto.length > 0) {
+          const seguir = ui.alert("⚖️ PRECIOS DISTINTOS ENTRE CATÁLOGO Y ODOO",
+            textoDifsPrecios(rp).substring(0, 1500) + "\n\nLa RMA usará el precio de Odoo y no coincidirá con el PDF.\n¿Continuar de todos modos?", ui.ButtonSet.YES_NO);
+          if (seguir !== ui.Button.YES) return;
+        }
+      }
+    } catch (ePrecios) { Logger.log("⚠️ No se pudo verificar precios vs Odoo: " + ePrecios); }
 
     const resultadoFinal = procesarOportunidadCompleta(hojaDiag, nombreOportunidad, true);
 
@@ -3786,7 +3854,7 @@ function probarTodosLosMetodos() {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("EYM v13.0")
+  SpreadsheetApp.getUi().createMenu("EYM v15.0")
     .addItem("📥 Procesar Manualmente", "procesarRespuestaFormulario")
     .addItem("♻️ Volver a pasar una oportunidad", "volverAPasarOportunidad")
     .addItem("🔧 Instalar Trigger", "instalarTriggerAutomatico")
@@ -3801,6 +3869,7 @@ function onOpen() {
     .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
     .addItem("🧾 Recalcular repuestos y tapicería (T y V)", "recalcularRepuestosOportunidad")
     .addItem("🧮 Recalcular totales (columna X)", "recalcularTotalesX")
+    .addItem("⚖️ Verificar precios catálogo vs Odoo", "verificarPreciosCatalogoVsOdoo")
     .addItem("🔁 Recalcular Todo", "recalcularTodo")
     .addItem("📋 Configurar Listas Desplegables", "configurarValidacionAprobacion")
     .addSeparator()

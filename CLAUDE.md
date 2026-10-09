@@ -501,7 +501,7 @@ Odoo: account.invoice (Factura)
   antes se había mencionado `eymclaude@eym-oficinas.com`: si falla la autenticación, probar el otro).
 - Apps Script conecta a Odoo sin problema. El entorno cloud de Claude Code NO llega a Odoo salvo que se agregue
   `eym-oficinas.ovh` en *Network access → Custom → Allowed domains*.
-- Script vigente: `automation/scripts/SCRIPT_V9_MEJORADO.gs` (v13). Menú "EYM v13.0" → "🔬 DIAGNÓSTICO: Esquema RMA en Odoo".
+- Script vigente: `automation/scripts/SCRIPT_V9_MEJORADO.gs` (v13). Menú "EYM v15.0" → "🔬 DIAGNÓSTICO: Esquema RMA en Odoo".
 
 **Archivos y rutas**
 - Worksheet "Diagnosticos y OP 2026": `1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y` (hojas DIAGNOSTICOS_2026, OP_2026 y el catálogo).
