@@ -501,7 +501,7 @@ Odoo: account.invoice (Factura)
   antes se había mencionado `eymclaude@eym-oficinas.com`: si falla la autenticación, probar el otro).
 - Apps Script conecta a Odoo sin problema. El entorno cloud de Claude Code NO llega a Odoo salvo que se agregue
   `eym-oficinas.ovh` en *Network access → Custom → Allowed domains*.
-- Script vigente: `automation/scripts/SCRIPT_V9_MEJORADO.gs` (v13). Menú "EYM v15.0" → "🔬 DIAGNÓSTICO: Esquema RMA en Odoo".
+- Script vigente: `automation/scripts/SCRIPT_V9_MEJORADO.gs` (v15). Menú "EYM v15.0" → "🔬 DIAGNÓSTICO: Esquema RMA en Odoo".
 
 **Archivos y rutas**
 - Worksheet "Diagnosticos y OP 2026": `1yaRRfrnzseiqXqoiHrFM6KZ9lc124e3cM4Xcqw8-p9Y` (hojas DIAGNOSTICOS_2026, OP_2026 y el catálogo).
@@ -605,3 +605,5 @@ en las OP de esas sillas (oportunidad + EyM). Estados de AA: Cotización, Aproba
 - Columna G (FOTO) de DIAGNOSTICOS_2026: en vez de la URL larga queda un chip de Drive si está habilitado el servicio avanzado "Google Sheets API" (`CONFIG.FOTOS_COMO_CHIP`, verifica que el chip quedó); si no, un enlace corto "📷 Foto" / "📷 Foto 1  📷 Foto 2" (`actualizarCeldaFotos`).
 - Columna B (oportunidad): el nombre queda con enlace a la oportunidad del CRM (`.../web#id=<lead>&action=478&model=crm.lead&view_type=form&cids=1&menu_id=320`, `ponerEnlaceOportunidadEnHoja`) sin cambiar el texto (el lead sale de la RMA, `rma.leadId`).
 - En la oportunidad de Odoo se deja una NOTA INTERNA (chatter, `message_post` con `mail.mt_note`) con el enlace "Fotografias" a la carpeta de fotos (`registrarEnlaceFotosEnOdoo`); no se repite si ya existe.
+
+**V15 (2026-10-09)**: (1) al "Finalizar oportunidad", T (repuestos) y V (tapicería) se recalculan SIEMPRE con el catálogo vigente antes del PDF/RMA (`obtenerDiagnosticosDeOportunidad`); U y W no se tocan. (2) Verificación de precios catálogo vs Odoo (list_price por código, col. C): menú "⚖️ Verificar precios catálogo vs Odoo" (todo el catálogo) y aviso con confirmación SÍ/NO antes de Finalizar para los repuestos de la oportunidad. Menú "EYM v15.0".
