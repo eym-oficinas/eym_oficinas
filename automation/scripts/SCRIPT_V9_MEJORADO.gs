@@ -3481,14 +3481,35 @@ function buscarEtapaPorNombre(etapas, nombreEtapa) {
   const contiene = conClave.find(x => x.c.indexOf(k) !== -1);
   return contiene ? contiene.e : null;
 }
+// Odoo guarda los nombres de las etapas traducidos por idioma: por la API (sin idioma) las etapas de fábrica salen en inglés
+// ("Qualified" en vez de "Proceso de cotización (Ccial)"). Se lee con el idioma del usuario y, si no aparece, con cada idioma activo.
+function buscarEtapaCRMTraducida(nombreEtapa, creds) {
+  const leer = lang => llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds,
+    { context: lang ? { lang: lang, active_test: false } : { active_test: false } });
+  let langs = [];
+  const u = llamarOdooXMLRPC("res.users", "read", [[odooUid(creds)], ["lang"]], creds);
+  if (u && u[0] && u[0].lang) langs.push(u[0].lang);
+  const activos = llamarOdooXMLRPC("res.lang", "search_read", [[["active", "=", true]], ["code"]], creds) || [];
+  activos.forEach(l => { if (langs.indexOf(l.code) === -1) langs.push(l.code); });
+  if (langs.length === 0) langs = [""];
+  let ultimas = null;
+  for (let i = 0; i < langs.length; i++) {
+    const et = leer(langs[i]);
+    if (!et) continue;
+    if (!ultimas) ultimas = et;
+    const e = buscarEtapaPorNombre(et, nombreEtapa);
+    if (e) return { etapa: e, etapas: et };
+  }
+  return { etapa: null, etapas: ultimas };
+}
 // Mueve la oportunidad (crm.lead) a la etapa cuyo nombre EMPIEZA con `nombreEtapa`. Devuelve { movida, etapa, error }.
 function moverLeadAEtapa(leadId, nombreEtapa, creds) {
   const res = { movida: false, etapa: "", error: "" };
-  const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds, { context: { active_test: false } });
-  if (!etapas) { res.error = "no se pudieron leer las etapas del CRM: " + ODOO_ULTIMO_ERROR; return res; }
-  const etapa = buscarEtapaPorNombre(etapas, nombreEtapa);
+  const bus = buscarEtapaCRMTraducida(nombreEtapa, creds);
+  if (!bus.etapas) { res.error = "no se pudieron leer las etapas del CRM: " + ODOO_ULTIMO_ERROR; return res; }
+  const etapa = bus.etapa;
   if (!etapa) {
-    res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM. Etapas disponibles: " + etapas.map(e => e.name).join(" | ");
+    res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM. Etapas disponibles: " + bus.etapas.map(e => e.name).join(" | ");
     return res;
   }
   res.etapa = etapa.name;
@@ -3535,17 +3556,7 @@ function moverOportunidadDeRMAaEtapa(rmaId, nombreEtapa, creds) {
     const lead = rma && rma[0] && rma[0][campoLead];
     const leadId = Array.isArray(lead) ? lead[0] : lead;
     if (!leadId) { res.error = "la RMA no tiene oportunidad"; return res; }
-    const etapas = llamarOdooXMLRPC("crm.stage", "search_read", [[], ["name"]], creds) || [];
-    const buscada = sinTildes(nombreEtapa);
-    const etapa = etapas.find(e => sinTildes(e.name).indexOf(buscada) === 0);
-    if (!etapa) { res.error = "no existe la etapa '" + nombreEtapa + "' en el CRM"; return res; }
-    res.etapa = etapa.name;
-    const actual = llamarOdooXMLRPC("crm.lead", "read", [[leadId], ["stage_id"]], creds);
-    const stageActual = actual && actual[0] && actual[0].stage_id;
-    if (stageActual && stageActual[0] === etapa.id) return res; // ya está en esa etapa
-    const ok = llamarOdooXMLRPC("crm.lead", "write", [[leadId], { stage_id: etapa.id }], creds);
-    if (ok === null) { res.error = "Odoo no permitió mover la oportunidad: " + ODOO_ULTIMO_ERROR; return res; }
-    res.movida = true;
+    return moverLeadAEtapa(leadId, nombreEtapa, creds);
   } catch (e) {
     res.error = e.toString();
   }
