@@ -611,3 +611,5 @@ en las OP de esas sillas (oportunidad + EyM). Estados de AA: Cotización, Aproba
 **Etapa del CRM más robusta (2026-10-09)**: `buscarEtapaPorNombre` busca exacta, luego que EMPIECE, luego que CONTENGA (config: "Proceso de cotización (Ccial)"); lee también etapas plegadas/archivadas y, si no la halla, lista las etapas disponibles en el aviso. `moverLeadAEtapa` vuelve a leer la oportunidad tras escribir y avisa en AD si Odoo no la movió realmente.
 
 **Etapas del CRM traducidas (2026-10-09)**: por la API sin idioma Odoo devuelve el nombre de fábrica en inglés ("Qualified" = "Proceso de cotización (Ccial)" en pantalla; también New, Proposition, Won). `buscarEtapaCRMTraducida` lee `crm.stage` con el idioma del usuario (`res.users.lang`) y, si no aparece, con cada idioma activo. `moverOportunidadDeRMAaEtapa` ahora delega en `moverLeadAEtapa`.
+
+**Coincidencia de la oportunidad hoja ↔ Odoo (2026-10-09)**: `buscarOportunidadEnOdoo` sigue siendo EXACTA pero ignora mayúsculas, tildes y espacios (dobles, al borde, no separables): `claveNombreOportunidad`. Caso real: en Odoo "CRYSTAL R  MARINILLA 06-10-2026" (dos espacios) vs hoja con uno.
