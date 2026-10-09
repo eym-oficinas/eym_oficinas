@@ -1968,18 +1968,31 @@ function obtenerDiagnosticosDeOportunidad(hoja, nombreOportunidad) {
       }
     }
 
-    // Las piezas con valor y código en la nota de T se suman a T (así el PDF, la RMA y la hoja coinciden)
+    // V13.3: T (repuestos) y V (tapicería) se RECALCULAN SIEMPRE con el catálogo vigente antes de generar PDF/RMA.
+    // Antes solo se recalculaban si la fila tenía piezas manuales en la nota de T: T quedaba congelado con el precio
+    // del día en que llegó el formulario y, si el catálogo/Odoo cambiaba después (ej. Base Nylon 56.000 -> 54.000),
+    // el PDF y la hoja quedaban por encima de la RMA (que toma el precio vigente de Odoo). Incluye piezas de la nota de T.
+    // U (otros servicios) y W (M.O.) son de digitación manual y no se tocan.
+    const ajustes = [];
     diagnosticos.forEach(d => {
-      if (!Object.keys(d.manuales).some(k => d.manuales[k].valor > 0)) return;
       const n = calcularTyV(hoja, d.fila);
-      if (n.totalT !== d.valorPartes) {
-        hoja.getRange(d.fila, 20).setValue(n.totalT);
-        d.valorTotal += n.totalT - d.valorPartes;
-        d.valorPartes = n.totalT;
-        marcarCeldaRepuestos(hoja, d.fila, n.sinPrecioRepuestos, n.manuales);
-        Logger.log("🟨 Fila " + d.fila + ": T actualizado a $" + formatearNumero(n.totalT) + " con las piezas de la nota");
-      }
+      const cambioT = n.totalT !== d.valorPartes, cambioV = n.totalV !== d.valorTapiceria;
+      if (!cambioT && !cambioV) return;
+      if (cambioT) hoja.getRange(d.fila, 20).setValue(n.totalT);
+      if (cambioV) hoja.getRange(d.fila, 22).setValue(n.totalV);
+      d.valorTotal += (n.totalT - d.valorPartes) + (n.totalV - d.valorTapiceria);
+      ajustes.push("Fila " + d.fila + ": T $" + formatearNumero(d.valorPartes) + " → $" + formatearNumero(n.totalT) +
+        ", V $" + formatearNumero(d.valorTapiceria) + " → $" + formatearNumero(n.totalV));
+      d.valorPartes = n.totalT;
+      d.valorTapiceria = n.totalV;
+      marcarCeldaRepuestos(hoja, d.fila, n.sinPrecioRepuestos, n.manuales);
+      marcarSinPrecio(hoja, d.fila, n.sinPrecio, n.serviciosSinCodigo);
     });
+    if (ajustes.length > 0) {
+      SpreadsheetApp.flush();
+      Logger.log("🔄 Precios actualizados con el catálogo vigente (" + ajustes.length + " fila(s)):\n" + ajustes.join("\n"));
+      try { SpreadsheetApp.getActive().toast(ajustes.length + " silla(s) con T/V actualizados al catálogo vigente", "EYM", 8); } catch (e) {}
+    }
 
     return diagnosticos;
 
