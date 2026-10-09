@@ -2733,17 +2733,29 @@ function odooCampos(modelo, creds) {
 }
 
 // Coincidencia EXACTA (sin importar mayúsculas), nunca parcial
+// V15: la coincidencia sigue siendo EXACTA pero ignora diferencias de espacios (dobles, al borde, no separables),
+// mayúsculas y tildes. Caso real: en Odoo "CRYSTAL R  MARINILLA 06-10-2026" (dos espacios; la pantalla los muestra como uno)
+// y en la hoja "CRYSTAL R MARINILLA 06-10-2026": la búsqueda literal no la encontraba.
+function claveNombreOportunidad(t) {
+  return sinTildes((t || "").toString().replace(/[\u00a0\u2007\u202f\u200b]/g, " ")).replace(/\s+/g, " ").trim();
+}
 function buscarOportunidadOdoo(nombreOportunidad, creds) {
-  const patron = nombreOportunidad.toString().trim().replace(/([%_\\])/g, "\\$1");
   Logger.log("🔍 Buscando oportunidad EXACTA en CRM: '" + nombreOportunidad + "'");
-  const ids = llamarOdooXMLRPC("crm.lead", "search", [[["type", "=", "opportunity"], ["name", "=ilike", patron]]], creds);
-  if (ids === null) return { id: null, count: 0, error: ODOO_ULTIMO_ERROR };
-  return { id: ids.length > 0 ? ids[0] : null, count: ids.length };
+  const clave = claveNombreOportunidad(nombreOportunidad);
+  const palabras = clave.split(" ").filter(x => x).map(x => x.replace(/([%_\\])/g, "\\$1"));
+  if (palabras.length === 0) return { id: null, count: 0 };
+  // Candidatas: todas las palabras en el mismo orden, con cualquier separación (%); luego se compara el nombre normalizado
+  const candidatas = llamarOdooXMLRPC("crm.lead", "search_read",
+    [[["type", "=", "opportunity"], ["name", "ilike", palabras.join("%")]], ["name"]], creds, { limit: 50 });
+  if (candidatas === null) return { id: null, count: 0, error: ODOO_ULTIMO_ERROR };
+  const exactas = candidatas.filter(x => claveNombreOportunidad(x.name) === clave);
+  if (exactas.length > 0) Logger.log("✅ Coincidencia: '" + exactas[0].name + "' (id " + exactas[0].id + ")");
+  return { id: exactas.length > 0 ? exactas[0].id : null, count: exactas.length };
 }
 
 function sugerirOportunidadesOdoo(nombreOportunidad, creds) {
   const r = llamarOdooXMLRPC("crm.lead", "search_read",
-    [[["type", "=", "opportunity"], ["name", "ilike", nombreOportunidad.toString().trim()]], ["name"]], creds, { limit: 8 });
+    [[["type", "=", "opportunity"], ["name", "ilike", claveNombreOportunidad(nombreOportunidad).split(" ").slice(0, 2).join("%")]], ["name"]], creds, { limit: 8 });
   return (r || []).map(x => x.name);
 }
 
