@@ -38,7 +38,7 @@ const CONFIG = {
   MODO_PRUEBAS: true, // true: "Procesar Manualmente" vuelve a traer las sillas cuyas filas borraste de DIAGNOSTICOS_2026 (poner false al terminar las pruebas)
   ESTADO_OP_TERMINADO: "Terminado",
   // Nombre con que llega del formulario -> ítem del catálogo (además de la columna D "ALIAS" del catálogo)
-  ALIAS_CATALOGO: { "Platina Curva": "Platina en L", "Telescopio": "Funda Telescópica" },
+  ALIAS_CATALOGO: { "Platina Curva": "Platina en L", "Telescopio": "Funda Telescópica", "Abollonado y Tapizado general": "SERVICIO ABOLL Y TAP GRAL" },
   // Si vienen en Repuestos (col. N) se tratan como Otros servicios: sin precio de catálogo, U en amarillo
   ITEMS_COMO_OTROS_SERVICIOS: ["Tornillería", "Cabecero"]
 };
@@ -221,12 +221,22 @@ function resolverItemCatalogo(texto) {
   return { entry: null, motivo: "ambiguo", opciones: cand.map(e => e.nombre) };
 }
 
-// Tapicería (col. Q asiento + col. R espaldar). Si alguna dice "Abollonado y Tapizado general": solo ese ítem, una vez.
+// ¿El texto es el servicio general? Nombre nuevo del formulario/catálogo ("SERVICIO ABOLL Y TAP GRAL", [SVCTP]) o el viejo ("Abollonado y Tapizado general").
+function esServicioTapGeneral(t) {
+  const k = normalizarTexto(t || "");
+  if (!k) return false;
+  if (k === "abollonado y tapizado general") return true;
+  const w = k.split(" ");
+  return w.indexOf("aboll") !== -1 && w.indexOf("tap") !== -1 && (w.indexOf("gral") !== -1 || w.indexOf("general") !== -1);
+}
+// Tapicería (col. Q asiento + col. R espaldar). Si alguna es el servicio general: solo ese ítem, una vez (el ítem del catálogo no distingue asiento/espaldar).
 function itemsTapiceria(asiento, espaldar) {
-  const general = "abollonado y tapizado general";
   const deAsiento = dividirItems(asiento), deEspaldar = dividirItems(espaldar);
-  if (deAsiento.concat(deEspaldar).some(t => normalizarTexto(t) === general)) {
-    return [{ texto: "Abollonado y Tapizado general", lugar: "", entry: resolverItemCatalogo(general).entry }];
+  const gen = deAsiento.concat(deEspaldar).find(esServicioTapGeneral);
+  if (gen !== undefined) {
+    let entry = resolverItemCatalogo(gen).entry;
+    if (!entry) entry = resolverItemCatalogo("servicio aboll y tap gral").entry;
+    return [{ texto: entry ? entry.nombre : gen, lugar: "", entry: entry }];
   }
   const out = [];
   deAsiento.forEach(t => out.push({ texto: t, lugar: "asiento", entry: resolverItemCatalogo(t + " asiento").entry }));
@@ -2121,17 +2131,9 @@ function consolidarTapiceria(diag) {
   const asiento = (diag.tapiceriaAsiento || "").toString().trim();
   const espaldar = (diag.tapiceriaEspaldar || "").toString().trim();
 
-  // Si alguno contiene "Abollonado y Tapizado general", omitir el formato especial
-  if (asiento.toLowerCase().includes("abollonado y tapizado general") ||
-      espaldar.toLowerCase().includes("abollonado y tapizado general")) {
-    // Retornar solo el que tiene este texto
-    if (asiento.toLowerCase().includes("abollonado y tapizado general")) {
-      return asiento;
-    }
-    if (espaldar.toLowerCase().includes("abollonado y tapizado general")) {
-      return espaldar;
-    }
-  }
+  // Si alguno es el servicio general (nombre nuevo o viejo), omitir el formato especial y devolver solo ese
+  if (esServicioTapGeneral(asiento)) return asiento;
+  if (esServicioTapGeneral(espaldar)) return espaldar;
 
   // Formato normal: "Asiento: X; Espaldar: Y"
   const partes = [];
