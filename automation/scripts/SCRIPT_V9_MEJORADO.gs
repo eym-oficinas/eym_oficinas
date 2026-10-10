@@ -3567,17 +3567,21 @@ function buscarPlanRecurrenteSinPlan(camposLead, creds) {
     llamarOdooXMLRPC(modelo, "search_read", [[], ["name"]], creds, { context: { active_test: false } }),
     llamarOdooXMLRPC(modelo, "search_read", [[], ["name"]], creds, { context: { active_test: false, lang: "en_US" } })
   ];
-  const esSinPlan = n => { const k = sinTildes(n); return k === "sin plan" || k === "no plan"; };
+  const errorLectura = (lecturas[0] === null && lecturas[1] === null) ? ODOO_ULTIMO_ERROR : "";
+  // "Sin Plan", "Sin plan recurrente", "No Plan", "Ninguno", "None"... (sin tildes/mayúsculas)
+  const esSinPlan = n => { const k = sinTildes(n); return /^(sin plan|no plan|sin plan recurrente|no recurring plan|ninguno|ninguna|none|sin)\b/.test(k) || k.indexOf("sin plan") !== -1 || k.indexOf("no plan") !== -1; };
+  let nombres = [];
   for (let i = 0; i < lecturas.length; i++) {
+    (lecturas[i] || []).forEach(x => { if (nombres.indexOf(x.name) === -1) nombres.push(x.name); });
     const hallado = (lecturas[i] || []).find(x => esSinPlan(x.name));
-    if (hallado) return { campo: campo, id: hallado.id };
+    if (hallado) return { campo: campo, id: hallado.id, nombre: hallado.name };
   }
   const flds = odooCampos(modelo, creds);
   if (flds.number_of_months) {
     const cero = llamarOdooXMLRPC(modelo, "search_read", [[["number_of_months", "=", 0]], ["name"]], creds, { limit: 1, context: { active_test: false } });
-    if (cero && cero.length > 0) return { campo: campo, id: cero[0].id };
+    if (cero && cero.length > 0) return { campo: campo, id: cero[0].id, nombre: cero[0].name };
   }
-  return null;
+  return { campo: campo, id: null, planes: nombres, error: errorLectura };
 }
 
 // Al elaborar la RMA: ingreso esperado (antes de IVA), IVA en la casilla "+" y etapa "Proceso de cotización". Nunca bloquea la RMA.
@@ -3590,12 +3594,23 @@ function actualizarOportunidadTrasRMA(leadId, base, iva, creds) {
       vals.recurring_revenue = iva;
       // V15: la casilla "+" (IVA) exige un Plan recurrente; sin él Odoo muestra "Campos inválidos: Plan recurrente" al abrir la RMA.
       // Se deja siempre "Sin Plan".
-      const plan = buscarPlanRecurrenteSinPlan(campos, creds);
-      if (plan) vals[plan.campo] = plan.id;
-      else if (campos.recurring_plan || campos.recurring_plan_id) out.avisos.push("No se encontró el plan recurrente 'Sin Plan' en el CRM: ponlo a mano en la oportunidad");
+      var plan = buscarPlanRecurrenteSinPlan(campos, creds);
+      if (plan && plan.id) vals[plan.campo] = plan.id;
+      else if (plan) out.avisos.push("No se encontró el plan recurrente 'Sin Plan' en el CRM" +
+        (plan.error ? " (" + plan.error + ")" : (plan.planes && plan.planes.length ? ". Planes existentes: " + plan.planes.join(" | ") : ". No hay planes creados")) + ": ponlo a mano en la oportunidad");
     } else out.avisos.push("El CRM no tiene la casilla del IVA (recurring_revenue): solo se escribió el ingreso esperado");
     if (llamarOdooXMLRPC("crm.lead", "write", [[leadId], vals], creds) === null) {
       out.avisos.push("No se pudo escribir el ingreso esperado en la oportunidad: " + ODOO_ULTIMO_ERROR);
+    } else if (plan && plan.id) {
+      // Verifica que el plan quedó guardado (si Odoo lo ignoró, lo escribe aparte; si aun así no queda, avisa)
+      const leer = () => { const r = llamarOdooXMLRPC("crm.lead", "read", [[leadId], [plan.campo]], creds); const v = r && r[0] && r[0][plan.campo]; return Array.isArray(v) ? v[0] : v; };
+      if (leer() !== plan.id) {
+        if (llamarOdooXMLRPC("crm.lead", "write", [[leadId], (function () { const o = {}; o[plan.campo] = plan.id; return o; })()], creds) === null) {
+          out.avisos.push("No se pudo poner el plan recurrente '" + (plan.nombre || plan.id) + "': " + ODOO_ULTIMO_ERROR);
+        } else if (leer() !== plan.id) {
+          out.avisos.push("Odoo no guardó el plan recurrente '" + (plan.nombre || plan.id) + "': ponlo a mano en la oportunidad");
+        }
+      }
     }
     const m = moverLeadAEtapa(leadId, CONFIG.ETAPA_CRM_COTIZACION, creds);
     if (m.error) out.avisos.push("Etapa del CRM: " + m.error);
