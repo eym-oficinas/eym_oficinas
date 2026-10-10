@@ -2741,23 +2741,37 @@ function odooCampos(modelo, creds) {
 function claveNombreOportunidad(t) {
   return sinTildes((t || "").toString().replace(/[\u00a0\u2007\u202f\u200b]/g, " ")).replace(/\s+/g, " ").trim();
 }
+// Patrón para el ilike de Odoo: palabras del nombre en orden, separadas por %, cortando cada palabra antes de su primer carácter no ASCII
+// (ñ, tildes, símbolos raros). Así "PEÑOL" busca "PE" y encuentra el nombre aunque el servidor no ignore tildes; la comparación EXACTA se hace después en el script.
+function patronBusquedaOportunidad(nombre, maxPalabras) {
+  const crudo = (nombre || "").toString().replace(/[\u00a0\u2007\u202f\u200b]/g, " ").replace(/\s+/g, " ").trim();
+  let ws = crudo.split(" ").map(w => { const m = w.match(/^[\x00-\x7F]*/)[0]; return m.replace(/([%_\\])/g, "\\$1"); }).filter(w => w);
+  if (maxPalabras) ws = ws.slice(0, maxPalabras);
+  return ws.join("%");
+}
 function buscarOportunidadOdoo(nombreOportunidad, creds) {
   Logger.log("🔍 Buscando oportunidad EXACTA en CRM: '" + nombreOportunidad + "'");
   const clave = claveNombreOportunidad(nombreOportunidad);
-  const palabras = clave.split(" ").filter(x => x).map(x => x.replace(/([%_\\])/g, "\\$1"));
-  if (palabras.length === 0) return { id: null, count: 0 };
-  // Candidatas: todas las palabras en el mismo orden, con cualquier separación (%); luego se compara el nombre normalizado
+  const patron = patronBusquedaOportunidad(nombreOportunidad);
+  if (!clave || !patron) return { id: null, count: 0 };
+  // Candidatas: todas las palabras en el mismo orden con cualquier separación; luego se compara el nombre normalizado
   const candidatas = llamarOdooXMLRPC("crm.lead", "search_read",
-    [[["type", "=", "opportunity"], ["name", "ilike", palabras.join("%")]], ["name"]], creds, { limit: 50 });
+    [[["type", "=", "opportunity"], ["name", "ilike", patron]], ["name"]], creds, { limit: 50, context: { active_test: false } });
   if (candidatas === null) return { id: null, count: 0, error: ODOO_ULTIMO_ERROR };
-  const exactas = candidatas.filter(x => claveNombreOportunidad(x.name) === clave);
+  let exactas = candidatas.filter(x => claveNombreOportunidad(x.name) === clave);
+  if (exactas.length === 0 && patron.indexOf("%") !== -1) {
+    // Respaldo: el nombre difiere en tildes/ñ (hoja "PENOL" vs Odoo "PEÑOL"): busca por las 2 primeras palabras y compara exacto sin tildes
+    const amplias = llamarOdooXMLRPC("crm.lead", "search_read",
+      [[["type", "=", "opportunity"], ["name", "ilike", patronBusquedaOportunidad(nombreOportunidad, 2)]], ["name"]], creds, { limit: 200, context: { active_test: false } }) || [];
+    exactas = amplias.filter(x => claveNombreOportunidad(x.name) === clave);
+  }
   if (exactas.length > 0) Logger.log("✅ Coincidencia: '" + exactas[0].name + "' (id " + exactas[0].id + ")");
   return { id: exactas.length > 0 ? exactas[0].id : null, count: exactas.length };
 }
 
 function sugerirOportunidadesOdoo(nombreOportunidad, creds) {
   const r = llamarOdooXMLRPC("crm.lead", "search_read",
-    [[["type", "=", "opportunity"], ["name", "ilike", claveNombreOportunidad(nombreOportunidad).split(" ").slice(0, 2).join("%")]], ["name"]], creds, { limit: 8 });
+    [[["type", "=", "opportunity"], ["name", "ilike", patronBusquedaOportunidad(nombreOportunidad, 2)]], ["name"]], creds, { limit: 8 });
   return (r || []).map(x => x.name);
 }
 
@@ -3575,7 +3589,7 @@ function actualizarOportunidadTrasRMA(leadId, base, iva, creds) {
       // Se deja siempre "Sin Plan".
       const plan = buscarPlanRecurrenteSinPlan(campos, creds);
       if (plan) vals[plan.campo] = plan.id;
-      else out.avisos.push("No se encontró el plan recurrente 'Sin Plan' en el CRM: ponlo a mano en la oportunidad");
+      else if (campos.recurring_plan || campos.recurring_plan_id) out.avisos.push("No se encontró el plan recurrente 'Sin Plan' en el CRM: ponlo a mano en la oportunidad");
     } else out.avisos.push("El CRM no tiene la casilla del IVA (recurring_revenue): solo se escribió el ingreso esperado");
     if (llamarOdooXMLRPC("crm.lead", "write", [[leadId], vals], creds) === null) {
       out.avisos.push("No se pudo escribir el ingreso esperado en la oportunidad: " + ODOO_ULTIMO_ERROR);
