@@ -1910,9 +1910,63 @@ function procesarAprobacionEnFila(hoja, fila) {
 // Y=25:OPERARIO_DIAGNOSTICA, Z=26:ESTADO_DIAGNOSTICO, AA=27:ESTADO_APROBACION,
 // AB=28:FECHA_APROBACION, AC=29:REFERENCIA_RMA
 // ═══════════════════════════════════════════════════════════════════════════════════════
+// ═══ OP_2026: sin duplicados y columna K (# temporal) como texto ═══
+// "1-5" escrito en una celda numérica se convierte en fecha (1 de mayo). Se normaliza a texto "1-5" para comparar y para escribir.
+function claveTemporalOP(v) {
+  if (v === null || v === undefined || v === "") return "";
+  if (Object.prototype.toString.call(v) === "[object Date]") return v.getDate() + "-" + (v.getMonth() + 1);
+  return v.toString().trim().split("-").map(p => { const n = parseInt(p, 10); return isNaN(n) ? p.trim() : String(n); }).join("-");
+}
+function claveOportunidadOP(v) { return claveNombreOportunidad(v); }
+// Devuelve el número de fila de una OP que ya existe para esa silla (misma oportunidad y mismo # EYM, o mismo # temporal), o 0.
+function buscarOPExistente(hojaOP, oportunidad, eym, temporal) {
+  const ult = hojaOP.getLastRow();
+  if (ult < 2) return 0;
+  const datos = hojaOP.getRange(2, 1, ult - 1, 16).getValues();
+  const kOp = claveOportunidadOP(oportunidad), kEym = (eym || "").toString().trim(), kTmp = claveTemporalOP(temporal);
+  for (let i = 0; i < datos.length; i++) {
+    const r = datos[i];
+    if (!r[0]) continue;
+    if (claveOportunidadOP(r[4]) !== kOp) continue;
+    const eymOP = (r[15] || "").toString().trim();
+    if ((kEym && eymOP && eymOP === kEym) || (kTmp && claveTemporalOP(r[10]) === kTmp)) return i + 2;
+  }
+  return 0;
+}
+// Convierte la columna K de OP_2026 a texto: las fechas que Sheets hizo de "1-5" vuelven a "1-5". Idempotente.
+function convertirColumnaKOPATexto(hojaOP) {
+  const ult = hojaOP.getLastRow();
+  if (ult < 2) return 0;
+  const rng = hojaOP.getRange(2, 11, ult - 1, 1);
+  const vals = rng.getValues();
+  let n = 0;
+  const nuevos = vals.map(r => {
+    if (Object.prototype.toString.call(r[0]) === "[object Date]") { n++; return [claveTemporalOP(r[0])]; }
+    return [r[0]];
+  });
+  rng.setNumberFormat("@");
+  rng.setValues(nuevos);
+  hojaOP.getRange(ult + 1, 11, Math.max(hojaOP.getMaxRows() - ult, 1), 1).setNumberFormat("@");
+  return n;
+}
+function convertirColumnaKOPATextoMenu() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), hojaOP = ss.getSheetByName("OP_2026");
+  if (!hojaOP) { SpreadsheetApp.getUi().alert("No se encontró la hoja OP_2026"); return; }
+  const n = convertirColumnaKOPATexto(hojaOP);
+  SpreadsheetApp.getUi().alert("✅ Columna K de OP_2026 en texto. Fechas convertidas a texto: " + n);
+}
+
 function crearOP(hojaDiag, hojaOP, fila) {
   try {
     const numeroEYM = hojaDiag.getRange(fila, 5).getValue(); // Columna E
+    // Sin duplicados: si esta silla (oportunidad + # EYM o # temporal) ya tiene OP, no se crea otra
+    const temporalDiag = hojaDiag.getRange(fila, 6).getDisplayValue();
+    const yaOP = buscarOPExistente(hojaOP, hojaDiag.getRange(fila, 2).getValue(), numeroEYM, temporalDiag);
+    if (yaOP) {
+      Logger.log("🟣 La silla ya tiene OP en OP_2026 (fila " + yaOP + "): no se duplica");
+      ponerRMAenOP(hojaOP, yaOP, hojaDiag.getRange(fila, 29));
+      return;
+    }
     const nuevoOP = obtenerProximoOP(hojaOP);
 
     // Obtener servicios y combinarlos
@@ -1940,7 +1994,7 @@ function crearOP(hojaDiag, hojaOP, fila) {
       hojaDiag.getRange(fila, 4).getValue(),    // H: TIPO_SILLA ← Col D
       hojaDiag.getRange(fila, 11).getValue(),   // I: COLOR ← Col K
       hojaDiag.getRange(fila, 10).getValue(),   // J: TIPO_TELA ← Col J
-      hojaDiag.getRange(fila, 6).getValue(),    // K: NUMERO_TEMP ← Col F (#_TEMPORAL)
+      temporalDiag,                             // K: NUMERO_TEMP ← Col F (#_TEMPORAL), como TEXTO ("1-5", nunca fecha)
       hojaDiag.getRange(fila, 14).getValue(),   // L: PARTES ← Col N (Repuestos)
       serviciosCombinados,                 // M: OTROS_SERVICIOS ← Col O + Col P
       tapiceriaAsiento,                    // N: ABOLLONADO/ASIENTO ← Col Q (TAPICERIA Asiento)
@@ -1950,6 +2004,7 @@ function crearOP(hojaDiag, hojaOP, fila) {
     ];
 
     const newFilaOP = hojaOP.getLastRow() + 1;
+    hojaOP.getRange(newFilaOP, 11).setNumberFormat("@");
     hojaOP.getRange(newFilaOP, 1, 1, filaOP.length).setValues([filaOP]);
     ponerRMAenOP(hojaOP, newFilaOP, hojaDiag.getRange(fila, 29));
 
@@ -3679,6 +3734,7 @@ function procesarRMAsConfirmadas() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const hoja = ss.getSheetByName("DIAGNOSTICOS_2026");
     if (!hoja) { ui.alert("❌ Hoja DIAGNOSTICOS_2026 no encontrada"); return; }
+    try { const hOP = ss.getSheetByName("OP_2026"); if (hOP) convertirColumnaKOPATexto(hOP); } catch (eK) { Logger.log("⚠️ Columna K de OP_2026: " + eK); }
     const a = sincronizarAprobacionesOdoo(hoja, creds);
     const rmaEnOP = completarRMAenOP(hoja, ss.getSheetByName("OP_2026"));
     const lineas = ["✅ RMA CONFIRMADAS", ""];
@@ -3973,6 +4029,7 @@ function onOpen() {
     .addItem("📷 Organizar fotos de una oportunidad", "organizarFotosOportunidad")
     .addItem("📋 Finalizar Oportunidad", "finalizarOportunidad")
     .addItem("✅ Procesar RMA confirmadas", "procesarRMAsConfirmadas")
+    .addItem("🔤 OP_2026: columna K como texto", "convertirColumnaKOPATextoMenu")
     .addItem("🏁 Procesar OP terminadas", "procesarOPsTerminadas")
     .addSeparator()
     .addItem("✅ Procesar Aprobados → OP", "procesarAprobadosAOP")
