@@ -1,0 +1,124 @@
+{
+  "diagnostico": {
+    "fecha_diagnostico": "2026-10-01",
+    "nombre_oportunidad": "OP-001-CLIENTE",
+    "cliente": {
+      "nombre": "Cliente Nombre",
+      "email": "cliente@example.com",
+      "telefono": "+57 1234567890"
+    },
+    "silla": {
+      "tipo": "Secretarial",
+      "numero_temporal": "TEMP-001",
+      "numero_eym_anterior": null,
+      "condicion": "Usada",
+      "tipo_tela": "Tela Sintética",
+      "color": "Negro",
+      "ubicacion": "Oficina Principal",
+      "garantia": "12 meses"
+    },
+    "diagnostico_tecnico": {
+      "problemas": [
+        {
+          "id": 1,
+          "descripcion": "Rasgadura en asiento",
+          "componente_afectado": "Tapizado Asiento",
+          "severidad": "Media",
+          "solucion": "Tapizado Completo"
+        },
+        {
+          "id": 2,
+          "descripcion": "Base rota",
+          "componente_afectado": "Base",
+          "severidad": "Alta",
+          "solucion": "Cambio Base Cromada"
+        }
+      ],
+      "componentes_a_cambiar": [
+        "Base cromada 64cms",
+        "Rodachinas goma 50mm x5",
+        "Telescopio"
+      ],
+      "servicios_adicionales": [
+        "Limpieza general",
+        "Soldadura (si aplica)"
+      ],
+      "trabajo_tapiceria": {
+        "asiento": "Abollonado y Tapizado",
+        "espaldar": "Limpieza"
+      },
+      "observaciones": "Silla en buen estado general, solo requiere cambio de base y reparación de tapizado.",
+      "foto_inicial": "https://drive.google.com/... (URL foto)"
+    },
+    "presupuesto": {
+      "componentes": {
+        "base_cromada": {
+          "nombre": "Base cromada 64cms",
+          "cantidad": 1,
+          "precio_unitario": 69000,
+          "subtotal": 69000
+        },
+        "rodachinas": {
+          "nombre": "Rodachinas goma 50mm x5",
+          "cantidad": 1,
+          "precio_unitario": 25000,
+          "subtotal": 25000
+        },
+        "telescopio": {
+          "nombre": "Telescopio",
+          "cantidad": 1,
+          "precio_unitario": 5000,
+          "subtotal": 5000
+        }
+      },
+      "servicios": {
+        "limpieza": {
+          "nombre": "Limpieza general",
+          "precio": 15000
+        }
+      },
+      "tapiceria": {
+        "asiento": "Abollonado y Tapizado",
+        "precio": 100000
+      },
+      "mano_obra": 46000,
+      "subtotales": {
+        "partes": 99000,
+        "servicios": 15000,
+        "tapiceria": 100000,
+        "mano_obra": 46000,
+        "total_sin_iva": 260000,
+        "iva_19": 49400,
+        "total_con_iva": 309400
+      }
+    },
+    "aprobacion": {
+      "estado": "Pendiente",
+      "aprobado_por": null,
+      "fecha_aprobacion": null,
+      "comentarios": null
+    },
+    "referencia_odoo": {
+      "rma_numero": "RMA-60030",
+      "cotizacion_odoo_id": null,
+      "orden_manufactura_id": null,
+      "factura_id": null
+    },
+    "seguimiento": {
+      "estado_actual": "Diagnosticado",
+      "operario_diagnostica": "Juan Pérez",
+      "operario_repara": null,
+      "fecha_inicio_reparacion": null,
+      "fecha_finalizacion": null,
+      "control_calidad": {
+        "completado": false,
+        "comentarios": null
+      }
+    }
+  },
+  "metadata": {
+    "version": "2.0",
+    "creado_el": "2026-10-01",
+    "sistema": "EYM Automático"
+  }
+}
