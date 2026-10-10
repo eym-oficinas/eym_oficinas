@@ -615,3 +615,5 @@ en las OP de esas sillas (oportunidad + EyM). Estados de AA: Cotización, Aproba
 **Coincidencia de la oportunidad hoja ↔ Odoo (2026-10-09)**: `buscarOportunidadEnOdoo` sigue siendo EXACTA pero ignora mayúsculas, tildes y espacios (dobles, al borde, no separables): `claveNombreOportunidad`. Caso real: en Odoo "CRYSTAL R  MARINILLA 06-10-2026" (dos espacios) vs hoja con uno.
 
 **Servicio general de tapicería (2026-10-09)**: el ítem `[SVCTP] SERVICIO ABOLL Y TAP GRAL` (nombre nuevo del formulario/catálogo; el viejo "Abollonado y Tapizado general" sigue valiendo, `CONFIG.ALIAS_CATALOGO`) se reconoce con `esServicioTapGeneral` en Q o R: cuenta UNA vez por silla con el precio de ese ítem del catálogo, sin sufijo "asiento"/"espaldar" (antes se buscaba "<ítem> asiento" y quedaba "sin precio", V=0).
+
+**Plan recurrente de la oportunidad (2026-10-10)**: al escribir el IVA en la casilla "+" (`recurring_revenue`) el script también pone el Plan recurrente en "Sin Plan" (`buscarPlanRecurrenteSinPlan`, campo `recurring_plan` -> `crm.recurring.plan`); sin plan Odoo muestra "Campos inválidos: Plan recurrente" al abrir la RMA desde la oportunidad.

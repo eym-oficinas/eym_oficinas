@@ -3539,14 +3539,44 @@ function moverLeadAEtapa(leadId, nombreEtapa, creds) {
   return res;
 }
 
+// V15: id del plan recurrente "Sin Plan" (Odoo 14: campo crm.lead.recurring_plan -> crm.recurring.plan).
+// Busca por nombre (con y sin tildes/mayúsculas, "Sin Plan" / "No Plan"), en el idioma del usuario y en el de fábrica;
+// si no hay coincidencia usa el plan de 0 meses.
+function buscarPlanRecurrenteSinPlan(camposLead, creds) {
+  const campo = camposLead.recurring_plan ? "recurring_plan" : (camposLead.recurring_plan_id ? "recurring_plan_id" : null);
+  if (!campo) return null;
+  const modelo = (camposLead[campo] && camposLead[campo].relation) || "crm.recurring.plan";
+  const lecturas = [
+    llamarOdooXMLRPC(modelo, "search_read", [[], ["name"]], creds, { context: { active_test: false } }),
+    llamarOdooXMLRPC(modelo, "search_read", [[], ["name"]], creds, { context: { active_test: false, lang: "en_US" } })
+  ];
+  const esSinPlan = n => { const k = sinTildes(n); return k === "sin plan" || k === "no plan"; };
+  for (let i = 0; i < lecturas.length; i++) {
+    const hallado = (lecturas[i] || []).find(x => esSinPlan(x.name));
+    if (hallado) return { campo: campo, id: hallado.id };
+  }
+  const flds = odooCampos(modelo, creds);
+  if (flds.number_of_months) {
+    const cero = llamarOdooXMLRPC(modelo, "search_read", [[["number_of_months", "=", 0]], ["name"]], creds, { limit: 1, context: { active_test: false } });
+    if (cero && cero.length > 0) return { campo: campo, id: cero[0].id };
+  }
+  return null;
+}
+
 // Al elaborar la RMA: ingreso esperado (antes de IVA), IVA en la casilla "+" y etapa "Proceso de cotización". Nunca bloquea la RMA.
 function actualizarOportunidadTrasRMA(leadId, base, iva, creds) {
   const out = { avisos: [] };
   try {
     const campos = odooCampos("crm.lead", creds);
     const vals = { expected_revenue: base };
-    if (campos.recurring_revenue) vals.recurring_revenue = iva;
-    else out.avisos.push("El CRM no tiene la casilla del IVA (recurring_revenue): solo se escribió el ingreso esperado");
+    if (campos.recurring_revenue) {
+      vals.recurring_revenue = iva;
+      // V15: la casilla "+" (IVA) exige un Plan recurrente; sin él Odoo muestra "Campos inválidos: Plan recurrente" al abrir la RMA.
+      // Se deja siempre "Sin Plan".
+      const plan = buscarPlanRecurrenteSinPlan(campos, creds);
+      if (plan) vals[plan.campo] = plan.id;
+      else out.avisos.push("No se encontró el plan recurrente 'Sin Plan' en el CRM: ponlo a mano en la oportunidad");
+    } else out.avisos.push("El CRM no tiene la casilla del IVA (recurring_revenue): solo se escribió el ingreso esperado");
     if (llamarOdooXMLRPC("crm.lead", "write", [[leadId], vals], creds) === null) {
       out.avisos.push("No se pudo escribir el ingreso esperado en la oportunidad: " + ODOO_ULTIMO_ERROR);
     }
