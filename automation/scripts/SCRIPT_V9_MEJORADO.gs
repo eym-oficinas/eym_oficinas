@@ -2753,16 +2753,19 @@ function buscarOportunidadOdoo(nombreOportunidad, creds) {
   Logger.log("🔍 Buscando oportunidad EXACTA en CRM: '" + nombreOportunidad + "'");
   const clave = claveNombreOportunidad(nombreOportunidad);
   const patron = patronBusquedaOportunidad(nombreOportunidad);
-  if (!clave || !patron) return { id: null, count: 0 };
+  if (!clave) return { id: null, count: 0 };
   // Candidatas: todas las palabras en el mismo orden con cualquier separación; luego se compara el nombre normalizado
-  const candidatas = llamarOdooXMLRPC("crm.lead", "search_read",
-    [[["type", "=", "opportunity"], ["name", "ilike", patron]], ["name"]], creds, { limit: 50, context: { active_test: false } });
+  const candidatas = patron ? llamarOdooXMLRPC("crm.lead", "search_read",
+    [[["type", "=", "opportunity"], ["name", "ilike", patron]], ["name"]], creds, { limit: 50, context: { active_test: false } }) : [];
   if (candidatas === null) return { id: null, count: 0, error: ODOO_ULTIMO_ERROR };
   let exactas = candidatas.filter(x => claveNombreOportunidad(x.name) === clave);
-  if (exactas.length === 0 && patron.indexOf("%") !== -1) {
-    // Respaldo: el nombre difiere en tildes/ñ (hoja "PENOL" vs Odoo "PEÑOL"): busca por las 2 primeras palabras y compara exacto sin tildes
+  if (exactas.length === 0) {
+    // Respaldo (cualquier palabra con tilde/ñ, no solo una): la hoja y Odoo difieren en tildes ("MUNOZ" vs "MUÑOZ").
+    // Cada vocal y la n se cambian por "_" (un carácter cualquiera) para que acepte la letra con tilde o ñ; la comparación exacta sin tildes se hace aquí.
+    const tolerante = nombreOportunidad.toString().replace(/[\u00a0\u2007\u202f\u200b]/g, " ").replace(/\s+/g, " ").trim()
+      .split(" ").map(w => w.replace(/([%\\])/g, "\\$1").replace(/[aeiouAEIOUnN\u00c0-\u017f]/g, "_")).join("%");
     const amplias = llamarOdooXMLRPC("crm.lead", "search_read",
-      [[["type", "=", "opportunity"], ["name", "ilike", patronBusquedaOportunidad(nombreOportunidad, 2)]], ["name"]], creds, { limit: 200, context: { active_test: false } }) || [];
+      [[["type", "=", "opportunity"], ["name", "ilike", tolerante]], ["name"]], creds, { limit: 200, context: { active_test: false } }) || [];
     exactas = amplias.filter(x => claveNombreOportunidad(x.name) === clave);
   }
   if (exactas.length > 0) Logger.log("✅ Coincidencia: '" + exactas[0].name + "' (id " + exactas[0].id + ")");
